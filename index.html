@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hot Cross Buns - Music Notation Demo</title>
+    <link rel="stylesheet" href="./src/index.css" />
+    <script type="module" src="/src/components/index.ts"></script>
+  </head>
+  <body>
+    <div class="sheet-music">
+      <h1>Hot Cross Buns</h1>
+      <h2>Traditional English Nursery Rhyme</h2>
+
+      <div class="song-header">
+        <div class="song-info">
+          <music-tempo marking="Moderato" bpm="100" beat="quarter"></music-tempo>
+        </div>
+        <div class="song-meta">
+          <music-dynamics level="mf"></music-dynamics>
+        </div>
+      </div>
+
+      <!-- Staff with melody -->
+      <music-staff clef="treble">
+        <!-- Time signature -->
+        <music-meter top="4" bottom="4"></music-meter>
+
+        <!-- Measure 1: "Hot Cross Buns" - B A G (rest) -->
+        <music-measure>
+          <music-note pitch="B4" duration="quarter"></music-note>
+          <music-note pitch="A4" duration="quarter"></music-note>
+          <music-note pitch="G4" duration="half"></music-note>
+        </music-measure>
+
+        <!-- Measure 2: "Hot Cross Buns" - B A G (rest) -->
+        <music-measure>
+          <music-note pitch="B4" duration="quarter"></music-note>
+          <music-note pitch="A4" duration="quarter"></music-note>
+          <music-note pitch="G4" duration="half"></music-note>
+        </music-measure>
+
+        <!-- Measure 3: "One a penny, two a penny" - G G G G A A A A (beamed) -->
+        <music-measure>
+          <music-beam>
+            <music-note pitch="G4" duration="eighth"></music-note>
+            <music-note pitch="G4" duration="eighth"></music-note>
+            <music-note pitch="G4" duration="eighth"></music-note>
+            <music-note pitch="G4" duration="eighth"></music-note>
+          </music-beam>
+          <music-beam>
+            <music-note pitch="A4" duration="eighth"></music-note>
+            <music-note pitch="A4" duration="eighth"></music-note>
+            <music-note pitch="A4" duration="eighth"></music-note>
+            <music-note pitch="A4" duration="eighth"></music-note>
+          </music-beam>
+        </music-measure>
+
+        <!-- Measure 4: "Hot Cross Buns" - B A G -->
+        <music-measure end-bar="final">
+          <music-note pitch="B4" duration="quarter"></music-note>
+          <music-note pitch="A4" duration="quarter"></music-note>
+          <music-note pitch="G4" duration="half"></music-note>
+        </music-measure>
+      </music-staff>
+
+      <!-- Hot Cross Buns - One Octave Higher -->
+      <h3 style="margin-top: 30px;">One Octave Higher</h3>
+      <music-staff clef="treble">
+        <music-meter top="4" bottom="4"></music-meter>
+
+        <music-measure>
+          <music-note pitch="B5" duration="quarter"></music-note>
+          <music-note pitch="A5" duration="quarter"></music-note>
+          <music-note pitch="G5" duration="half"></music-note>
+        </music-measure>
+
+        <music-measure>
+          <music-note pitch="B5" duration="quarter"></music-note>
+          <music-note pitch="A5" duration="quarter"></music-note>
+          <music-note pitch="G5" duration="half"></music-note>
+        </music-measure>
+
+        <music-measure>
+          <music-beam>
+            <music-note pitch="G5" duration="eighth"></music-note>
+            <music-note pitch="G5" duration="eighth"></music-note>
+            <music-note pitch="G5" duration="eighth"></music-note>
+            <music-note pitch="G5" duration="eighth"></music-note>
+          </music-beam>
+          <music-beam>
+            <music-note pitch="A5" duration="eighth"></music-note>
+            <music-note pitch="A5" duration="eighth"></music-note>
+            <music-note pitch="A5" duration="eighth"></music-note>
+            <music-note pitch="A5" duration="eighth"></music-note>
+          </music-beam>
+        </music-measure>
+
+        <music-measure end-bar="final">
+          <music-note pitch="B5" duration="quarter"></music-note>
+          <music-note pitch="A5" duration="quarter"></music-note>
+          <music-note pitch="G5" duration="half"></music-note>
+        </music-measure>
+      </music-staff>
+
+      <!-- Hot Cross Buns - One Octave Lower -->
+      <h3 style="margin-top: 30px;">One Octave Lower</h3>
+      <music-staff clef="treble">
+        <music-meter top="4" bottom="4"></music-meter>
+
+        <music-measure>
+          <music-note pitch="B3" duration="quarter"></music-note>
+          <music-note pitch="A3" duration="quarter"></music-note>
+          <music-note pitch="G3" duration="half"></music-note>
+        </music-measure>
+
+        <music-measure>
+          <music-note pitch="B3" duration="quarter"></music-note>
+          <music-note pitch="A3" duration="quarter"></music-note>
+          <music-note pitch="G3" duration="half"></music-note>
+        </music-measure>
+
+        <music-measure>
+          <music-beam>
+            <music-note pitch="G3" duration="eighth"></music-note>
+            <music-note pitch="G3" duration="eighth"></music-note>
+            <music-note pitch="G3" duration="eighth"></music-note>
+            <music-note pitch="G3" duration="eighth"></music-note>
+          </music-beam>
+          <music-beam>
+            <music-note pitch="A3" duration="eighth"></music-note>
+            <music-note pitch="A3" duration="eighth"></music-note>
+            <music-note pitch="A3" duration="eighth"></music-note>
+            <music-note pitch="A3" duration="eighth"></music-note>
+          </music-beam>
+        </music-measure>
+
+        <music-measure end-bar="final">
+          <music-note pitch="B3" duration="quarter"></music-note>
+          <music-note pitch="A3" duration="quarter"></music-note>
+          <music-note pitch="G3" duration="half"></music-note>
+        </music-measure>
+      </music-staff>
+
+      <!-- Legend showing note types -->
+      <div class="legend">
+        <h3>Notation Key</h3>
+        <div class="legend-items">
+          <div class="legend-item">
+            <music-note duration="whole"></music-note>
+            <span>Whole Note</span>
+          </div>
+          <div class="legend-item">
+            <music-note duration="half"></music-note>
+            <span>Half Note</span>
+          </div>
+          <div class="legend-item">
+            <music-note duration="quarter"></music-note>
+            <span>Quarter Note</span>
+          </div>
+          <div class="legend-item">
+            <music-note duration="eighth"></music-note>
+            <span>Eighth Note</span>
+          </div>
+          <div class="legend-item">
+            <music-note duration="sixteenth"></music-note>
+            <span>Sixteenth Note</span>
+          </div>
+        </div>
+        <div class="legend-items" style="margin-top: 15px;">
+          <div class="legend-item">
+            <music-rest duration="whole"></music-rest>
+            <span>Whole Rest</span>
+          </div>
+          <div class="legend-item">
+            <music-rest duration="half"></music-rest>
+            <span>Half Rest</span>
+          </div>
+          <div class="legend-item">
+            <music-rest duration="quarter"></music-rest>
+            <span>Quarter Rest</span>
+          </div>
+          <div class="legend-item">
+            <music-rest duration="eighth"></music-rest>
+            <span>Eighth Rest</span>
+          </div>
+        </div>
+        <div class="legend-items" style="margin-top: 15px;">
+          <div class="legend-item">
+            <music-dynamics level="pp"></music-dynamics>
+            <span>Pianissimo</span>
+          </div>
+          <div class="legend-item">
+            <music-dynamics level="p"></music-dynamics>
+            <span>Piano</span>
+          </div>
+          <div class="legend-item">
+            <music-dynamics level="mp"></music-dynamics>
+            <span>Mezzo-piano</span>
+          </div>
+          <div class="legend-item">
+            <music-dynamics level="mf"></music-dynamics>
+            <span>Mezzo-forte</span>
+          </div>
+          <div class="legend-item">
+            <music-dynamics level="f"></music-dynamics>
+            <span>Forte</span>
+          </div>
+          <div class="legend-item">
+            <music-dynamics level="ff"></music-dynamics>
+            <span>Fortissimo</span>
+          </div>
+        </div>
+        <div class="legend-items" style="margin-top: 15px;">
+          <div class="legend-item">
+            <music-beam>
+              <music-note pitch="C5" duration="eighth"></music-note>
+              <music-note pitch="D5" duration="eighth"></music-note>
+              <music-note pitch="E5" duration="eighth"></music-note>
+              <music-note pitch="F5" duration="eighth"></music-note>
+            </music-beam>
+            <span>Beamed Eighth Notes</span>
+          </div>
+          <div class="legend-item">
+            <music-note pitch="C4" duration="quarter"></music-note>
+            <span>Note with Ledger Line (C4)</span>
+          </div>
+          <div class="legend-item">
+            <music-note pitch="A5" duration="quarter"></music-note>
+            <span>Note with Ledger Line (A5)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

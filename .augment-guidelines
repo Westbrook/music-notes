@@ -1,0 +1,109 @@
+# Music Notes - Development Guidelines
+
+## Project Overview
+
+This is a music notation web component library built with Lit. Components are designed to be used declaratively in HTML without requiring JavaScript knowledge from end users.
+
+## Architecture Decisions
+
+### Framework Choice: Lit
+- Lightweight web components framework
+- Uses decorators (`@customElement`, `@property`, `@state`) for reactive properties
+- Shadow DOM for style encapsulation
+- TypeScript for type safety
+
+### Component Structure
+- Each component is a self-contained custom element
+- Components communicate via attributes and CSS custom properties
+- Slotted content allows composition (e.g., notes inside measures, measures inside staff)
+
+## Technical Decisions
+
+### Pitch Positioning System
+- Treble clef positions defined in `TREBLE_CLEF_POSITIONS` mapping
+- E4 = position 0 (bottom staff line), B4 = position 4 (middle line)
+- Each position step = 4px vertical offset (half of 8px line spacing)
+- Notes use `transform: translateY()` for positioning to avoid layout recalculation
+
+### Stem Direction Logic
+- Individual notes: stems up if below B4, stems down if on/above B4
+- Beamed groups: use average pitch of all notes to determine uniform direction
+- Threshold: position >= 4 means stems down
+
+### Ledger Lines
+- Automatically rendered for notes outside staff range
+- Below staff: C4 (position -2) and lower need ledger lines at even positions
+- Above staff: A5 (position 10) and higher need ledger lines at even positions
+- Ledger lines centered on note head (12px wide note head, 18px wide ledger line)
+
+### Beaming Implementation
+- `<music-beam>` wraps notes to be beamed together
+- Sets `beamed` and `stem-down` attributes on child notes
+- Beam position calculated from stem element bounding rectangles
+- Uses CSS custom properties (`--beam-left`, `--beam-width`, `--beam-top`) for positioning
+
+### Timing for Beam Calculation
+- Must wait for notes to re-render after setting stem direction
+- Uses nested `requestAnimationFrame` calls:
+  1. First frame: set attributes on notes
+  2. Second frame: calculate beam position after notes have re-rendered
+
+## Known Limitations
+
+### CSS Anchor Positioning
+- Investigated using CSS Anchor Positioning for beam placement
+- **Does not work across Shadow DOM boundaries**
+- Anchors defined in one shadow root cannot be referenced from another
+- Current solution: hybrid approach with minimal JS for position calculation
+
+### Beam Positioning for Different Pitches
+- For ascending/descending note groups, beam connects at extremes:
+  - Stems up: beam at highest stem top (minimum Y)
+  - Stems down: beam at lowest stem bottom (maximum Y)
+- Currently uses `getBoundingClientRect()` for accurate positioning
+
+## CSS Custom Properties
+
+### Theming
+- `--note-color`: Color for notes, stems, beams (default: #000)
+- `--beam-thickness`: Beam line thickness (default: 4px)
+- `--line-spacing`: Staff line spacing (default: 8px)
+
+### Internal Communication
+- `--hide-flags`: Set by music-beam to hide flags on beamed notes
+
+## File Structure
+
+```
+src/components/
+├── index.ts          # Exports all components
+├── music-note.ts     # Note rendering with pitch positioning
+├── music-rest.ts     # Rest symbols
+├── music-measure.ts  # Measure container with bar lines
+├── music-staff.ts    # Staff lines container
+├── music-beam.ts     # Beam grouping for eighth/sixteenth notes
+├── music-meter.ts    # Time signature
+├── music-tempo.ts    # Tempo marking
+└── music-dynamics.ts # Dynamic markings (pp, p, mp, mf, f, ff)
+```
+
+## Common Patterns
+
+### Adding New Pitch Range
+Update `TREBLE_CLEF_POSITIONS` in both:
+- `src/components/music-note.ts`
+- `src/components/music-beam.ts`
+
+### Debugging Beam Issues
+- Console logging is available in `calculateBeamPosition()`
+- Check: stem direction, stem bounding rects, calculated beam position
+- Verify notes have re-rendered before calculating (timing issue)
+
+## Testing Considerations
+
+- Test notes at various pitches (within staff, above, below)
+- Test beamed groups with same pitch and different pitches
+- Test ascending and descending note patterns
+- Verify ledger lines appear correctly for out-of-staff notes
+- Test components both inside `<music-staff>` and standalone (legend)
+
