@@ -1,132 +1,87 @@
-# Music Notes - Web Component Library
+# Music Notes
 
-A music notation system built with Lit web components that can be used directly in HTML pages.
+Music notation written in readable HTML, rendered as SVG in the browser. Custom elements are the source data; a separate score model preserves musical structure and exact timing. VexFlow 5.0.0 supplies engraving primitives and locally bundled music fonts. No font CDN is required.
 
-## Overview
+This is a source project, not a published npm package. It displays and validates music; an editing UI and playback are future work.
 
-This library provides custom HTML elements for rendering musical notation, including notes, rests, measures, time signatures, tempo markings, dynamics, and beamed note groups.
+The [third-party notices](THIRD_PARTY_NOTICES.md) preserve the renderer and bundled font licenses. Production builds include a copy as `THIRD_PARTY_NOTICES.txt`.
 
-## Installation
+## Run
 
-```bash
+Use Node 22.12 or newer on a supported even-numbered Node release.
+
+```sh
 npm install
 npm run dev
 ```
 
-## Usage
+The demo contains eight original studies: pitch spelling, 7/8, 15/8, 5/4, mixed and nested tuplets, improvisation notation, piano voices, and ensemble layout. The ensemble shows the same music twice: first with automatic wrapping, then with optional author-chosen line and page breaks.
 
-Include the components in your HTML and use them declaratively:
+## Write a measure
 
 ```html
 <script type="module" src="/src/components/index.ts"></script>
 
 <music-staff clef="treble">
-  <music-meter top="4" bottom="4"></music-meter>
-  
   <music-measure>
-    <music-note pitch="B4" duration="quarter"></music-note>
-    <music-note pitch="A4" duration="quarter"></music-note>
-    <music-note pitch="G4" duration="half"></music-note>
+    <music-meter top="7" bottom="8" groups="2+2+3"></music-meter>
+    <music-tempo marking="Even eighths" bpm="144" beat="eighth"></music-tempo>
+    <music-note pitch="D4" duration="quarter"></music-note>
+    <music-note pitch="F4" duration="quarter"></music-note>
+    <music-note pitch="A4" duration="quarter" dots="1"></music-note>
   </music-measure>
-  
-  <music-measure>
-    <music-beam>
-      <music-note pitch="G4" duration="eighth"></music-note>
-      <music-note pitch="G4" duration="eighth"></music-note>
-      <music-note pitch="A4" duration="eighth"></music-note>
-      <music-note pitch="A4" duration="eighth"></music-note>
-    </music-beam>
+  <music-measure end-bar="final">
+    <music-rest measure></music-rest>
   </music-measure>
 </music-staff>
 ```
 
-## Components
+Always close custom elements explicitly: `<music-note ...></music-note>`, not `<music-note ... />`. The second measure inherits the meter. Its `measure` rest fills 7/8; a `duration="whole"` rest instead lasts one whole note.
 
-### `<music-staff>`
-Container for staff lines and measures. Renders 5 staff lines with treble clef.
+## Supported foundation
 
-### `<music-measure>`
-Contains notes/rests with bar lines.
-- `end-bar`: Set to "final" for double bar line at end
+- Treble, bass, alto, and tenor clefs; major/minor key signatures; explicit pitch spelling, accidental cancellation, dots, rests, ties, and chords.
+- Simple, compound, and additive meters with declared beat groups. Durations from breve through 128th; exact tuplet ratios with mixed values, rests, and nesting.
+- Independent voices, aligned staves, braces/brackets, tempo and dynamics, rehearsal marks, harmony text, directions, and beat or rhythmic slashes.
+- Automatic responsive systems, optional line/page breaks, measure numbering, configurable print width, a textual score representation, diagnostics, and source IDs for future editing.
 
-### `<music-note>`
-Renders a musical note positioned on the staff based on pitch.
-- `pitch`: Note pitch (e.g., "C4", "E5", "G#4", "Bb3")
-- `duration`: "whole" | "half" | "quarter" | "eighth" | "sixteenth"
-- `dotted`: Boolean for dotted notes
-- `accidental`: "sharp" | "flat" | "natural"
-- `beamed`: Boolean (set automatically by music-beam)
-- `stem-down`: Boolean to force stem direction
+Invalid or unsupported notation is diagnosed rather than presented as a successful engraving. See the [authoring guide](docs/authoring.md) for grammar, defaults, and the browser API, and the [design review](docs/design-review.md) for the acceptance criteria and limits.
 
-### `<music-beam>`
-Groups notes together with connecting beams.
-- `beams`: Number of beams (1 for eighth, 2 for sixteenth)
-- `stem-direction`: "up" | "down" | "auto"
+Automatic wrapping is the default: no break attributes or measure-count limit are needed. All parts wrap together as the available width changes. A short opening pickup stays with the following bar when they fit, without adding a layout instruction to the source.
 
-### `<music-rest>`
-Renders a rest symbol.
-- `duration`: "whole" | "half" | "quarter" | "eighth"
+Set `max-measures` only to impose an upper limit; it does not promise that many measures will fit. A measure's `break-before="line"` or `break-before="page"` forces that boundary even when more music could fit. `keep-with-next` adds an author's preference for neighboring measures. Explicit breaks, a measure limit, or insufficient space take precedence over both that preference and automatic pickup grouping.
 
-### `<music-meter>`
-Time signature display.
-- `top`: Upper number (beats per measure)
-- `bottom`: Lower number (beat unit)
+The demo's print controls have separate jobs:
 
-### `<music-tempo>`
-Tempo marking display.
-- `marking`: Text marking (e.g., "Moderato", "Allegro")
-- `bpm`: Beats per minute
-- `beat`: Beat unit ("quarter", "half", etc.)
+- **Use print layout on screen (680px)** switches the scores to their fixed print width. It changes score wrapping, not zoom or paper size. Short examples may look unchanged because they already fit; narrow windows can scroll the fixed layout. Uncheck it to restore responsive wrapping.
+- **Open print dialog…** requests browser printing of the whole workbook: all nine score views, including both ensemble layouts, with headings and explanations. It waits for rendering and blocks the request if a score reports an error. It uses the fixed print layouts whether the checkbox is checked or not. The toolbar, source snippets, and score transcripts are omitted from print.
 
-### `<music-dynamics>`
-Dynamic level marking.
-- `level`: "pp" | "p" | "mp" | "mf" | "f" | "ff"
+For your own page, `print-preview` selects the fixed layout on screen and `print-width` sets its width in CSS pixels (default 680). This is not a preview of physical paper pages. A print request cannot confirm that a dialog appeared or that pages were produced correctly. If no dialog opens, open the workbook in a browser with printing support and use its Print command once the notation has finished loading and errors are resolved.
 
-## Pitch System
+## Architecture
 
-Notes are positioned on a treble clef staff:
-- **E4** (position 0): Bottom line of staff
-- **B4** (position 4): Middle line of staff (center reference)
-- **F5** (position 8): Top line of staff
-
-Supported pitch range: E3 to E6
-
-### Ledger Lines
-- Notes at C4 and below automatically render ledger lines below the staff
-- Notes at A5 and above automatically render ledger lines above the staff
-
-### Stem Direction
-- Notes on or above B4 (position >= 4): stems point down
-- Notes below B4 (position < 4): stems point up
-- Beamed groups use average pitch to determine uniform stem direction
-
-## Technical Details
-
-### Dimensions
-- Staff height: 72px
-- Line spacing: 8px (5 lines = 32px)
-- Note head: 12px × 9px
-- Stem height: 28px
-- Beam thickness: 4px
-
-### Positioning
-- Each pitch position = 4px vertical offset (half of line spacing)
-- Notes use `transform: translateY()` for pitch-based positioning
-- Beams calculate position from stem element bounding rectangles
-
-## Development
-
-```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npx tsc --noEmit # Type check
+```text
+Hand-authored DOM
+       ↓
+DOM reader → typed score + source map + diagnostics
+       ↓
+Exact musical validation → system planning → VexFlow SVG
 ```
 
-## Browser Support
+`src/model` owns pitch, meter, rational durations, and validation without depending on a browser or renderer. `src/dom` reads and serializes the authoring grammar. `src/engraving` handles notation and system layout. `src/components` observes source changes and manages rendering, accessibility, and browser lifecycle.
 
-Requires modern browsers with support for:
-- Custom Elements v1
-- Shadow DOM v1
-- CSS Custom Properties
-- ES Modules
+Edit source attributes or component properties to change music. Do not edit the generated SVG. A serialized score keeps musical values and IDs; it is not a byte-for-byte copy of the original HTML.
 
+## Verify
+
+```sh
+npm test
+npm run typecheck
+npm run build
+```
+
+Tests cover musical semantics, DOM parsing/serialization, and layout. The demo supplies visual cases to inspect at desktop, narrow, and print widths. Automated checks do not establish that every possible score has ideal engraving or page turns.
+
+With the dev server running, open `/tests/browser.html` on the same origin and select **Run browser regressions**. This checks visible-ink spacing, rests, ties, nested tuplets, ensemble joins, native resize boundaries, source edits, lifecycle behavior, and fixed print preview; it is separate from `npm test`.
+
+Current limits include cross-staff beams, independent polymeter, microtones, tuplets spanning barlines, arbitrary graphical notation, and automatic page-turn optimization. Fixed print layouts are tested, but the current test workflow has not verified native print dialogs or the resulting PDF/paper pagination. Review the final pages with your paper size, margins, and playing tempo before performing from a printed part.

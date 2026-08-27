@@ -1,0 +1,28 @@
+:host { display: block; min-width: 0; color: #111; }
+[hidden] { display: none !important; }
+.surface { width: 100%; min-width: 0; }
+.system-row { max-width: 100%; overflow-x: auto; overflow-y: hidden; margin: 0 0 10px; }
+.system-row:focus-visible { outline: 2px solid #386f8a; outline-offset: 2px; }
+.notation-svg { display: block; max-width: none; background: #fff; }
+.print { display: none; }
+.screen.measuring, .print.measuring { display: block !important; position: absolute; visibility: hidden; pointer-events: none; }
+:host([print-preview]) .screen { display: none; }
+:host([print-preview]) .print { display: block; }
+.page-break::before { display: block; content: 'Page break'; color: #6b6359; border-top: 1px dashed #bbb; font: 11px system-ui, sans-serif; padding: 7px 0; }
+.diagnostics { margin: 8px 0; border-left: 3px solid #a57926; padding: 8px 12px; background: #fff7e8; font: 13px/1.5 system-ui, sans-serif; }
+.diagnostics[data-errors] { border-color: #a23232; background: #fff1f0; }
+.diagnostics ul { padding-left: 20px; margin: 8px 0 0; }
+.diagnostics summary { cursor: pointer; }
+.transcript { margin-top: 8px; color: #4c4943; font: 12px/1.6 system-ui, sans-serif; }
+.transcript summary { cursor: pointer; width: fit-content; }
+.transcript pre { white-space: pre-wrap; font: inherit; }
+.loading { color: #6b6359; font: 13px system-ui, sans-serif; padding: 16px 0; }
+@media print {
+  :host { display: block; break-inside: auto; }
+  .screen, :host([print-preview]) .screen { display: none !important; }
+  .print { display: block !important; }
+  .system-row { overflow: visible; max-width: none; break-inside: avoid; page-break-inside: avoid; margin-bottom: 10px; }
+  .page-break { break-before: page; page-break-before: always; }
+  .page-break::before, .transcript, .diagnostics:not([data-errors]) { display: none; }
+  .notation-svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

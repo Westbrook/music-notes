@@ -1,0 +1,876 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EngravingOptions, EngravingResult, HitRegion } from '../src/engraving/render.js';
+import type { Diagnostic, Score } from '../src/model/types.js';
+
+const engine = vi.hoisted(() => ({
+  ready: vi.fn<() => Promise<void>>(),
+  render: vi.fn<(container: HTMLElement, score: Score, options: EngravingOptions) => EngravingResult>(),
+}));
+
+vi.mock('../src/engraving/render.js', () => ({ engravingReady: engine.ready, renderScore: engine.render }));
+
+// Resolve the mocked backend before multiple surfaces import it concurrently.
+import '../src/engraving/render.js';
+import { MusicNote, MusicSurface, readScore } from '../src/components/index.js';
+
+function draw(container: HTMLElement, score: Score, options: EngravingOptions): EngravingResult {
+  const events = score.staves.flatMap(staff => staff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('data-score-id', score.id);
+  svg.setAttribute('data-first-pitch', events[0]?.pitches[0]?.step ?? 'rest');
+  svg.setAttribute('data-width', String(options.width));
+  const hitRegions: HitRegion[] = events.map((event, index) => {
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('data-source-id', event.id);
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('width', '8');
+    rect.setAttribute('height', '8');
+    group.append(rect);
+    svg.append(group);
+    return { sourceId: event.id, system: 0, x: index * 12, y: 10, width: options.width, height: 8, onset: event.onset };
+  });
+  container.replaceChildren(svg);
+  return { systems: [], hitRegions, diagnostics: [] };
+}
+
+function mount<T extends MusicSurface = MusicSurface>(html = '<music-measure><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure>'): T {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const root = template.content.firstElementChild as T;
+  document.body.append(root);
+  return root;
+}
+
+function note(root: MusicSurface): MusicNote { return root.querySelector('music-note')!; }
+function firstPitch(root: MusicSurface): string | null { return root.shadowRoot!.querySelector('.screen svg')?.getAttribute('data-first-pitch') ?? null; }
+function currentPitch(root: MusicSurface): string | undefined { return root.score?.staves[0].measures[0].voices[0].events[0].pitches[0]?.step; }
+function nextTask(): Promise<void> { return new Promise(resolve => setTimeout(resolve, 0)); }
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+/** happy-dom has no layout or ResizeObserver delivery; keep the real scheduler. */
+function viewport(initialWidth: number) {
+  let width = initialWidth;
+  const observers: ControlledResizeObserver[] = [];
+  class ControlledResizeObserver implements ResizeObserver {
+    readonly targets = new Set<Element>();
+    readonly callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) { this.callback = callback; observers.push(this); }
+    observe(target: Element): void { this.targets.add(target); }
+    unobserve(target: Element): void { this.targets.delete(target); }
+    disconnect(): void { this.targets.clear(); }
+  }
+  vi.stubGlobal('ResizeObserver', ControlledResizeObserver);
+  const getStyle = globalThis.getComputedStyle.bind(globalThis);
+  vi.spyOn(globalThis, 'getComputedStyle').mockImplementation((element, pseudo) => {
+    const style = getStyle(element, pseudo);
+    if (!element.classList.contains('surface')) return style;
+    return new Proxy(style, {
+      get(target, property) { return property === 'width' ? `${width}px` : Reflect.get(target, property, target); },
+    });
+  });
+  return {
+    setWidth(nextWidth: number) { width = nextWidth; },
+    targets() { return observers.flatMap(observer => [...observer.targets]); },
+    resize(nextWidth: number) {
+      width = nextWidth;
+      for (const observer of observers) {
+        const entries = [...observer.targets].map(target => ({
+          target, contentRect: new DOMRect(0, 0, width, 100),
+          borderBoxSize: [{ inlineSize: width, blockSize: 100 }],
+          contentBoxSize: [{ inlineSize: width, blockSize: 100 }],
+          devicePixelContentBoxSize: [{ inlineSize: width, blockSize: 100 }],
+        }));
+        if (entries.length) observer.callback(entries, observer);
+      }
+    },
+  };
+}
+
+let actualFontPreparation: (() => Promise<void>) | undefined;
+
+beforeEach(async () => {
+  document.body.replaceChildren();
+  engine.ready.mockReset().mockResolvedValue();
+  engine.render.mockReset().mockImplementation(draw);
+  // Vitest can return the actual module to a concurrent dynamic import while
+  // another import is resolving its mock. Stub only the same two backend
+  // exports on that path as well; all component and DOM scheduling stays real.
+  const actual = await vi.importActual<typeof import('../src/engraving/render.js')>('../src/engraving/render.js');
+  actualFontPreparation ??= actual.engravingReady;
+  vi.spyOn(actual, 'engravingReady').mockImplementation(engine.ready);
+  vi.spyOn(actual, 'renderScore').mockImplementation(engine.render);
+});
+
+afterEach(async () => {
+  document.body.replaceChildren();
+  await nextTask();
+  vi.unstubAllGlobals();
+});
+
+describe('reflected authoring properties', () => {
+  it('reflects string, number, boolean, and camelCase properties to source attributes', () => {
+    const element = document.createElement('music-note');
+    element.pitch = 'F#4';
+    element.duration = 'eighth';
+    element.dots = 2;
+    element.dotted = true;
+    element.accidentalDisplay = 'courtesy';
+    element.beam = 'start';
+    element.stem = 'down';
+    element.tie = 'start';
+    element.triplet = 'start';
+    expect(element.getAttribute('pitch')).toBe('F#4');
+    expect(element.getAttribute('duration')).toBe('eighth');
+    expect(element.getAttribute('dots')).toBe('2');
+    expect(element.hasAttribute('dotted')).toBe(true);
+    expect(element.getAttribute('accidental-display')).toBe('courtesy');
+    expect(element.getAttribute('stem')).toBe('down');
+    expect(element.getAttribute('tie')).toBe('start');
+    expect(element.getAttribute('triplet')).toBe('start');
+    element.dotted = false;
+    expect(element.hasAttribute('dotted')).toBe(false);
+    Reflect.set(element, 'duration', null);
+    expect(element.hasAttribute('duration')).toBe(false);
+    expect(element.duration).toBe('quarter');
+    element.setAttribute('dots', '3');
+    expect(element.dots).toBe(3);
+  });
+
+  it('reflects meter, tuplet, chord, slash, annotation, and layout setters', () => {
+    const meter = document.createElement('music-meter');
+    meter.top = '2+2+3'; meter.bottom = 8; meter.groups = '2+2+3';
+    expect(meter.getAttribute('top')).toBe('2+2+3');
+    expect(meter.bottom).toBe(8);
+    const tuplet = document.createElement('music-tuplet');
+    tuplet.actual = 5; tuplet.normal = 4; tuplet.ratio = true; tuplet.bracket = 'yes';
+    expect(tuplet.getAttribute('actual')).toBe('5');
+    expect(tuplet.hasAttribute('ratio')).toBe(true);
+    const chord = document.createElement('music-chord');
+    chord.pitches = 'C4 E4 G4'; chord.accidentalDisplay = 'always';
+    expect(chord.getAttribute('pitches')).toBe('C4 E4 G4');
+    const slash = document.createElement('music-slash');
+    slash.rhythmic = true; slash.duration = 'eighth';
+    expect(slash.hasAttribute('rhythmic')).toBe(true);
+    const direction = document.createElement('music-direction');
+    direction.text = 'Open solo'; direction.at = '1/4'; direction.placement = 'below';
+    expect(direction.getAttribute('text')).toBe('Open solo');
+    expect(direction.getAttribute('at')).toBe('1/4');
+    const tempo = document.createElement('music-tempo');
+    tempo.text = 'Rubato'; tempo.placement = 'below';
+    expect(tempo.getAttribute('text')).toBe('Rubato');
+    expect(tempo.getAttribute('placement')).toBe('below');
+    const dynamics = document.createElement('music-dynamics');
+    dynamics.text = 'sfz';
+    expect(dynamics.getAttribute('text')).toBe('sfz');
+    const root = document.createElement('music-system');
+    root.maxMeasures = 3; root.printWidth = 800; root.justifyLast = true; root.printPreview = true; root.bracket = 'brace';
+    expect(root.getAttribute('max-measures')).toBe('3');
+    expect(root.getAttribute('print-width')).toBe('800');
+    expect(root.hasAttribute('justify-last')).toBe(true);
+    expect(root.hasAttribute('print-preview')).toBe(true);
+    expect(root.getAttribute('bracket')).toBe('brace');
+  });
+
+  it('replays pre-upgrade own properties through the real connection lifecycle', () => {
+    const pending = document.createElement('music-note');
+    // happy-dom replaces unknown nodes at define() and drops their user fields.
+    // Model the browser's preserved own-property state, then use the actual DOM
+    // connection callback to exercise the component's replay logic.
+    for (const [name, value] of Object.entries({ pitch: 'Bb4', duration: 'half', dots: 1, dotted: true })) {
+      Object.defineProperty(pending, name, { value, writable: true, configurable: true, enumerable: true });
+    }
+    expect(Object.hasOwn(pending, 'pitch')).toBe(true);
+    document.body.append(pending);
+    expect(pending.getAttribute('pitch')).toBe('Bb4');
+    expect(pending.getAttribute('duration')).toBe('half');
+    expect(pending.getAttribute('dots')).toBe('1');
+    expect(pending.hasAttribute('dotted')).toBe(true);
+    expect(Object.hasOwn(pending, 'pitch')).toBe(false);
+    pending.pitch = 'D5';
+    expect(pending.getAttribute('pitch')).toBe('D5');
+  });
+
+  it('replays inherited surface and measure properties on first connection', async () => {
+    const root = document.createElement('music-measure');
+    root.innerHTML = '<music-note pitch="C4" duration="quarter"></music-note>';
+    for (const [name, value] of Object.entries({ label: 'Opening', meter: '3/4', pickup: true, number: '0', printWidth: 420 })) {
+      Object.defineProperty(root, name, { value, writable: true, configurable: true, enumerable: true });
+    }
+    document.body.append(root);
+    await root.renderComplete;
+    expect(root.getAttribute('label')).toBe('Opening');
+    expect(root.getAttribute('meter')).toBe('3/4');
+    expect(root.hasAttribute('pickup')).toBe(true);
+    expect(root.getAttribute('print-width')).toBe('420');
+    expect(root.score!.staves[0].measures[0]).toMatchObject({ pickup: true, number: '0', meter: { numerator: 3, denominator: 4 } });
+    expect(root.diagnostics).toEqual([]);
+  });
+
+  it('keeps legacy scalar defaults and does not invent a structural tuplet ratio', () => {
+    const meter = document.createElement('music-meter');
+    expect(meter.top).toBe(4); expect(meter.bottom).toBe(4);
+    meter.top = 7; expect(meter.top).toBe(7);
+    meter.top = '2+2+3'; expect(meter.top).toBe('2+2+3');
+    expect(document.createElement('music-dynamics').level).toBe('mf');
+    const tuplet = document.createElement('music-tuplet');
+    expect(tuplet.actual).toBe(0); expect(tuplet.normal).toBe(0);
+  });
+
+  it('dispatches a bubbling notation-change from reflected data attributes', () => {
+    const parent = document.createElement('div');
+    const element = document.createElement('music-note');
+    parent.append(element);
+    const listener = vi.fn();
+    parent.addEventListener('notation-change', listener);
+    element.pitch = 'D4';
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0]).toMatchObject({ bubbles: true, composed: true });
+  });
+});
+
+describe('surface ownership and real DOM observation', () => {
+  it('renders one screen and one print view without changing light DOM', async () => {
+    const root = mount();
+    const source = root.innerHTML;
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(firstPitch(root)).toBe('C');
+    expect(root.innerHTML).toBe(source);
+    expect(root.shadowRoot!.querySelector('.transcript pre')!.textContent).toContain('C4');
+    expect(root.shadowRoot!.querySelector<HTMLElement>('.loading')!.hidden).toBe(true);
+  });
+
+  it('coalesces a synchronous group of property and child mutations', async () => {
+    const root = mount();
+    await root.renderComplete;
+    engine.render.mockClear();
+    const listener = vi.fn();
+    root.addEventListener('notation-render', listener);
+    note(root).pitch = 'D4';
+    note(root).pitch = 'E4';
+    note(root).pitch = 'F4';
+    const instruction = document.createElement('music-direction');
+    instruction.text = 'Swing';
+    root.prepend(instruction);
+    await root.renderComplete;
+    await nextTask();
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(firstPitch(root)).toBe('F');
+  });
+
+  it('does not rerender when a reflected property is assigned its existing value', async () => {
+    const root = mount();
+    await root.renderComplete;
+    engine.render.mockClear();
+    const listener = vi.fn();
+    root.addEventListener('notation-render', listener);
+    note(root).pitch = 'C4';
+    note(root).duration = 'whole';
+    await nextTask();
+    await root.renderComplete;
+    expect(engine.render).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('automatically diagnoses and repairs an unknown attribute through MutationObserver', async () => {
+    const root = mount();
+    await root.renderComplete;
+    note(root).setAttribute('duraton', 'whole');
+    await vi.waitFor(() => expect(root.diagnostics.some(diagnostic => diagnostic.code === 'unknown-attribute')).toBe(true));
+    expect(firstPitch(root)).toBeNull();
+    note(root).removeAttribute('duraton');
+    await vi.waitFor(() => expect(firstPitch(root)).toBe('C'));
+    expect(root.diagnostics).toEqual([]);
+  });
+
+  it('observes annotation characterData changes without a property event or refresh call', async () => {
+    const root = mount('<music-measure><music-direction>Warmly</music-direction><music-note pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    const text = root.querySelector('music-direction')!.firstChild!;
+    text.nodeValue = 'Very freely';
+    await vi.waitFor(() => expect(root.score!.staves[0].measures[0].annotations[0].text).toBe('Very freely'));
+    expect(root.shadowRoot!.querySelector('.transcript pre')!.textContent).toContain('Very freely');
+  });
+
+  it('makes renderComplete await an immediately preceding unobserved-attribute mutation', async () => {
+    const root = mount();
+    await root.renderComplete;
+    note(root).setAttribute('pitchh', 'D4');
+    await root.renderComplete;
+    expect(root.diagnostics.some(diagnostic => diagnostic.code === 'unknown-attribute')).toBe(true);
+    note(root).removeAttribute('pitchh');
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    expect(firstPitch(root)).toBe('C');
+  });
+
+  it('makes renderComplete await an immediately preceding text or child-list mutation', async () => {
+    const root = mount('<music-measure><music-direction>Quietly</music-direction><music-note pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    root.querySelector('music-direction')!.firstChild!.nodeValue = 'Brightly';
+    await root.renderComplete;
+    expect(root.score!.staves[0].measures[0].annotations[0].text).toBe('Brightly');
+    const replacement = document.createElement('music-note');
+    replacement.pitch = 'G4'; replacement.duration = 'whole';
+    note(root).replaceWith(replacement);
+    await root.renderComplete;
+    expect(firstPitch(root)).toBe('G');
+  });
+
+  it('keeps nested staffs and measures from rendering duplicate surfaces', async () => {
+    const root = mount('<music-system><music-staff><music-measure><music-note pitch="C4" duration="whole"></music-note></music-measure></music-staff></music-system>');
+    await root.renderComplete;
+    await nextTask();
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    const staff = root.querySelector('music-staff')!;
+    const bar = root.querySelector('music-measure')!;
+    expect(staff.shadowRoot!.querySelector<HTMLElement>('.surface')!.hidden).toBe(true);
+    expect(bar.shadowRoot!.querySelector<HTMLElement>('.surface')!.hidden).toBe(true);
+    expect(staff.shadowRoot!.querySelector('svg')).toBeNull();
+    expect(bar.shadowRoot!.querySelector('svg')).toBeNull();
+    engine.render.mockClear();
+    note(root).pitch = 'E4';
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(firstPitch(root)).toBe('E');
+  });
+
+  it('transfers rendering ownership when a staff moves into and out of a system', async () => {
+    const staff = mount('<music-staff id="moved"><music-measure><music-note pitch="C4" duration="whole"></music-note></music-measure></music-staff>');
+    const system = mount('<music-system><music-staff><music-measure><music-rest measure></music-rest></music-measure></music-staff></music-system>');
+    await Promise.all([staff.renderComplete, system.renderComplete]);
+    engine.render.mockClear();
+    system.append(staff);
+    await system.renderComplete;
+    await nextTask();
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(system.score!.staves).toHaveLength(2);
+    expect(staff.shadowRoot!.querySelector<HTMLElement>('.surface')!.hidden).toBe(true);
+    engine.render.mockClear();
+    document.body.append(staff);
+    await Promise.all([staff.renderComplete, system.renderComplete]);
+    await nextTask();
+    expect(engine.render, JSON.stringify({
+      staffDiagnostics: staff.diagnostics, systemDiagnostics: system.diagnostics,
+      staffHidden: staff.shadowRoot!.querySelector<HTMLElement>('.surface')!.hidden,
+      staffConnected: staff.isConnected, staffParent: staff.parentElement?.localName,
+      renderedRoots: engine.render.mock.calls.map(([container]) => (container.getRootNode() as ShadowRoot).host.localName),
+    })).toHaveBeenCalledTimes(4);
+    expect(staff.shadowRoot!.querySelector<HTMLElement>('.surface')!.hidden).toBe(false);
+    expect(staff.score!.staves).toHaveLength(1);
+    expect(system.score!.staves).toHaveLength(1);
+    expect(firstPitch(staff)).toBe('C');
+  });
+
+  it('disconnects observers and safely reinstalls them on reconnect', async () => {
+    const disconnect = vi.spyOn(MutationObserver.prototype, 'disconnect');
+    const observe = vi.spyOn(MutationObserver.prototype, 'observe');
+    const resizeDisconnect = vi.spyOn(ResizeObserver.prototype, 'disconnect');
+    const root = mount();
+    await root.renderComplete;
+    engine.render.mockClear();
+    root.remove();
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(resizeDisconnect).toHaveBeenCalledTimes(1);
+    note(root).pitch = 'F4';
+    await nextTask();
+    expect(engine.render).not.toHaveBeenCalled();
+    document.body.append(root);
+    await root.renderComplete;
+    expect(observe).toHaveBeenCalledTimes(2);
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(firstPitch(root)).toBe('F');
+  });
+});
+
+describe('viewport width and stable print geometry', () => {
+  it('observes and floors inner content width instead of the transformed host border box', async () => {
+    const size = viewport(770.703);
+    const root = mount('<music-measure style="padding: 20px; border: 5px solid; transform: scale(2)" print-width="680.9"><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure>');
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1641.406, 200));
+    await root.renderComplete;
+    expect(size.targets()).toEqual([root.shadowRoot!.querySelector('.surface')]);
+    expect(engine.render.mock.calls.map(([, , options]) => options.width)).toEqual([770, 680]);
+    expect(root.printWidth).toBe(680.9);
+  });
+
+  it('ignores repeat observations and fractional changes within the same pixel', async () => {
+    const size = viewport(770.703);
+    const root = mount();
+    await root.renderComplete;
+    engine.render.mockClear();
+    size.resize(770.9);
+    size.resize(770.05);
+    await root.renderComplete;
+    await nextTask();
+    expect(engine.render).not.toHaveBeenCalled();
+    size.resize(771.05);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(1);
+    expect(engine.render.mock.calls[0][2].width).toBe(771);
+  });
+
+  it('coalesces resize delivery while preserving the existing print SVG', async () => {
+    const size = viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    const print = root.shadowRoot!.querySelector('.print svg');
+    const source = root.innerHTML;
+    const listener = vi.fn();
+    root.addEventListener('notation-render', listener);
+    engine.render.mockClear();
+    size.resize(720.8);
+    size.resize(680.4);
+    size.resize(640.1);
+    await root.renderComplete;
+    await nextTask();
+    expect(engine.render).toHaveBeenCalledTimes(1);
+    expect(engine.render.mock.calls[0][2].width).toBe(640);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(root.shadowRoot!.querySelector('.print svg')).toBe(print);
+    expect(root.innerHTML).toBe(source);
+    expect(root.getSource('note')).toBe(note(root));
+  });
+
+  it('retains print-preview nodes, hit coordinates, and selection across resizes', async () => {
+    const size = viewport(800);
+    const root = mount('<music-measure print-preview print-width="420"><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    const print = root.shadowRoot!.querySelector('.print svg');
+    const hits = root.getHitRegions();
+    const selection = vi.fn();
+    root.addEventListener('notation-select', selection);
+    engine.render.mockClear();
+    size.resize(340);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(1);
+    expect(root.shadowRoot!.querySelector('.print svg')).toBe(print);
+    expect(root.getHitRegions()).toBe(hits);
+    expect(root.getHitRegions()[0].width).toBe(420);
+    print!.querySelector('rect')!.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    expect(selection.mock.calls[0][0].detail).toEqual({ sourceId: 'note', sourceElement: note(root) });
+    expect(root.shadowRoot!.querySelector('.print')!.classList.contains('measuring')).toBe(false);
+  });
+
+  it('keeps valid print-preview hit coordinates available while a resize render waits', async () => {
+    const size = viewport(800);
+    const root = mount('<music-measure print-preview><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    const hits = root.getHitRegions();
+    const font = deferred();
+    engine.ready.mockReturnValueOnce(font.promise);
+    size.resize(400);
+    const complete = root.renderComplete;
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(2));
+    expect(root.getHitRegions()).toBe(hits);
+    expect(root.getSource('note')).toBe(note(root));
+    font.resolve();
+    await complete;
+    expect(root.getHitRegions()).toBe(hits);
+  });
+
+  it('retains cached print diagnostics once per render instead of dropping or duplicating them', async () => {
+    const size = viewport(800);
+    engine.render.mockImplementation((container, score, options) => ({
+      ...draw(container, score, options),
+      diagnostics: [{ severity: 'warning', code: 'notice', sourceId: score.id, message: `${container.className} notice` }],
+    }));
+    const root = mount();
+    await root.renderComplete;
+    const printNotice = root.diagnostics.find(diagnostic => diagnostic.code === 'print-notice');
+    size.resize(700);
+    await root.renderComplete;
+    size.resize(600);
+    await root.renderComplete;
+    expect(root.diagnostics.map(diagnostic => diagnostic.code)).toEqual(['notice', 'print-notice']);
+    expect(root.diagnostics[1]).toEqual(printNotice);
+  });
+
+  it.each([
+    ['print-width', '500'], ['max-measures', '2'], ['justify-last', ''],
+    ['measure-numbers', 'all'], ['print-preview', ''],
+  ])('invalidates print geometry when %s changes', async (attribute, value) => {
+    viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    const oldPrint = root.shadowRoot!.querySelector('.print svg');
+    engine.render.mockClear();
+    root.setAttribute(attribute, value);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(root.shadowRoot!.querySelector('.print svg')).not.toBe(oldPrint);
+    if (attribute === 'print-width') expect(engine.render.mock.calls[1][2].width).toBe(500);
+  });
+
+  it('invalidates print geometry for pitch and annotation text changes', async () => {
+    const size = viewport(800);
+    const root = mount('<music-measure><music-direction>Warmly</music-direction><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    const oldPrint = root.shadowRoot!.querySelector('.print svg');
+    engine.render.mockClear();
+    note(root).pitch = 'D4';
+    root.querySelector('music-direction')!.firstChild!.nodeValue = 'Freely';
+    size.resize(700);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(root.shadowRoot!.querySelector('.print svg')).not.toBe(oldPrint);
+    expect(root.shadowRoot!.querySelector('.print svg')!.getAttribute('data-first-pitch')).toBe('D');
+    expect(root.score!.staves[0].measures[0].annotations[0].text).toBe('Freely');
+  });
+
+  it('makes explicit refresh immediately measure the new width and rebuild both views', async () => {
+    const size = viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    const oldPrint = root.shadowRoot!.querySelector('.print svg');
+    engine.render.mockClear();
+    size.setWidth(599.9); // No ResizeObserver delivery before this explicit refresh.
+    await root.refresh();
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(engine.render.mock.calls[0][2].width).toBe(599);
+    expect(root.shadowRoot!.querySelector('.print svg')).not.toBe(oldPrint);
+  });
+
+  it('rebuilds cached print output after disconnect and reconnect', async () => {
+    const size = viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    const oldPrint = root.shadowRoot!.querySelector('.print svg');
+    root.remove();
+    expect(size.targets()).toEqual([]);
+    note(root).pitch = 'F4';
+    size.setWidth(700);
+    engine.render.mockClear();
+    document.body.append(root);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(root.shadowRoot!.querySelector('.print svg')).not.toBe(oldPrint);
+    expect(firstPitch(root)).toBe('F');
+    expect(root.getSource('note')).toBe(note(root));
+  });
+
+  it('does not reuse geometry measured while a root was hidden', async () => {
+    const size = viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    engine.render.mockClear();
+    size.resize(0);
+    await nextTask();
+    expect(engine.render).not.toHaveBeenCalled();
+    note(root).pitch = 'E4';
+    await root.renderComplete;
+    const hiddenPrint = root.shadowRoot!.querySelector('.print svg');
+    engine.render.mockClear();
+    size.resize(800);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(root.shadowRoot!.querySelector('.print svg')).not.toBe(hiddenPrint);
+    expect(firstPitch(root)).toBe('E');
+  });
+
+  it('discards cached print output after a resize engraving error and can retry by resizing', async () => {
+    const size = viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    engine.render.mockImplementationOnce(() => { throw new Error('Transient screen layout failure'); });
+    size.resize(700);
+    await root.renderComplete;
+    expect(root.shadowRoot!.querySelector('svg')).toBeNull();
+    expect(root.getHitRegions()).toEqual([]);
+    engine.render.mockClear();
+    size.resize(710);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(root.diagnostics).toEqual([]);
+    expect(firstPitch(root)).toBe('C');
+  });
+
+  it('does not cache an engraving result that reports an error diagnostic', async () => {
+    const size = viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    engine.render.mockImplementationOnce((container, score, options) => ({
+      ...draw(container, score, options),
+      diagnostics: [{ severity: 'error', code: 'engine-error', sourceId: score.id, message: 'A reported engraving error' }],
+    }));
+    size.resize(700);
+    await root.renderComplete;
+    expect(root.diagnostics.some(diagnostic => diagnostic.code === 'engine-error')).toBe(true);
+    engine.render.mockClear();
+    size.resize(710);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(root.diagnostics).toEqual([]);
+  });
+
+  it('never restores stale cached print geometry after a newer source edit', async () => {
+    const size = viewport(800);
+    const root = mount();
+    await root.renderComplete;
+    const font = deferred();
+    engine.ready.mockReturnValueOnce(font.promise);
+    size.resize(700);
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(2));
+    note(root).pitch = 'G4';
+    await root.renderComplete;
+    const print = root.shadowRoot!.querySelector('.print svg');
+    expect(print!.getAttribute('data-first-pitch')).toBe('G');
+    font.resolve();
+    await nextTask();
+    engine.render.mockClear();
+    size.resize(600);
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(1);
+    expect(root.shadowRoot!.querySelector('.print svg')).toBe(print);
+    expect(firstPitch(root)).toBe('G');
+  });
+});
+
+describe('asynchronous engraving lifecycle', () => {
+  it('does not commit an obsolete font-waiting render or resolve completion early', async () => {
+    const oldFont = deferred(); const newFont = deferred();
+    engine.ready.mockReset().mockReturnValueOnce(oldFont.promise).mockReturnValue(newFont.promise);
+    const root = mount();
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(1));
+    note(root).pitch = 'D4';
+    const complete = root.renderComplete;
+    let finished = false;
+    void complete.then(() => { finished = true; });
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(2));
+    oldFont.resolve();
+    await nextTask();
+    expect(engine.render).not.toHaveBeenCalled();
+    expect(finished).toBe(false);
+    newFont.resolve();
+    await complete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(firstPitch(root)).toBe('D');
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignores an older async render that later %ss', async outcome => {
+    const oldFont = deferred(); const newFont = deferred();
+    engine.ready.mockReset().mockReturnValueOnce(oldFont.promise).mockReturnValue(newFont.promise);
+    const root = mount();
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(1));
+    note(root).pitch = 'E4';
+    const complete = root.renderComplete;
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(2));
+    newFont.resolve();
+    await complete;
+    if (outcome === 'resolve') oldFont.resolve();
+    else oldFont.reject(new Error('Old font request failed'));
+    await nextTask();
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(firstPitch(root)).toBe('E');
+    expect(root.diagnostics).toEqual([]);
+  });
+
+  it('finishes a disconnected pending render and renders anew after reconnect', async () => {
+    const font = deferred();
+    engine.ready.mockReturnValueOnce(font.promise);
+    const root = mount();
+    const pending = root.renderComplete;
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(1));
+    root.remove();
+    await pending;
+    note(root).pitch = 'G4';
+    document.body.append(root);
+    await root.renderComplete;
+    expect(firstPitch(root)).toBe('G');
+    font.resolve();
+    await nextTask();
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(firstPitch(root)).toBe('G');
+  });
+
+  it('reports a failed font preparation and permits a later refresh to retry', async () => {
+    engine.ready.mockRejectedValueOnce(new Error('Bundled notation font unavailable'));
+    const root = mount();
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([expect.objectContaining({ code: 'engraving-error', message: 'Bundled notation font unavailable' })]);
+    expect(engine.render).not.toHaveBeenCalled();
+    expect(root.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!.open).toBe(true);
+    await root.refresh();
+    expect(engine.ready).toHaveBeenCalledTimes(2);
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(firstPitch(root)).toBe('C');
+    expect(root.diagnostics).toEqual([]);
+  });
+
+  it('retries the actual font adapter after load and availability failures', async () => {
+    const original = Object.getOwnPropertyDescriptor(document, 'fonts');
+    const load = vi.fn().mockResolvedValue([]).mockRejectedValueOnce(new Error('Font load failed'));
+    const check = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { load, check } });
+    try {
+      await expect(actualFontPreparation!()).rejects.toThrow('Font load failed');
+      const callsPerAttempt = load.mock.calls.length;
+      expect(callsPerAttempt).toBeGreaterThan(0);
+      await expect(actualFontPreparation!()).rejects.toThrow('could not be loaded');
+      expect(load).toHaveBeenCalledTimes(callsPerAttempt * 2);
+      await actualFontPreparation!();
+      expect(load).toHaveBeenCalledTimes(callsPerAttempt * 3);
+      await actualFontPreparation!();
+      expect(load).toHaveBeenCalledTimes(callsPerAttempt * 3);
+    } finally {
+      if (original) Object.defineProperty(document, 'fonts', original);
+      else Reflect.deleteProperty(document, 'fonts');
+    }
+  });
+
+  it('clears partial output after an engine exception and can recover', async () => {
+    engine.render.mockImplementationOnce((container, score, options) => {
+      draw(container, score, options);
+      throw new Error('Layout failed');
+    });
+    const root = mount();
+    await root.renderComplete;
+    expect(root.shadowRoot!.querySelector('svg')).toBeNull();
+    expect(root.getHitRegions()).toEqual([]);
+    expect(root.diagnostics.some(diagnostic => diagnostic.code === 'engraving-error')).toBe(true);
+    await root.refresh();
+    expect(firstPitch(root)).toBe('C');
+    expect(root.diagnostics).toEqual([]);
+  });
+
+  it('keeps renderComplete pending when a render listener makes another edit', async () => {
+    const root = mount();
+    await root.renderComplete;
+    const font = deferred();
+    engine.ready.mockReset().mockResolvedValueOnce().mockReturnValue(font.promise);
+    let reentered = false;
+    root.addEventListener('notation-render', () => {
+      if (reentered) return;
+      reentered = true;
+      note(root).pitch = 'E4';
+    });
+    note(root).pitch = 'D4';
+    const completion = root.renderComplete;
+    let finished = false;
+    void completion.then(() => { finished = true; });
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(2));
+    await nextTask();
+    expect(finished).toBe(false);
+    expect(firstPitch(root)).toBe('D');
+    font.resolve();
+    await completion;
+    expect(firstPitch(root)).toBe('E');
+  });
+
+  it.each(['notation-render', 'notation-diagnostics'])('keeps completion pending for a characterData edit inside %s', async eventName => {
+    const root = mount('<music-measure><music-direction>Quietly</music-direction><music-note pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    const font = deferred();
+    engine.ready.mockReset().mockResolvedValueOnce().mockReturnValue(font.promise);
+    let reentered = false;
+    root.addEventListener(eventName, () => {
+      if (reentered) return;
+      reentered = true;
+      root.querySelector('music-direction')!.firstChild!.nodeValue = 'With energy';
+    });
+    note(root).pitch = 'D4';
+    const completion = root.renderComplete;
+    let finished = false;
+    void completion.then(() => { finished = true; });
+    await vi.waitFor(() => expect(engine.ready).toHaveBeenCalledTimes(2));
+    await nextTask();
+    expect(finished).toBe(false);
+    font.resolve();
+    await completion;
+    expect(root.score!.staves[0].measures[0].annotations[0].text).toBe('With energy');
+  });
+});
+
+describe('export, diagnostics, and selection integration', () => {
+  it('exports fresh cloned JSON and safely escaped equivalent HTML', async () => {
+    const root = mount('<music-measure><music-direction text="Quietly"></music-direction><music-note id="n" pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    root.label = 'A & B "<study>"';
+    root.querySelector('music-direction')!.text = '<script>alert("x")</script> & solo';
+    note(root).pitch = 'D4';
+    const exported = root.toJSON();
+    expect(exported.staves[0].measures[0].voices[0].events[0].pitches[0].step).toBe('D');
+    Reflect.set(exported.staves[0].measures[0].voices[0].events[0].pitches[0], 'step', 'B');
+    expect(root.toJSON().staves[0].measures[0].voices[0].events[0].pitches[0].step).toBe('D');
+    const html = root.toHTML();
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).not.toContain('<script>');
+    const template = document.createElement('template'); template.innerHTML = html;
+    expect(readScore(template.content.firstElementChild!).score).toEqual(root.toJSON());
+    await root.renderComplete;
+    expect(currentPitch(root)).toBe('D');
+    expect(root.shadowRoot!.querySelector('script')).toBeNull();
+    expect(root.shadowRoot!.querySelector('.transcript pre')!.textContent).toContain('<script>');
+  });
+
+  it('refuses invalid exports and displays user-controlled diagnostics as text', async () => {
+    const root = mount();
+    await root.renderComplete;
+    note(root).pitch = '<img src=x onerror=alert(1)>';
+    expect(() => root.toJSON()).toThrow('Fix notation errors');
+    expect(() => root.toHTML()).toThrow('Fix notation errors');
+    await root.renderComplete;
+    expect(root.shadowRoot!.querySelector('img')).toBeNull();
+    expect(root.shadowRoot!.querySelector('.diagnostics')!.textContent).toContain('<img src=x');
+    expect(root.shadowRoot!.querySelector('svg')).toBeNull();
+  });
+
+  it('reports invalid layout options instead of invoking engraving', async () => {
+    const root = mount('<music-measure max-measures="0" print-width="-4" measure-numbers="sometimes"><music-rest measure></music-rest></music-measure>');
+    await root.renderComplete;
+    expect(root.diagnostics.filter(diagnostic => diagnostic.code === 'invalid-layout')).toHaveLength(3);
+    expect(engine.render).not.toHaveBeenCalled();
+  });
+
+  it('emits diagnostics/render details and keeps hit regions linked to authored elements', async () => {
+    const root = mount();
+    const renderListener = vi.fn(); const diagnosticsListener = vi.fn();
+    root.addEventListener('notation-render', renderListener);
+    root.addEventListener('notation-diagnostics', diagnosticsListener);
+    await root.renderComplete;
+    expect(renderListener).toHaveBeenCalledTimes(1);
+    const event = renderListener.mock.calls[0][0] as CustomEvent;
+    expect(event.bubbles).toBe(true); expect(event.composed).toBe(true);
+    expect(event.detail.score).toBe(root.score);
+    expect(event.detail.diagnostics).toEqual([]);
+    expect(event.detail.hitRegions).toEqual(root.getHitRegions());
+    expect(diagnosticsListener.mock.calls[0][0].detail.diagnostics).toEqual([]);
+    const hit = root.getHitRegions()[0];
+    expect(hit.sourceId).toBe('note');
+    expect(root.getSource(hit.sourceId)).toBe(note(root));
+    expect(root.getSource('missing')).toBeUndefined();
+  });
+
+  it('bubbles notation-select from SVG hit elements with the source element', async () => {
+    const root = mount();
+    await root.renderComplete;
+    const listener = vi.fn();
+    document.body.addEventListener('notation-select', listener, { once: true });
+    root.shadowRoot!.querySelector('.screen rect')!.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].detail).toEqual({ sourceId: 'note', sourceElement: note(root) });
+  });
+
+  it('uses print hit regions in print-preview and labels print diagnostics distinctly', async () => {
+    engine.render.mockImplementation((container, score, options) => {
+      const result = draw(container, score, options);
+      const diagnostic: Diagnostic = { severity: 'warning', code: 'layout-overflow', sourceId: score.id, message: 'An intentional notice' };
+      return { ...result, diagnostics: [diagnostic] };
+    });
+    const root = mount('<music-measure print-width="420" print-preview><music-note id="n" pitch="C4" duration="whole"></music-note></music-measure>');
+    await root.renderComplete;
+    expect(root.getHitRegions()[0].width).toBe(420);
+    expect(root.diagnostics.map(diagnostic => diagnostic.code)).toEqual(['layout-overflow', 'print-layout-overflow']);
+    expect(root.diagnostics[1].message).toBe('Print: An intentional notice');
+    root.printPreview = false;
+    await root.renderComplete;
+    expect(root.getHitRegions()[0].width).toBe(680);
+  });
+});

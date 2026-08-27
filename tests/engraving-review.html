@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Engraving edge cases</title>
+    <style>body{max-width:760px;margin:24px auto;padding:0 20px;font:15px/1.5 system-ui,sans-serif} h2{font-size:18px} pre{white-space:pre-wrap;font-size:12px}</style>
+  </head>
+  <body>
+    <h1>Engraving edge cases</h1>
+    <h2>Identical altered unison in two voices</h2>
+    <music-staff id="unison" label="Unison">
+      <music-measure>
+        <music-voice><music-note pitch="F#4" duration="whole"></music-note></music-voice>
+        <music-voice><music-note pitch="F#4" duration="whole"></music-note></music-voice>
+      </music-measure>
+    </music-staff>
+    <h2>Different alterations at the same staff position</h2>
+    <music-staff id="conflicting-unison" label="Split unison">
+      <music-measure>
+        <music-voice><music-note pitch="F#4" duration="whole"></music-note></music-voice>
+        <music-voice><music-note pitch="F4" duration="whole"></music-note></music-voice>
+      </music-measure>
+    </music-staff>
+    <h2>Different alterations inside a chord</h2>
+    <music-staff id="conflicting-chord">
+      <music-measure><music-chord pitches="F4 F#4" duration="whole"></music-chord></music-measure>
+    </music-staff>
+    <h2>Words and dynamic symbols use readable fonts</h2>
+    <music-staff id="dynamic-prose">
+      <music-measure>
+        <music-dynamics text="subito p"></music-dynamics>
+        <music-note pitch="G4" duration="half"></music-note>
+        <music-dynamics level="cresc."></music-dynamics>
+        <music-note pitch="A4" duration="half"></music-note>
+      </music-measure>
+    </music-staff>
+    <pre id="review-report" role="status">Preparing edge cases…</pre>
+    <script type="module">
+      import '../src/components/index.ts';
+      const roots = [...document.querySelectorAll('music-staff')];
+      await Promise.all(roots.map(root => root.refresh()));
+      document.querySelector('#review-report').textContent = JSON.stringify(roots.map(root => ({
+        id: root.id,
+        diagnostics: root.diagnostics,
+        accidentals: [...root.shadowRoot.querySelectorAll('.screen svg text')].filter(text => /[\uE260-\uE264]/.test(text.textContent)).length,
+        noteheads: root.shadowRoot.querySelectorAll('.screen .vf-notehead').length,
+      })), null, 2);
+    </script>
+  </body>
+</html>

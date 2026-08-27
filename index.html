@@ -2,236 +2,386 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hot Cross Buns - Music Notation Demo</title>
+    <meta name="description" content="Readable HTML for precise music notation: meters, tuplets, voices, and scores that reflow." />
+    <title>Music Notes — a notation workbook</title>
     <link rel="stylesheet" href="./src/index.css" />
-    <script type="module" src="/src/components/index.ts"></script>
   </head>
   <body>
-    <div class="sheet-music">
-      <h1>Hot Cross Buns</h1>
-      <h2>Traditional English Nursery Rhyme</h2>
-
-      <div class="song-header">
-        <div class="song-info">
-          <music-tempo marking="Moderato" bpm="100" beat="quarter"></music-tempo>
+    <main class="sheet-music">
+      <header class="page-header">
+        <p class="eyebrow">A notation workbook</p>
+        <h1>Music Notes</h1>
+        <p class="intro">Write the music in HTML. Keep its rhythm, spelling, and structure intact as it moves from a wide screen to a small one, or onto paper.</p>
+        <div class="toolbar" role="group" aria-label="Score display controls">
+          <label><input id="print-preview" type="checkbox" aria-describedby="print-layout-help" /> Use print layout on screen (680px)</label>
+          <button id="print-scores" type="button" aria-describedby="print-dialog-help">Open print dialog…</button>
+          <a class="source-link" href="#source-example">Read the markup</a>
         </div>
-        <div class="song-meta">
-          <music-dynamics level="mf"></music-dynamics>
-        </div>
-      </div>
+        <p id="print-layout-help" class="toolbar-help">The checkbox fixes score wrapping at the print width; it does not show paper pages. Short scores may look unchanged. Try the <a href="#ensemble-auto-heading">automatic ensemble</a> in a narrow window to see the difference.</p>
+        <p id="print-dialog-help" class="toolbar-help">Printing includes all nine scores and their explanations, without source snippets or text transcripts. It always uses the print layout, whether the checkbox is on or off. Choose paper and margins in your browser’s dialog, then Print or Save as PDF if offered. If no dialog opens here, use a browser with printing support.</p>
+        <p id="workbook-status" class="workbook-status" role="status" aria-live="polite" aria-atomic="true">Scores follow the window width.</p>
+      </header>
 
-      <!-- Staff with melody -->
-      <music-staff clef="treble">
-        <!-- Time signature -->
-        <music-meter top="4" bottom="4"></music-meter>
-
-        <!-- Measure 1: "Hot Cross Buns" - B A G (rest) -->
-        <music-measure>
-          <music-note pitch="B4" duration="quarter"></music-note>
-          <music-note pitch="A4" duration="quarter"></music-note>
-          <music-note pitch="G4" duration="half"></music-note>
-        </music-measure>
-
-        <!-- Measure 2: "Hot Cross Buns" - B A G (rest) -->
-        <music-measure>
-          <music-note pitch="B4" duration="quarter"></music-note>
-          <music-note pitch="A4" duration="quarter"></music-note>
-          <music-note pitch="G4" duration="half"></music-note>
-        </music-measure>
-
-        <!-- Measure 3: "One a penny, two a penny" - G G G G A A A A (beamed) -->
-        <music-measure>
-          <music-beam>
-            <music-note pitch="G4" duration="eighth"></music-note>
-            <music-note pitch="G4" duration="eighth"></music-note>
-            <music-note pitch="G4" duration="eighth"></music-note>
-            <music-note pitch="G4" duration="eighth"></music-note>
-          </music-beam>
-          <music-beam>
-            <music-note pitch="A4" duration="eighth"></music-note>
-            <music-note pitch="A4" duration="eighth"></music-note>
-            <music-note pitch="A4" duration="eighth"></music-note>
-            <music-note pitch="A4" duration="eighth"></music-note>
-          </music-beam>
-        </music-measure>
-
-        <!-- Measure 4: "Hot Cross Buns" - B A G -->
-        <music-measure end-bar="final">
-          <music-note pitch="B4" duration="quarter"></music-note>
-          <music-note pitch="A4" duration="quarter"></music-note>
-          <music-note pitch="G4" duration="half"></music-note>
-        </music-measure>
-      </music-staff>
-
-      <!-- Hot Cross Buns - One Octave Higher -->
-      <h3 style="margin-top: 30px;">One Octave Higher</h3>
-      <music-staff clef="treble">
-        <music-meter top="4" bottom="4"></music-meter>
-
-        <music-measure>
-          <music-note pitch="B5" duration="quarter"></music-note>
-          <music-note pitch="A5" duration="quarter"></music-note>
-          <music-note pitch="G5" duration="half"></music-note>
-        </music-measure>
-
-        <music-measure>
-          <music-note pitch="B5" duration="quarter"></music-note>
-          <music-note pitch="A5" duration="quarter"></music-note>
-          <music-note pitch="G5" duration="half"></music-note>
-        </music-measure>
-
-        <music-measure>
-          <music-beam>
-            <music-note pitch="G5" duration="eighth"></music-note>
-            <music-note pitch="G5" duration="eighth"></music-note>
-            <music-note pitch="G5" duration="eighth"></music-note>
-            <music-note pitch="G5" duration="eighth"></music-note>
-          </music-beam>
-          <music-beam>
-            <music-note pitch="A5" duration="eighth"></music-note>
-            <music-note pitch="A5" duration="eighth"></music-note>
-            <music-note pitch="A5" duration="eighth"></music-note>
-            <music-note pitch="A5" duration="eighth"></music-note>
-          </music-beam>
-        </music-measure>
-
-        <music-measure end-bar="final">
-          <music-note pitch="B5" duration="quarter"></music-note>
-          <music-note pitch="A5" duration="quarter"></music-note>
-          <music-note pitch="G5" duration="half"></music-note>
-        </music-measure>
-      </music-staff>
-
-      <!-- Hot Cross Buns - One Octave Lower -->
-      <h3 style="margin-top: 30px;">One Octave Lower</h3>
-      <music-staff clef="treble">
-        <music-meter top="4" bottom="4"></music-meter>
-
-        <music-measure>
-          <music-note pitch="B3" duration="quarter"></music-note>
-          <music-note pitch="A3" duration="quarter"></music-note>
-          <music-note pitch="G3" duration="half"></music-note>
-        </music-measure>
-
-        <music-measure>
-          <music-note pitch="B3" duration="quarter"></music-note>
-          <music-note pitch="A3" duration="quarter"></music-note>
-          <music-note pitch="G3" duration="half"></music-note>
-        </music-measure>
-
-        <music-measure>
-          <music-beam>
-            <music-note pitch="G3" duration="eighth"></music-note>
-            <music-note pitch="G3" duration="eighth"></music-note>
-            <music-note pitch="G3" duration="eighth"></music-note>
-            <music-note pitch="G3" duration="eighth"></music-note>
-          </music-beam>
-          <music-beam>
-            <music-note pitch="A3" duration="eighth"></music-note>
-            <music-note pitch="A3" duration="eighth"></music-note>
-            <music-note pitch="A3" duration="eighth"></music-note>
-            <music-note pitch="A3" duration="eighth"></music-note>
-          </music-beam>
-        </music-measure>
-
-        <music-measure end-bar="final">
-          <music-note pitch="B3" duration="quarter"></music-note>
-          <music-note pitch="A3" duration="quarter"></music-note>
-          <music-note pitch="G3" duration="half"></music-note>
-        </music-measure>
-      </music-staff>
-
-      <!-- Legend showing note types -->
-      <div class="legend">
-        <h3>Notation Key</h3>
-        <div class="legend-items">
-          <div class="legend-item">
-            <music-note duration="whole"></music-note>
-            <span>Whole Note</span>
-          </div>
-          <div class="legend-item">
-            <music-note duration="half"></music-note>
-            <span>Half Note</span>
-          </div>
-          <div class="legend-item">
-            <music-note duration="quarter"></music-note>
-            <span>Quarter Note</span>
-          </div>
-          <div class="legend-item">
-            <music-note duration="eighth"></music-note>
-            <span>Eighth Note</span>
-          </div>
-          <div class="legend-item">
-            <music-note duration="sixteenth"></music-note>
-            <span>Sixteenth Note</span>
-          </div>
-        </div>
-        <div class="legend-items" style="margin-top: 15px;">
-          <div class="legend-item">
-            <music-rest duration="whole"></music-rest>
-            <span>Whole Rest</span>
-          </div>
-          <div class="legend-item">
-            <music-rest duration="half"></music-rest>
-            <span>Half Rest</span>
-          </div>
-          <div class="legend-item">
-            <music-rest duration="quarter"></music-rest>
-            <span>Quarter Rest</span>
-          </div>
-          <div class="legend-item">
-            <music-rest duration="eighth"></music-rest>
-            <span>Eighth Rest</span>
-          </div>
-        </div>
-        <div class="legend-items" style="margin-top: 15px;">
-          <div class="legend-item">
-            <music-dynamics level="pp"></music-dynamics>
-            <span>Pianissimo</span>
-          </div>
-          <div class="legend-item">
-            <music-dynamics level="p"></music-dynamics>
-            <span>Piano</span>
-          </div>
-          <div class="legend-item">
+      <section class="study" aria-labelledby="pitch-heading">
+        <div class="study-head"><span class="study-number">01</span><h2 id="pitch-heading">Pitch is explicit</h2></div>
+        <p>The first bar is in G; the second changes to C. <code>F4</code> always means F natural, while <code>F#4</code> means F sharp. The engraving supplies the necessary cancellations.</p>
+        <music-staff id="pitch-study" data-score clef="treble" key="G" max-measures="2" measure-numbers="all" aria-label="Pitch spelling and key cancellation">
+          <music-measure>
+            <music-meter top="4" bottom="4"></music-meter>
+            <music-tempo marking="Lightly" bpm="96" beat="quarter"></music-tempo>
             <music-dynamics level="mp"></music-dynamics>
-            <span>Mezzo-piano</span>
-          </div>
-          <div class="legend-item">
-            <music-dynamics level="mf"></music-dynamics>
-            <span>Mezzo-forte</span>
-          </div>
-          <div class="legend-item">
-            <music-dynamics level="f"></music-dynamics>
-            <span>Forte</span>
-          </div>
-          <div class="legend-item">
-            <music-dynamics level="ff"></music-dynamics>
-            <span>Fortissimo</span>
-          </div>
-        </div>
-        <div class="legend-items" style="margin-top: 15px;">
-          <div class="legend-item">
-            <music-beam>
+            <music-note id="editable-note" pitch="F#4" duration="quarter"></music-note>
+            <music-note pitch="F4" duration="quarter"></music-note>
+            <music-note pitch="F#4" duration="quarter"></music-note>
+            <music-note pitch="A4" duration="quarter"></music-note>
+          </music-measure>
+          <music-measure key="C" end-bar="final">
+            <music-note pitch="F4" duration="quarter"></music-note>
+            <music-note pitch="F#4" duration="quarter"></music-note>
+            <music-note pitch="F4" duration="quarter"></music-note>
+            <music-rest duration="quarter"></music-rest>
+          </music-measure>
+        </music-staff>
+        <details id="source-example">
+          <summary>The HTML is the authoring surface</summary>
+          <pre><code>&lt;music-staff clef="treble" key="G"&gt;
+  &lt;music-measure meter="4/4"&gt;
+    &lt;music-note pitch="F#4" duration="quarter"&gt;&lt;/music-note&gt;
+    &lt;music-note pitch="F4" duration="quarter"&gt;&lt;/music-note&gt;
+    &lt;music-note pitch="F#4" duration="quarter"&gt;&lt;/music-note&gt;
+    &lt;music-rest duration="quarter"&gt;&lt;/music-rest&gt;
+  &lt;/music-measure&gt;
+&lt;/music-staff&gt;</code></pre>
+        </details>
+      </section>
+
+      <section class="study" aria-labelledby="seven-heading">
+        <div class="study-head"><span class="study-number">02</span><h2 id="seven-heading">Seven, grouped 2 + 2 + 3</h2></div>
+        <p>Grouping describes the pulse. The first bar makes it visible in the beams; the second expresses the same meter with longer values.</p>
+        <music-staff id="seven-study" data-score clef="treble" max-measures="2" measure-numbers="all" aria-label="Seven eighths grouped two plus two plus three">
+          <music-measure>
+            <music-meter top="7" bottom="8" groups="2+2+3"></music-meter>
+            <music-note pitch="D4" duration="eighth"></music-note>
+            <music-note pitch="F4" duration="eighth"></music-note>
+            <music-note pitch="A4" duration="eighth"></music-note>
+            <music-note pitch="G4" duration="eighth"></music-note>
+            <music-note pitch="F4" duration="eighth"></music-note>
+            <music-note pitch="E4" duration="eighth"></music-note>
+            <music-note pitch="D4" duration="eighth"></music-note>
+          </music-measure>
+          <music-measure end-bar="final">
+            <music-note pitch="D4" duration="quarter"></music-note>
+            <music-note pitch="F4" duration="quarter"></music-note>
+            <music-note pitch="A4" duration="quarter" dots="1"></music-note>
+          </music-measure>
+        </music-staff>
+        <details>
+          <summary>Keep grouping separate from the printed numerator</summary>
+          <pre><code>&lt;music-meter top="7" bottom="8" groups="2+2+3"&gt;&lt;/music-meter&gt;
+&lt;!-- To print an additive numerator, use top="2+2+3". --&gt;</code></pre>
+        </details>
+      </section>
+
+      <section class="study" aria-labelledby="fifteen-heading">
+        <div class="study-head"><span class="study-number">03</span><h2 id="fifteen-heading">Five compound beats</h2></div>
+        <p>Here 15/8 is five groups of three eighths. The metronome marking uses a dotted quarter. A full-measure rest fills all fifteen eighths, whatever its printed rest symbol.</p>
+        <music-staff id="fifteen-study" data-score clef="bass" max-measures="2" measure-numbers="all" aria-label="Fifteen eighths with five compound beats">
+          <music-measure>
+            <music-meter top="15" bottom="8" groups="3+3+3+3+3"></music-meter>
+            <music-tempo marking="Flowing" bpm="76" beat="quarter" dots="1"></music-tempo>
+            <music-note pitch="D3" duration="eighth"></music-note>
+            <music-note pitch="F3" duration="eighth"></music-note>
+            <music-note pitch="A3" duration="eighth"></music-note>
+            <music-note pitch="G3" duration="eighth"></music-note>
+            <music-note pitch="E3" duration="eighth"></music-note>
+            <music-note pitch="C3" duration="eighth"></music-note>
+            <music-note pitch="Bb2" duration="quarter" dots="1"></music-note>
+            <music-note pitch="A2" duration="quarter" dots="1"></music-note>
+            <music-note pitch="D3" duration="quarter" dots="1"></music-note>
+          </music-measure>
+          <music-measure end-bar="final">
+            <music-rest measure></music-rest>
+          </music-measure>
+        </music-staff>
+      </section>
+
+      <section class="study" aria-labelledby="five-heading">
+        <div class="study-head"><span class="study-number">04</span><h2 id="five-heading">Five quarters, three then two</h2></div>
+        <p>A longer bar does not need a special duration system. These measures each total five quarters, with a 3 + 2 pulse.</p>
+        <music-staff id="five-study" data-score clef="treble" max-measures="2" measure-numbers="all" aria-label="Five quarters grouped three plus two">
+          <music-measure meter="5/4" groups="3+2">
+            <music-note pitch="E4" duration="quarter"></music-note>
+            <music-note pitch="G4" duration="quarter"></music-note>
+            <music-note pitch="B4" duration="eighth"></music-note>
+            <music-note pitch="D5" duration="eighth"></music-note>
+            <music-note pitch="C5" duration="quarter"></music-note>
+            <music-note pitch="A4" duration="quarter"></music-note>
+          </music-measure>
+          <music-measure end-bar="final">
+            <music-note pitch="G4" duration="half" dotted></music-note>
+            <music-note pitch="E4" duration="half"></music-note>
+          </music-measure>
+        </music-staff>
+      </section>
+
+      <section class="study" aria-labelledby="tuplet-heading">
+        <div class="study-head"><span class="study-number">05</span><h2 id="tuplet-heading">Ratios change time</h2></div>
+        <p>Triplets may contain rests or mixed values. Five sixteenths in the time of four occupy one quarter. Nested ratios compose; the final bar changes to 6/8 and uses a duplet.</p>
+        <music-staff id="tuplet-study" data-score clef="treble" max-measures="2" measure-numbers="all" aria-label="Mixed triplets quintuplets nested tuplets and compound duplets">
+          <music-measure meter="2/4">
+            <music-tuplet actual="3" normal="2" bracket="yes">
               <music-note pitch="C5" duration="eighth"></music-note>
-              <music-note pitch="D5" duration="eighth"></music-note>
+              <music-rest duration="eighth"></music-rest>
               <music-note pitch="E5" duration="eighth"></music-note>
-              <music-note pitch="F5" duration="eighth"></music-note>
-            </music-beam>
-            <span>Beamed Eighth Notes</span>
-          </div>
-          <div class="legend-item">
-            <music-note pitch="C4" duration="quarter"></music-note>
-            <span>Note with Ledger Line (C4)</span>
-          </div>
-          <div class="legend-item">
-            <music-note pitch="A5" duration="quarter"></music-note>
-            <span>Note with Ledger Line (A5)</span>
-          </div>
-        </div>
-      </div>
-    </div>
+            </music-tuplet>
+            <music-tuplet actual="3" normal="2" bracket="yes">
+              <music-note pitch="G5" duration="quarter"></music-note>
+              <music-note pitch="E5" duration="eighth"></music-note>
+            </music-tuplet>
+          </music-measure>
+          <music-measure>
+            <music-tuplet actual="5" normal="4" ratio bracket="yes">
+              <music-note pitch="D5" duration="sixteenth"></music-note>
+              <music-note pitch="F5" duration="sixteenth"></music-note>
+              <music-rest duration="sixteenth"></music-rest>
+              <music-note pitch="Ab5" duration="sixteenth"></music-note>
+              <music-note pitch="C6" duration="sixteenth"></music-note>
+            </music-tuplet>
+            <music-note pitch="B5" duration="quarter"></music-note>
+          </music-measure>
+          <music-measure>
+            <music-tuplet actual="3" normal="2" bracket="yes">
+              <music-note pitch="A4" duration="eighth"></music-note>
+              <music-tuplet actual="5" normal="4" ratio bracket="yes">
+                <music-note pitch="B4" duration="thirty-second"></music-note>
+                <music-note pitch="C5" duration="thirty-second"></music-note>
+                <music-note pitch="D5" duration="thirty-second"></music-note>
+                <music-note pitch="F5" duration="thirty-second"></music-note>
+                <music-note pitch="G5" duration="thirty-second"></music-note>
+              </music-tuplet>
+              <music-note pitch="E5" duration="eighth"></music-note>
+            </music-tuplet>
+            <music-rest duration="quarter"></music-rest>
+          </music-measure>
+          <music-measure meter="6/8" groups="3+3" end-bar="final">
+            <music-tuplet actual="2" normal="3" ratio bracket="yes">
+              <music-note pitch="C5" duration="eighth"></music-note>
+              <music-note pitch="B4" duration="eighth"></music-note>
+            </music-tuplet>
+            <music-note pitch="A4" duration="quarter" dots="1"></music-note>
+          </music-measure>
+        </music-staff>
+        <details>
+          <summary>A triplet is a ratio, not a count of child elements</summary>
+          <pre><code>&lt;!-- This mixed triplet lasts one quarter-note beat. --&gt;
+&lt;music-tuplet actual="3" normal="2"&gt;
+  &lt;music-note pitch="G5" duration="quarter"&gt;&lt;/music-note&gt;
+  &lt;music-note pitch="E5" duration="eighth"&gt;&lt;/music-note&gt;
+&lt;/music-tuplet&gt;</code></pre>
+        </details>
+      </section>
+
+      <section class="study" aria-labelledby="improv-heading">
+        <div class="study-head"><span class="study-number">06</span><h2 id="improv-heading">Room to improvise</h2></div>
+        <p>Chord symbols and words express intent without inventing notes. Plain slashes leave the rhythm open; stemmed slashes specify rhythm without pitch. “Swing” is a performance instruction, not a hidden tuplet conversion.</p>
+        <music-staff id="improv-study" data-score clef="treble" max-measures="3" measure-numbers="all" aria-label="Jazz harmony and improvisation directions">
+          <music-measure meter="4/4">
+            <music-rehearsal text="A"></music-rehearsal>
+            <music-direction text="Swing; solo until cue"></music-direction>
+            <music-harmony text="Dm9"></music-harmony>
+            <music-slash duration="quarter"></music-slash>
+            <music-slash duration="quarter"></music-slash>
+            <music-slash duration="quarter"></music-slash>
+            <music-slash duration="quarter"></music-slash>
+          </music-measure>
+          <music-measure>
+            <music-harmony text="G13(b9)"></music-harmony>
+            <music-slash duration="quarter" dots="1" rhythmic></music-slash>
+            <music-slash duration="eighth" rhythmic></music-slash>
+            <music-rest duration="quarter"></music-rest>
+            <music-slash duration="quarter" rhythmic></music-slash>
+          </music-measure>
+          <music-measure end-bar="final">
+            <music-harmony text="Cmaj9/E"></music-harmony>
+            <music-slash duration="quarter"></music-slash>
+            <music-slash duration="quarter"></music-slash>
+            <music-slash duration="quarter"></music-slash>
+            <music-slash duration="quarter"></music-slash>
+          </music-measure>
+        </music-staff>
+      </section>
+
+      <section class="study" aria-labelledby="piano-heading">
+        <div class="study-head"><span class="study-number">07</span><h2 id="piano-heading">Two hands, independent voices</h2></div>
+        <p>The upper staff has a melody and sustained chords in separate voices. Each voice fills the measure; attacks at the same musical time align across both staves.</p>
+        <music-system id="piano-study" data-score bracket="brace" max-measures="2" measure-numbers="all" aria-label="Piano grand staff with independent upper voices">
+          <music-staff clef="treble" label="Piano">
+            <music-measure meter="4/4">
+              <music-dynamics level="p"></music-dynamics>
+              <music-voice id="melody-1">
+                <music-note pitch="C5" duration="quarter" stem="up"></music-note>
+                <music-note pitch="D5" duration="eighth" stem="up"></music-note>
+                <music-note pitch="E5" duration="eighth" stem="up"></music-note>
+                <music-note pitch="G5" duration="half" stem="up"></music-note>
+              </music-voice>
+              <music-voice id="inner-1">
+                <music-chord pitches="E4 G4" duration="half" stem="down"></music-chord>
+                <music-chord pitches="F4 A4" duration="half" stem="down"></music-chord>
+              </music-voice>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-voice id="melody-2">
+                <music-note pitch="G5" duration="quarter" stem="up"></music-note>
+                <music-note pitch="F5" duration="quarter" stem="up"></music-note>
+                <music-note pitch="E5" duration="half" stem="up"></music-note>
+              </music-voice>
+              <music-voice id="inner-2">
+                <music-chord pitches="C4 E4" duration="whole" stem="down"></music-chord>
+              </music-voice>
+            </music-measure>
+          </music-staff>
+          <music-staff clef="bass">
+            <music-measure meter="4/4">
+              <music-note pitch="C3" duration="half"></music-note>
+              <music-note pitch="G2" duration="half"></music-note>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-note pitch="C3" duration="whole"></music-note>
+            </music-measure>
+          </music-staff>
+        </music-system>
+      </section>
+
+      <section class="study" aria-labelledby="ensemble-heading">
+        <div class="study-head"><span class="study-number">08</span><h2 id="ensemble-heading">An ensemble, two layout choices</h2></div>
+        <p>The same flute, viola, and cello passage appears twice. Only the layout instructions change. Resize the window to compare them: all three parts wrap together. Viola uses alto clef; this high cello line uses tenor clef.</p>
+
+        <h3 id="ensemble-auto-heading">Without manual interjection</h3>
+        <p><strong>Automatic wrapping is the default.</strong> No line breaks, page breaks, keep hints, or measure limits are authored here. The opening pickup stays with bar 1 when they fit together; the remaining measures wrap as needed. Clefs repeat at new systems, and authored ties continue across any breaks.</p>
+        <music-system id="ensemble-auto-study" data-score bracket="bracket" measure-numbers="all" print-width="680" aria-label="Automatic layout for flute viola and cello">
+          <music-staff clef="treble" label="Flute">
+            <music-measure meter="3/4" pickup number="0">
+              <music-note pitch="G5" duration="quarter"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="A5" duration="half" dots="1" tie="start"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="A5" duration="quarter" tie="end"></music-note>
+              <music-rest duration="half"></music-rest>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-note pitch="G5" duration="half"></music-note>
+              <music-note pitch="E5" duration="quarter"></music-note>
+            </music-measure>
+          </music-staff>
+          <music-staff clef="alto" label="Viola">
+            <music-measure meter="3/4" pickup number="0">
+              <music-note pitch="C4" duration="quarter"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="F4" duration="half" dots="1" tie="start"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="F4" duration="quarter" tie="end"></music-note>
+              <music-rest duration="half"></music-rest>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-note pitch="E4" duration="half"></music-note>
+              <music-note pitch="C4" duration="quarter"></music-note>
+            </music-measure>
+          </music-staff>
+          <music-staff clef="tenor" label="Cello">
+            <music-measure meter="3/4" pickup number="0">
+              <music-note pitch="G3" duration="quarter"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="D4" duration="half" dots="1" tie="start"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="D4" duration="quarter" tie="end"></music-note>
+              <music-rest duration="half"></music-rest>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-note pitch="C4" duration="half"></music-note>
+              <music-note pitch="G3" duration="quarter"></music-note>
+            </music-measure>
+          </music-staff>
+        </music-system>
+        <details>
+          <summary>Automatic layout needs no break attributes</summary>
+          <pre><code>&lt;!-- Each part keeps its musical pickup, ties, rests, and barlines. --&gt;
+&lt;music-measure meter="3/4" pickup number="0"&gt;…&lt;/music-measure&gt;
+&lt;music-measure&gt;…&lt;/music-measure&gt;
+&lt;music-measure&gt;…&lt;/music-measure&gt;
+&lt;music-measure end-bar="final"&gt;…&lt;/music-measure&gt;</code></pre>
+        </details>
+
+        <h3 id="ensemble-manual-heading">With manual interjection</h3>
+        <p><strong>Author-directed breaks are optional overrides.</strong> The pickup asks to stay with bar 1. Bar 2 starts a new line, and bar 3 requests a new printed page after the rests. Those breaks remain even when a wider window could fit more music. Narrow widths can add further lines.</p>
+        <music-system id="ensemble-study" data-score bracket="bracket" measure-numbers="all" print-width="680" aria-label="Author-directed layout for flute viola and cello">
+          <music-staff clef="treble" label="Flute">
+            <music-measure meter="3/4" pickup keep-with-next number="0">
+              <music-note pitch="G5" duration="quarter"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="A5" duration="half" dots="1" tie="start"></music-note>
+            </music-measure>
+            <music-measure break-before="line">
+              <music-note pitch="A5" duration="quarter" tie="end"></music-note>
+              <music-rest duration="half"></music-rest>
+            </music-measure>
+            <music-measure break-before="page" end-bar="final">
+              <music-note pitch="G5" duration="half"></music-note>
+              <music-note pitch="E5" duration="quarter"></music-note>
+            </music-measure>
+          </music-staff>
+          <music-staff clef="alto" label="Viola">
+            <music-measure meter="3/4" pickup keep-with-next number="0">
+              <music-note pitch="C4" duration="quarter"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="F4" duration="half" dots="1" tie="start"></music-note>
+            </music-measure>
+            <music-measure break-before="line">
+              <music-note pitch="F4" duration="quarter" tie="end"></music-note>
+              <music-rest duration="half"></music-rest>
+            </music-measure>
+            <music-measure break-before="page" end-bar="final">
+              <music-note pitch="E4" duration="half"></music-note>
+              <music-note pitch="C4" duration="quarter"></music-note>
+            </music-measure>
+          </music-staff>
+          <music-staff clef="tenor" label="Cello">
+            <music-measure meter="3/4" pickup keep-with-next number="0">
+              <music-note pitch="G3" duration="quarter"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="D4" duration="half" dots="1" tie="start"></music-note>
+            </music-measure>
+            <music-measure break-before="line">
+              <music-note pitch="D4" duration="quarter" tie="end"></music-note>
+              <music-rest duration="half"></music-rest>
+            </music-measure>
+            <music-measure break-before="page" end-bar="final">
+              <music-note pitch="C4" duration="half"></music-note>
+              <music-note pitch="G3" duration="quarter"></music-note>
+            </music-measure>
+          </music-staff>
+        </music-system>
+        <details>
+          <summary>The same measures, with optional layout instructions</summary>
+          <pre><code>&lt;music-measure meter="3/4" pickup number="0" keep-with-next&gt;…&lt;/music-measure&gt;
+&lt;music-measure&gt;…&lt;/music-measure&gt;
+&lt;music-measure break-before="line"&gt;…&lt;/music-measure&gt;
+&lt;music-measure break-before="page" end-bar="final"&gt;…&lt;/music-measure&gt;</code></pre>
+        </details>
+        <p class="layout-note">Both versions use the same 680px print width. <strong>Use print layout on screen</strong> fixes the system layout; it does not show physical paper pages. Without a requested page break, the browser handles ordinary pagination. The manual page marker illustrates an author choice, not an automatically calculated safe turn. Review the final pages with your paper settings and playing tempo.</p>
+      </section>
+
+      <p class="page-footer">Eight original studies, with the ensemble shown in two layouts, written directly in this page’s HTML. Read <code>docs/authoring.md</code> for the data API and <code>docs/design-review.md</code> for the review criteria and current limits. There is no playback or editing UI; the score model and source links are the foundation for those future tools.</p>
+    </main>
+    <script type="module" src="/src/workbook.ts"></script>
   </body>
 </html>

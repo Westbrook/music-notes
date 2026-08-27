@@ -1,109 +1,49 @@
-# Music Notes - Development Guidelines
+# Music Notes development guidelines
 
-## Project Overview
+This library treats readable custom HTML elements as authored musical data. Preserve that API and the source DOM; do not require coordinates, engine-specific strings, or generated graphics to author music.
 
-This is a music notation web component library built with Lit. Components are designed to be used declaratively in HTML without requiring JavaScript knowledge from end users.
+## Architectural boundaries
 
-## Architecture Decisions
+- `src/model` is independent of the browser and engraving engine. Its readonly, serializable data uses exact rational time in whole-note units. Written values and dots remain separate from elapsed duration after tuplet ratios.
+- `src/dom` parses and serializes the documented grammar. It resolves inherited musical context, gives source nodes stable identities, and reports invalid or unsupported input without guessing a replacement note. Canonical serialization preserves the model, not incidental HTML formatting or metadata.
+- `src/engraving/semantics.ts` handles accidental state and beam membership. `layout.ts` chooses shared measure columns and complete system breaks. Both are pure and tested without SVG.
+- `src/engraving/render.ts` adapts validated music to the pinned VexFlow SVG engine. It owns voice alignment, ties, annotations, and final bounds. `geometry.ts` measures painted text/shape bounds. Keep engine-specific behavior in the adapter.
+- `src/components` provides native custom elements and property reflection. Only the outer music system/staff/measure renders; nested elements remain source data. One coordinator observes the complete source subtree, batches changes, handles async font races and reconnects, and exposes diagnostics, text descriptions, and source hit regions.
 
-### Framework Choice: Lit
-- Lightweight web components framework
-- Uses decorators (`@customElement`, `@property`, `@state`) for reactive properties
-- Shadow DOM for style encapsulation
-- TypeScript for type safety
+## Musical invariants
 
-### Component Structure
-- Each component is a self-contained custom element
-- Components communicate via attributes and CSS custom properties
-- Slotted content allows composition (e.g., notes inside measures, measures inside staff)
+- Use rational arithmetic for onsets, meter capacity, dots, and nested tuplets. Never use floating-point equality for musical timing.
+- Pitches are absolute spellings: F4 is natural even under a G-major key signature; F#4 is sharp. Legacy accidental attributes may specify an alteration but must not contradict a spelled suffix.
+- Meter grouping is in denominator units and must sum to the numerator. The displayed signature and its beaming groups are related but distinct.
+- Tuplet ratios do not prescribe the number of DOM children. Mixed durations, rests, chords, and nested groups must retain exact time.
+- A written whole rest is different from a full-measure rest. Pickups and incomplete drafts are explicit; no measure may silently overflow.
+- Ordinary single-voice rests retain conventional staff positions, including inside unbeamed tuplets. A rest must not follow a neighboring high pitch simply to align with it. If the engine shares one printed rest between voices, preserve both source identities and map both hit regions to that ink.
+- Simultaneous onsets share one horizontal timeline across staves and voices. All staves use the same line and page boundaries.
+- Repeated clefs/key signatures, accidental cancellation, proper beam levels, and ties communicate musical meaning. Do not approximate them with generic text symbols or geometric substitutes.
+- Invalid or unsupported music must produce actionable diagnostics. Do not render plausible-looking wrong notation or silently drop unsupported constructs.
 
-## Technical Decisions
+Measure notation after flags, dots, accidentals, beams, and ties have acquired their positions. SVG text bounds include unused font space; use actual canvas text ink metrics and native path/shape bounds, excluding transparent hit rectangles. Annotation clearances depend on overlapping horizontal spans. Charge repeated headers and incoming tie space only to the first measure of a system; connectors join final staff coordinates within that system.
 
-### Pitch Positioning System
-- Treble clef positions defined in `TREBLE_CLEF_POSITIONS` mapping
-- E4 = position 0 (bottom staff line), B4 = position 4 (middle line)
-- Each position step = 4px vertical offset (half of 8px line spacing)
-- Notes use `transform: translateY()` for positioning to avoid layout recalculation
+## Authoring and lifecycle
 
-### Stem Direction Logic
-- Individual notes: stems up if below B4, stems down if on/above B4
-- Beamed groups: use average pitch of all notes to determine uniform direction
-- Threshold: position >= 4 means stems down
+Every documented property setter reflects its attribute, so HTML and programmatic edits take the same parsing path. Preserve properties assigned before element upgrade. Source changes include unknown attribute removal, text edits, insertion, removal, reordering, and ancestor context changes.
 
-### Ledger Lines
-- Automatically rendered for notes outside staff range
-- Below staff: C4 (position -2) and lower need ledger lines at even positions
-- Above staff: A5 (position 10) and higher need ledger lines at even positions
-- Ledger lines centered on note head (12px wide note head, 18px wide ledger line)
+Keep callbacks and observers bounded and clean them up on disconnection. A stale asynchronous render must never overwrite newer data or resolve a newer render's completion promise. Await `renderComplete` for source edits and `refresh()` when changing containing layout and needing an immediate result.
 
-### Beaming Implementation
-- `<music-beam>` wraps notes to be beamed together
-- Sets `beamed` and `stem-down` attributes on child notes
-- Beam position calculated from stem element bounding rectangles
-- Uses CSS custom properties (`--beam-left`, `--beam-width`, `--beam-top`) for positioning
+Use the untransformed content width, normalized to whole CSS pixels. Viewport-only resizing may reuse the fixed print projection; source/options changes, refresh, reconnect, and errors must invalidate it. Responsive breaks remain deterministic for a given width, without history-dependent freezing.
 
-### Timing for Beam Calculation
-- Must wait for notes to re-render after setting stem direction
-- Uses nested `requestAnimationFrame` calls:
-  1. First frame: set attributes on notes
-  2. Second frame: calculate beam position after notes have re-rendered
+System wrapping is automatic unless the author adds layout constraints. Infer a keep preference for a short opening pickup with a following bar, without changing the model or source attributes; explicit breaks, measure limits, and actual fit still take precedence. Do not infer new phrases or page turns from later short measures. Keep the automatic and author-directed gallery examples musically identical and free of unrelated layout differences.
 
-## Known Limitations
+Keep workbook controls in the demo controller, separate from score components. Before requesting printing, wait for a stable set of current roots and completion promises, inspect all diagnostics, and leave no asynchronous gap before the request. Errors block the request; warnings remain notices. A returned `window.print()` call proves neither an open dialog nor a printed or saved document.
 
-### CSS Anchor Positioning
-- Investigated using CSS Anchor Positioning for beam placement
-- **Does not work across Shadow DOM boundaries**
-- Anchors defined in one shadow root cannot be referenced from another
-- Current solution: hybrid approach with minimal JS for position calculation
+Use textContent for user-supplied prose; do not inject score text as HTML. SVG and its source map are projections, not the editable source of truth.
 
-### Beam Positioning for Different Pitches
-- For ascending/descending note groups, beam connects at extremes:
-  - Stems up: beam at highest stem top (minimum Y)
-  - Stems down: beam at lowest stem bottom (maximum Y)
-- Currently uses `getBoundingClientRect()` for accurate positioning
+## Verification
 
-## CSS Custom Properties
+Run `npm test`, `npm run typecheck`, and `npm run build`. Exercise `/tests/browser.html` with the development server for real fonts/SVG, mutations, responsive layout, and print projections. Inspect the eight studies and both ensemble layouts in `index.html` visually, including narrow widths and print preview.
 
-### Theming
-- `--note-color`: Color for notes, stems, beams (default: #000)
-- `--beam-thickness`: Beam line thickness (default: 4px)
-- `--line-spacing`: Staff line spacing (default: 8px)
+Containment tests alone do not establish readable spacing. Check harmony-to-staff distance, nested tuplet clearance, incoming tie length, rest positions, exact connector gaps, fractional-width scrollbars, and width A→B→A geometry. Fixed print geometry and source identities must survive native viewport-only resize events.
 
-### Internal Communication
-- `--hide-flags`: Set by music-beam to hide flags on beamed notes
+Exercise the actual workbook toolbar with all nine scores as well as individual component fixtures. Intercepting `window.print()` tests only the request boundary. Print projections, a screen checkbox, and print CSS declarations do not replace visual inspection of real paginated PDF output.
 
-## File Structure
-
-```
-src/components/
-├── index.ts          # Exports all components
-├── music-note.ts     # Note rendering with pitch positioning
-├── music-rest.ts     # Rest symbols
-├── music-measure.ts  # Measure container with bar lines
-├── music-staff.ts    # Staff lines container
-├── music-beam.ts     # Beam grouping for eighth/sixteenth notes
-├── music-meter.ts    # Time signature
-├── music-tempo.ts    # Tempo marking
-└── music-dynamics.ts # Dynamic markings (pp, p, mp, mf, f, ff)
-```
-
-## Common Patterns
-
-### Adding New Pitch Range
-Update `TREBLE_CLEF_POSITIONS` in both:
-- `src/components/music-note.ts`
-- `src/components/music-beam.ts`
-
-### Debugging Beam Issues
-- Console logging is available in `calculateBeamPosition()`
-- Check: stem direction, stem bounding rects, calculated beam position
-- Verify notes have re-rendered before calculating (timing issue)
-
-## Testing Considerations
-
-- Test notes at various pitches (within staff, above, below)
-- Test beamed groups with same pitch and different pitches
-- Test ascending and descending note patterns
-- Verify ledger lines appear correctly for out-of-staff notes
-- Test components both inside `<music-staff>` and standalone (legend)
-
+Add regressions at the layer where a bug originates. Keep the supported scope and limitations in `docs/authoring.md` and the specialist acceptance record in `docs/design-review.md` accurate. Automatic page-turn optimization, polymeter, cross-staff beams, cross-bar tuplets, microtones, and arbitrary graphical notation require separate model and engraving work; do not imply that a text direction implements them.

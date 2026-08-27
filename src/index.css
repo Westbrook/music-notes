@@ -1,103 +1,147 @@
 :root {
-  font-family: 'Georgia', 'Times New Roman', serif;
-  line-height: 1.5;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #252723;
+  background: #f4f3ee;
+  font-synthesis: none;
+  line-height: 1.6;
   font-weight: 400;
-  color: #1a1a1a;
-  background-color: #faf8f5;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-body {
-  margin: 0;
-  padding: 20px;
-  min-width: 320px;
-  min-height: 100vh;
-}
+body { margin: 0; min-width: 320px; }
 
-h1 {
-  font-size: 2.5em;
-  line-height: 1.2;
-  margin: 0 0 10px;
-  text-align: center;
-}
+a { color: #714a37; text-underline-offset: 0.2em; }
 
-h2 {
-  font-size: 1.2em;
-  font-weight: normal;
-  font-style: italic;
-  color: #666;
-  margin: 0 0 30px;
-  text-align: center;
+button, input, select { font: inherit; }
+
+button, summary, input { accent-color: #714a37; }
+
+button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 3px solid #96613e;
+  outline-offset: 4px;
 }
 
 .sheet-music {
-  max-width: 900px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 30px;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  padding: 56px clamp(18px, 5vw, 64px) 40px;
+  background: #fffefa;
+  min-height: 100vh;
 }
 
-.song-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
+.page-header { margin-bottom: 38px; }
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #73513e;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
-.song-info {
-  text-align: left;
+h1, h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  line-height: 1.18;
+  text-wrap: balance;
 }
 
-.song-meta {
-  text-align: right;
-  font-size: 0.9em;
-  color: #666;
-}
+h1 { margin: 0 0 18px; font-size: clamp(2.5rem, 6vw, 4.5rem); letter-spacing: -0.04em; }
 
-music-staff {
-  margin: 20px 0;
-}
+h2 { margin: 0; font-size: clamp(1.5rem, 3vw, 1.95rem); letter-spacing: -0.02em; }
 
-.notation-row {
+h3 { margin: 32px 0 0; font-size: 1.1rem; font-weight: 650; line-height: 1.35; }
+
+.intro { max-width: 62ch; color: #52564d; font-size: 1.05rem; }
+
+.toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  margin: 10px 0;
+  gap: 12px 24px;
+  margin-top: 24px;
+  padding: 15px 0;
+  border-top: 1px solid #dedfd5;
+  border-bottom: 1px solid #dedfd5;
+  font-size: 0.9rem;
 }
 
-.legend {
-  margin-top: 40px;
-  padding: 20px;
-  background: #f5f5f5;
+.toolbar label { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+
+.toolbar input { width: 1.1rem; height: 1.1rem; margin: 0; }
+
+.toolbar button {
+  color: #fffefa;
+  background: #3e493e;
+  border: 1px solid #3e493e;
+  padding: 7px 14px;
   border-radius: 4px;
+  cursor: pointer;
 }
 
-.legend h3 {
-  margin: 0 0 15px;
-  font-size: 1.1em;
+.toolbar button:hover { background: #293529; }
+
+.toolbar button:disabled { opacity: 0.65; cursor: wait; }
+
+.toolbar .source-link { margin-left: auto; }
+
+.toolbar-help { margin: 10px 0 0; max-width: 90ch; color: #52564d; font-size: 0.85rem; }
+
+.workbook-status { margin: 12px 0 0; color: #52564d; font-size: 0.85rem; }
+
+.study { padding: 28px 0 34px; border-bottom: 1px solid #dedfd5; }
+
+.study-head { display: flex; gap: 16px; align-items: baseline; }
+
+.study-number { min-width: 22px; color: #867b66; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+
+.study p { margin: 12px 0 18px; color: #52564d; max-width: 78ch; }
+
+.study .layout-note { margin-top: 24px; padding-left: 14px; border-left: 2px solid #dedfd5; font-size: 0.9rem; }
+
+.study > music-staff, .study > music-system { display: block; margin: 10px 0 18px; }
+
+details { margin: 18px 0 0; font-size: 0.875rem; }
+
+summary { width: fit-content; color: #714a37; cursor: pointer; }
+
+code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 0.9em; }
+
+pre {
+  overflow-x: auto;
+  margin: 12px 0 0;
+  padding: 16px 18px;
+  border: 1px solid #e0e0d7;
+  border-radius: 4px;
+  background: #f7f7f1;
+  color: #323d32;
+  line-height: 1.7;
+  tab-size: 2;
 }
 
-.legend-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+.page-footer { margin: 28px 0 0; color: #666b5f; font-size: 0.85rem; max-width: 80ch; }
+
+@media (max-width: 600px) {
+  .sheet-music { padding-top: 30px; }
+  .toolbar { gap: 12px 18px; }
+  .toolbar .source-link { margin-left: 0; }
+  .study-head { gap: 9px; }
 }
 
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.legend-item span {
-  font-size: 0.9em;
-  color: #666;
+@media print {
+  :root { color: #000; background: #fff; }
+  body { min-width: 0; }
+  .sheet-music { max-width: none; padding: 0; background: #fff; }
+  .toolbar, .toolbar-help, .workbook-status, details, .page-footer { display: none; }
+  .page-header { margin-bottom: 16px; }
+  h1 { font-size: 30pt; }
+  h2 { font-size: 17pt; }
+  .intro { font-size: 10pt; }
+  .study { padding: 16px 0; border: 0; }
+  .study-head { break-inside: avoid; break-after: avoid; }
+  .study h3 { break-inside: avoid; break-after: avoid; }
+  .study p { margin: 6px 0 8px; font-size: 9pt; break-inside: avoid; break-after: avoid; }
+  .study-number, .eyebrow, .study p { color: #333; }
 }

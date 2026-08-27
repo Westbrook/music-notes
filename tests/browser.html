@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Notes — browser regressions</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { margin: 0 auto; max-width: 1100px; padding: 28px; }
+      h1 { margin-bottom: 8px; font-size: 28px; }
+      h2 { margin: 0 0 10px; font-size: 19px; }
+      h3 { margin: 0 0 8px; font-size: 16px; }
+      p { max-width: 80ch; }
+      button { font: inherit; padding: 10px 16px; border: 1px solid #215e77; border-radius: 6px; color: white; background: #215e77; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      a { color: #215e77; }
+      #summary { padding: 14px; border: 1px solid #b7c4c9; border-radius: 6px; background: white; }
+      [data-state="passed"] { border-color: #528269 !important; }
+      [data-state="failed"] { border-color: #aa4848 !important; }
+      #results { padding-left: 28px; }
+      #results li { padding: 6px 0; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      #results pre { padding: 10px; margin: 5px 0; border-left: 3px solid #aa4848; background: #fff3f2; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, monospace; }
+      .fixture { margin: 18px 0; padding: 14px; border: 1px solid #cbd5da; background: white; }
+      .fixture-note { margin: 0 0 10px; color: #52656f; font-size: 13px; }
+      .viewport { max-width: 100%; overflow-x: auto; }
+      .score-container { width: 960px; }
+      .score-container > music-system, .score-container > music-staff, .score-container > music-measure { width: 100%; }
+      .fixture > details { margin-top: 8px; }
+      #environment { color: #52656f; font-size: 12px; }
+      @media print {
+        body { max-width: none; padding: 0; background: white; }
+        header, #results, #summary, #environment, .fixture-note, .fixture > details { display: none; }
+        .fixture { border: 0; padding: 0; break-before: page; }
+        .viewport { overflow: visible; }
+        .score-container { width: auto !important; }
+      }
+    </style>
+    <script type="module" src="/tests/browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Music Notes browser regressions</h1>
+      <p>These checks use real custom elements, the bundled notation fonts, and actual SVG geometry. They edit the source DOM, resize score containers, and wait for the public rendering promises. Visible fixtures remain below for an engraver and performer to inspect.</p>
+      <p><button id="run" type="button">Run browser regressions</button> <a href="/">Open notation gallery</a></p>
+    </header>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready to run browser regressions.</p>
+    <p id="environment"></p>
+    <ol id="results" aria-label="Browser regression results"></ol>
+    <section aria-labelledby="fixtures-heading">
+      <h2 id="fixtures-heading">Visible inspection fixtures</h2>
+      <p class="fixture-note">Print preview checks verify the dedicated print surface and its explicit breaks. Physical page fitting still requires the browser’s print dialog and the chosen paper settings.</p>
+      <div id="fixtures"></div>
+    </section>
+  </body>
+</html>

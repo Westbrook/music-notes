@@ -1,13 +1,13 @@
-// Music Notation Web Components
-// Built with Lit
-
 export { MusicNote } from './music-note.js';
 export { MusicRest } from './music-rest.js';
-export { MusicMeasure } from './music-measure.js';
 export { MusicMeter } from './music-meter.js';
 export { MusicTempo } from './music-tempo.js';
 export { MusicDynamics } from './music-dynamics.js';
+export { MusicMeasure } from './music-measure.js';
 export { MusicStaff } from './music-staff.js';
-export { MusicBeam } from './music-beam.js';
-export { musicStyles, pitchPositions, durationValues } from './music-styles.js';
-
+export { MusicSystem } from './music-system.js';
+export { MusicTuplet, MusicVoice, MusicChord, MusicSlash, MusicDirection, MusicHarmony, MusicRehearsal } from './music-structure.js';
+export { MusicSurface } from './music-surface.js';
+export { readScore, serializeScore } from '../dom/index.js';
+export * from '../model/index.js';
+export type { EngravingOptions, EngravingResult, HitRegion } from '../engraving/render.js';
