@@ -3,11 +3,16 @@ export interface Rational { readonly numerator: number; readonly denominator: nu
 
 export type Duration = 'breve' | 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth' | 'thirty-second' | 'sixty-fourth' | '128th';
 export type Clef = 'treble' | 'bass' | 'alto' | 'tenor';
+export type StaffNotation = 'pitched' | 'rhythm' | 'three-roads';
+/** A relative instruction against the last main pitch in the same voice. */
+export type PitchDirection = 'higher' | 'same' | 'lower';
+export type PitchAlteration = -2 | -1.5 | -1 | -0.5 | 0 | 0.5 | 1 | 1.5 | 2;
 export type Step = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 export type AccidentalDisplay = 'auto' | 'always' | 'courtesy';
 export interface Pitch {
   readonly step: Step;
   readonly octave: number;
+  /** Absolute semitone alteration; supported values are multiples of 0.5 from -2 to 2. */
   readonly alter: number;
   readonly display: AccidentalDisplay;
 }
@@ -26,10 +31,46 @@ export type BeamPolicy = 'auto' | 'start' | 'continue' | 'end' | 'none';
 export type StemDirection = 'auto' | 'up' | 'down';
 export type TiePolicy = 'none' | 'start' | 'continue' | 'end';
 
+export type ArticulationType = 'accent' | 'staccato' | 'tenuto' | 'marcato' | 'staccatissimo' | 'fermata';
+export type OrnamentType = 'trill' | 'turn' | 'inverted-turn' | 'upper-mordent' | 'lower-mordent';
+export type MarkingPlacement = 'above' | 'below';
+export type IntervalNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+/** Major/perfect interval number; alter changes its magnitude before direction is applied. */
+export interface HarmonyInterval {
+  readonly number: IntervalNumber;
+  readonly alter: -1 | 0 | 1;
+}
+export interface ArticulationMarking {
+  readonly id: string;
+  readonly kind: 'articulation';
+  readonly type: ArticulationType;
+  /** Legacy source value; engraving always follows the side opposite the printed stem. */
+  readonly placement: MarkingPlacement | 'auto';
+}
+export interface OrnamentMarking {
+  readonly id: string;
+  readonly kind: 'ornament';
+  readonly type: OrnamentType;
+  /** Legacy source value; engraving always follows the side opposite the printed stem. */
+  readonly placement: MarkingPlacement;
+}
+export interface IntervalMarking {
+  readonly id: string;
+  readonly kind: 'interval';
+  readonly interval: HarmonyInterval;
+  /** Musical direction from the main pitch, not an interchangeable display preference. */
+  readonly placement: MarkingPlacement;
+}
+export type EventMarking = ArticulationMarking | OrnamentMarking | IntervalMarking;
+
 export interface MusicEvent {
   readonly id: string;
-  readonly kind: 'note' | 'chord' | 'rest' | 'slash';
+  readonly kind: 'note' | 'chord' | 'rest' | 'slash' | 'rhythm' | 'road';
   readonly pitches: readonly Pitch[];
+  /** Required only for road events; no absolute pitch or interval is inferred. */
+  readonly pitchDirection?: PitchDirection;
+  /** Event-local instructions with source identities; omitted or empty means none. They consume no time. */
+  readonly markings?: readonly EventMarking[];
   readonly duration: Duration;
   readonly dots: number;
   readonly onset: Rational;
@@ -89,6 +130,9 @@ export interface Measure {
 export interface Staff {
   readonly id: string;
   readonly label: string;
+  /** Omitted means pitched. Rhythm uses one line; three-roads uses the five-line staff's outer and middle lines. */
+  readonly notation?: StaffNotation;
+  /** Rhythm and three-roads retain neutral treble/C defaults for compatibility; neither is printed. */
   readonly clef: Clef;
   readonly key: string;
   readonly measures: readonly Measure[];

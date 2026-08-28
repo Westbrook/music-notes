@@ -101,8 +101,8 @@ async function mountWorkbook(label: string, width = 390): Promise<WorkbookFixtur
   const view = frame.contentWindow;
   assert(doc && view, 'The workbook iframe must remain on the same origin.');
   const scores = [...doc.querySelectorAll<MusicSurface>('[data-score]')];
-  equal(scores.length, 9, 'The workbook must include all nine actual score roots');
-  await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Render all nine workbook scores');
+  equal(scores.length, 12, 'The workbook must include all twelve actual score roots');
+  await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Render all twelve workbook scores');
   scores.forEach(score => noErrors(score, score.id));
   assert(doc.querySelector('#workbook-status')!.textContent!.includes('Responsive score layout'),
     'The production workbook controller did not initialize.');
@@ -223,7 +223,11 @@ function synchronizedRows(root: MusicSurface, surface = '.screen'): number {
         `${staff.label || staff.id}: all staves must share system range ${start}–${end}`);
     }
     const clefs = row.querySelectorAll('g.vf-clef').length;
-    assert(clefs >= score.staves.length, `System beginning at measure ${start + 1} has ${clefs} clefs for ${score.staves.length} staves.`);
+    const pitchedStaves = score.staves.filter(staff => (staff.notation ?? 'pitched') === 'pitched').length;
+    assert(clefs >= pitchedStaves, `System beginning at measure ${start + 1} has ${clefs} clefs for ${pitchedStaves} pitched staves.`);
+    for (const staff of row.querySelectorAll('g.vf-music-staff[data-notation="rhythm"], g.vf-music-staff[data-notation="three-roads"]')) {
+      equal(staff.querySelectorAll('g.vf-clef, g.vf-keysignature').length, 0, 'Rhythm and three-roads staves must not print pitched clefs or key signatures');
+    }
     const number = row.querySelector('g.vf-measure-number');
     assert(number?.textContent?.includes(score.staves[0].measures[start].number), `System ${start} has no useful starting measure number.`);
     next = end;
@@ -329,9 +333,9 @@ function checkNestedTupletClearance(root: MusicSurface): void {
 
 const tests: Test[] = [
   {
-    name: 'The real workbook toolbar switches all nine scores and requests the same print layout in either mode',
+    name: 'The real workbook toolbar switches all twelve scores and requests the same print layout in either mode',
     async run() {
-      const { frame, doc, view, scores } = await mountWorkbook('Actual workbook controls: all nine examples');
+      const { frame, doc, view, scores } = await mountWorkbook('Actual workbook controls: all twelve examples');
       const preview = doc.querySelector<HTMLInputElement>('#print-preview')!;
       const printButton = doc.querySelector<HTMLButtonElement>('#print-scores')!;
       const status = doc.querySelector<HTMLElement>('#workbook-status')!;
@@ -355,7 +359,7 @@ const tests: Test[] = [
         assert(!printButton.disabled, 'The print button must recover after the request returns.');
 
         preview.click();
-        await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Switch all nine workbook projections');
+        await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Switch all twelve workbook projections');
         for (const score of scores) {
           noErrors(score);
           assert(score.hasAttribute('print-preview'), `${score.id} did not follow the actual checkbox.`);
@@ -375,9 +379,9 @@ const tests: Test[] = [
         frame.style.width = '960px';
         await waitForRender(resized, 'Resize the actual workbook while previewing');
         await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Complete the workbook resize');
-        equal(scores.map(score => geometrySnapshot(score, '.print')), printGeometry, 'All nine print layouts remain fixed when the actual workbook viewport changes');
+        equal(scores.map(score => geometrySnapshot(score, '.print')), printGeometry, 'All twelve print layouts remain fixed when the actual workbook viewport changes');
         preview.click();
-        await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Return all nine scores to responsive mode');
+        await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Return all twelve scores to responsive mode');
         for (const [index, score] of scores.entries()) {
           assert(!score.hasAttribute('print-preview'), `${score.id} did not return to responsive mode.`);
           equal(view.getComputedStyle(score.shadowRoot!.querySelector('.screen')!).display, 'block', 'Responsive mode restores the screen projection');
@@ -386,9 +390,9 @@ const tests: Test[] = [
           sourceCoverage(score);
           synchronizedRows(score);
         }
-        equal(scores.map(score => score.toJSON()), models, 'Toolbar changes preserve all nine musical models');
+        equal(scores.map(score => score.toJSON()), models, 'Toolbar changes preserve all twelve musical models');
         equal(scores.map(score => score.innerHTML), markup, 'Toolbar changes preserve the authored musical DOM');
-        return 'The actual page, stylesheet and production controller switch all nine scores at 390/960px. Both checkbox states request identical print music and geometry; only window.print is intercepted, so physical pagination is not asserted.';
+        return 'The actual page, stylesheet and production controller switch all twelve scores at 390/960px. Both checkbox states request identical print music and geometry; only window.print is intercepted, so physical pagination is not asserted.';
       } finally {
         view.print = originalPrint;
       }
@@ -812,6 +816,114 @@ const tests: Test[] = [
       equal(selected.sourceId, group.dataset.sourceId, 'Selected source ID');
       assert(selected.sourceElement === root.getSource(selected.sourceId), 'The selection did not return the source DOM element.');
       return 'A rendered event selects the exact original DOM node for a future editor.';
+    },
+  },
+  {
+    name: 'System inspection bypasses SVG while geometry selection, scrolling, and disclosures remain usable',
+    async run() {
+      const fixture = await mount('Pointer-inert system: inspect the source, select the music', `
+        <music-system id="inspect-system" justify-last print-width="720">
+          <music-staff notation="three-roads"><music-measure>
+            <music-road id="inspect-first" direction="same" duration="half" stem="down">
+              <music-articulation id="inspect-accent" type="accent"></music-articulation>
+              <music-interval id="inspect-fifth" value="5" placement="above"></music-interval>
+              <music-interval id="inspect-third" value="b3" placement="below"></music-interval>
+            </music-road>
+            <music-road id="inspect-last" direction="higher" duration="half"></music-road>
+          </music-measure></music-staff>
+        </music-system>`, 600);
+      const { root } = fixture;
+      noErrors(root);
+      const model = root.toJSON();
+      const previousScroll = { x: window.scrollX, y: window.scrollY };
+      const selected: { sourceId: string; sourceElement: Element }[] = [];
+      root.addEventListener('notation-select', event => {
+        selected.push((event as CustomEvent<{ sourceId: string; sourceElement: Element }>).detail);
+      });
+      const deepestHit = (x: number, y: number): Element | null => {
+        let target = document.elementFromPoint(x, y);
+        const visited = new Set<Element>();
+        while (target?.shadowRoot && !visited.has(target)) {
+          visited.add(target);
+          const inner = target.shadowRoot.elementFromPoint(x, y);
+          if (!inner || inner === target) break;
+          target = inner;
+        }
+        return target;
+      };
+      const clickRegion = (id: string, expectedTarget: Element) => {
+        const layout = root.getLayoutGeometry()!;
+        const system = layout.systems[0];
+        const region = system.markings?.find(mark => mark.sourceId === id)
+          ?? root.getHitRegions().find(hit => hit.sourceId === id)!;
+        assert(region, `No current geometry for ${id}.`);
+        const svg = root.shadowRoot!.querySelector<SVGSVGElement>(`.${layout.projection} svg.notation-svg`)!;
+        const point = new DOMPoint(region.x + region.width / 2, region.y + region.height / 2).matrixTransform(svg.getScreenCTM()!);
+        const target = deepestHit(point.x, point.y);
+        assert(target === expectedTarget, `${id}: inspection reached ${target?.localName}.${target?.getAttribute('class')} instead of ${expectedTarget.localName}.`);
+        const before = selected.length;
+        const click = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: point.x, clientY: point.y });
+        target.dispatchEvent(click);
+        equal(selected.length, before + 1, `${id}: one semantic selection per click`);
+        equal(selected.at(-1)!.sourceId, id, `${id}: current projection chooses the precise source`);
+        assert(selected.at(-1)!.sourceElement === root.getSource(id), `${id}: source element changed.`);
+        assert(click.defaultPrevented, 'The handled score click must not fall through to an editor’s blank-measure selection.');
+      };
+      try {
+        root.scrollIntoView({ block: 'center' });
+        const svgNodes = [...root.shadowRoot!.querySelectorAll<SVGElement>('svg, svg *')];
+        assert(svgNodes.length > 0 && svgNodes.every(node => getComputedStyle(node).pointerEvents === 'none'),
+          'A generated system SVG descendant still intercepts pointer inspection.');
+        clickRegion('inspect-fifth', root);
+        clickRegion('inspect-third', root);
+        clickRegion('inspect-accent', root);
+        clickRegion('inspect-last', root);
+        equal(root.getHitRegions().map(hit => hit.sourceId), ['inspect-first', 'inspect-last'], 'Public hit regions remain event-only');
+
+        const transcript = root.shadowRoot!.querySelector<HTMLDetailsElement>('.transcript')!;
+        const transcriptSummary = transcript.querySelector('summary')!;
+        equal(getComputedStyle(transcriptSummary).pointerEvents, 'auto', 'Transcript remains pointer-active');
+        const beforeDisclosure = selected.length;
+        transcriptSummary.click();
+        assert(transcript.open, 'The transcript disclosure cannot be opened.');
+        transcriptSummary.click();
+        assert(!transcript.open, 'The transcript disclosure cannot be closed.');
+        equal(selected.length, beforeDisclosure, 'Text disclosures do not select notes');
+
+        root.printPreview = true;
+        await waitForRender(root.renderComplete, 'Select fixed print geometry');
+        const printed = root.shadowRoot!.querySelector('.print svg')!;
+        await resizeObserved(fixture, 280);
+        const row = root.shadowRoot!.querySelector<HTMLElement>('.print .system-row')!;
+        assert(row.scrollWidth > row.clientWidth, 'The fixture did not exercise horizontal overflow.');
+        equal(getComputedStyle(row).pointerEvents, 'auto', 'Overflow rows keep native scrollbar interaction');
+        const last = root.getHitRegions().find(hit => hit.sourceId === 'inspect-last')!;
+        row.scrollLeft = Math.max(0, last.x + last.width / 2 - 120);
+        assert(row.scrollLeft > 0, 'The print-preview row did not scroll horizontally.');
+        root.scrollIntoView({ block: 'center' });
+        clickRegion('inspect-last', row);
+        await resizeObserved(fixture, 960);
+        assert(root.shadowRoot!.querySelector('.print svg') === printed, 'Pointer policy changes must not recreate cached print SVG.');
+        equal(getComputedStyle(row).pointerEvents, 'none', 'A fitting row returns pointer inspection to the source host');
+        root.scrollIntoView({ block: 'center' });
+        clickRegion('inspect-third', root);
+
+        const beforeError = selected.length;
+        root.setAttribute('invalid-inspection-attribute', 'x');
+        await waitForRender(root.renderComplete, 'Invalidate stale pointer geometry');
+        const diagnostics = root.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!;
+        assert(!diagnostics.hidden, 'Invalid source did not expose diagnostics.');
+        equal(getComputedStyle(diagnostics.querySelector('summary')!).pointerEvents, 'auto', 'Diagnostics remain interactive');
+        root.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 100, clientY: 100 }));
+        equal(selected.length, beforeError, 'Invalidated geometry must not select stale music');
+        root.removeAttribute('invalid-inspection-attribute');
+        await waitForRender(root.renderComplete, 'Restore valid inspection fixture');
+        root.printPreview = false;
+        await waitForRender(root.renderComplete, 'Restore responsive fixture');
+        equal(root.toJSON(), model, 'Inspection, scrolling, and selection preserve the musical model');
+        noErrors(root);
+      } finally { window.scrollTo(previousScroll.x, previousScroll.y); }
+      return 'Browser hit testing reaches the source host (or an active overflow row), never SVG internals; measured selections preserve child/event IDs, print caching, scrolling, and disclosures. Click dispatch is synthetic, not an OS-input qualification.';
     },
   },
   {

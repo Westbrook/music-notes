@@ -1,6 +1,6 @@
 # Design review
 
-This refactor treats the project as a notation library with an editable musical source, not as a collection of drawing commands. The scope is conventional pitched notation, extended meters and tuplets, readable parts, and clear instructions for improvisation. It does not claim to replace a complete publishing or composition application.
+This refactor treats the project as a notation library with an editable musical source, not as a collection of drawing commands. The scope is conventional pitched notation, extended meters and tuplets, readable parts, and clear instructions for improvisation. The [notation expansion review](notation-expansion.md) extends that foundation with bounded quarter-tone spelling and a pitch-free, single-line rhythm staff. It does not claim to replace a complete publishing or composition application.
 
 ## What needed to change
 
@@ -38,7 +38,7 @@ The music engraver's concern is that a performer must see the intended pitch and
 | Authoring | Attribute changes, nested edits, and child replacement update the result. Invalid markup points to the responsible source. Supported scores survive serialize/read without changing musical values. |
 | Browser lifecycle | Resize, reconnect, font loading, print transitions, and successive edits do not leave stale output or duplicate observers. |
 
-The eight studies in `index.html` are deliberately small, original examples of these features. The ensemble appears twice, with automatic layout and authored overrides; all nine score roots are checked through the DOM reader and a canonical serialize/read comparison. The automated suites cover model arithmetic and validation, DOM behavior, engraving semantics, and deterministic system planning. Visual review remains necessary for spacing, collision avoidance, and the intended printed page.
+The original eight studies in `index.html` remain small, independent examples of these features. The ensemble appears twice, with automatic layout and authored overrides. The next three studies add quarter-tones with a single-line rhythm part, three-roads notation, and attached markings with interval harmonies, bringing the workbook to eleven studies and twelve score views. Gallery checks read the source and perform a canonical serialize/read comparison. The automated suites cover model arithmetic and validation, DOM behavior, engraving semantics, and deterministic system planning. Visual review remains necessary for spacing, collision avoidance, and the intended printed page.
 
 ## Notation references behind the choices
 
@@ -58,11 +58,11 @@ A good page break is not automatically a safe page turn. A turn requires enough 
 
 ## Boundaries and next work
 
-The current grammar does not express independent polymeter, cross-staff beams, microtonal tuning, cross-bar tuplets, instrument transposition, general slurs, articulations/ornaments, or arbitrary graphical notation. It does not automatically rewrite awkward rhythms into tied groups. Harmony is preserved text, not analyzed or transposed. Directions such as “solo until cue” express intent without inventing a repeat-playback program.
+The current grammar does not express independent polymeter, cross-staff beams, arbitrary tuning beyond its documented 24-EDO quarter-tone spellings, cross-bar tuplets, instrument transposition, general slurs, or arbitrary graphical notation. Its rhythm staff is one fixed line, not a configurable percussion kit map. It does not automatically rewrite awkward rhythms into tied groups. The [markings extension](event-markings.md) adds six articulations, five ornaments, and three-roads interval harmonies through 13; ornament realization and extension lines remain unsupported. Measure-level chord symbols are preserved text, not analyzed or transposed. Directions such as “solo until cue” express intent without inventing a repeat-playback program.
 
 The renderer is an implementation of the supported grammar, not a guarantee of ideal engraving for every dense or extreme score. An individual measure wider than its container may overflow. Print width is fixed and configurable; paper size, margins, browser pagination, and the performer's available turning time still require review. There is no automatic safe-turn optimizer or fully validated publishing workflow.
 
-A future editing surface can build commands, selection, undo/redo, and insertion previews around the model and source IDs. It should preserve exact musical time and explicit pitch spelling, make incomplete drafts visible, and keep layout preferences separate from note content. A future playback layer should introduce performed timing without replacing written timing.
+An embedding editor can build commands, selection, undo/redo, and insertion previews around the model and source IDs. It should preserve exact musical time and explicit pitch spelling, make incomplete drafts visible, and keep layout preferences separate from note content. A future playback layer should introduce performed timing without replacing written timing.
 
 Run `npm test`, `npm run typecheck`, and `npm run build` for automated verification. Inspect the workbook at desktop, narrow, and configured print widths; check the nested tuplets, accidental cancellations, common piano attacks, and the ensemble tie/page transitions before relying on a printed part.
 

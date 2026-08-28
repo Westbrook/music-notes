@@ -134,7 +134,7 @@ describe('written durations and absolute pitches', () => {
 
   it('rejects absent octaves, unknown pitch syntax, and unsafe ranges', () => {
     for (const value of ['', 'C', 'H4', 'C4garbage', 'C4.5', 'C10', 'C-2', 'C###4', 'C#b4', '440']) expect(() => parsePitch(value)).toThrow();
-    expect(() => parsePitch('C4', 'quarter-sharp')).toThrow();
+    expect(() => parsePitch('C4', 'eighth-tone-sharp')).toThrow();
     expect(() => parsePitch('C4', undefined, 'hidden' as 'auto')).toThrow();
     expect(() => pitchText({ ...parsePitch('C4'), alter: 3 })).toThrow();
   });

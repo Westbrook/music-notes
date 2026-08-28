@@ -6,7 +6,7 @@ const annotation = ['text', 'placement', 'at'];
 
 export const MUSIC_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = {
   'music-system': ['label', 'bracket', ...context, ...layout],
-  'music-staff': ['label', ...context, ...layout],
+  'music-staff': ['label', 'notation', ...context, ...layout],
   'music-measure': ['label', 'number', ...context, 'break-before', 'keep-with-next', 'end-bar', 'repeat-start', 'pickup', 'incomplete', ...layout],
   'music-voice': [],
   'music-tuplet': ['actual', 'normal', 'bracket', 'ratio'],
@@ -14,6 +14,11 @@ export const MUSIC_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = {
   'music-chord': ['pitches', 'accidental-display', ...rhythm],
   'music-rest': ['measure', ...rhythm],
   'music-slash': ['rhythmic', ...rhythm],
+  'music-rhythm': rhythm,
+  'music-road': ['direction', ...rhythm],
+  'music-articulation': ['type', 'placement'],
+  'music-ornament': ['type', 'placement'],
+  'music-interval': ['value', 'placement'],
   'music-meter': ['top', 'bottom', 'groups'],
   'music-tempo': ['marking', 'bpm', 'beat', 'dots', 'dotted', ...annotation],
   'music-dynamics': ['level', ...annotation],

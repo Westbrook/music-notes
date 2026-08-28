@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Notes — event marking checks</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { margin: 0 auto; max-width: 1100px; padding: 24px; }
+      h1 { margin: 0 0 8px; font-size: 28px; }
+      h2 { font-size: 20px; }
+      h3 { margin: 0 0 8px; font-size: 17px; }
+      p { max-width: 85ch; }
+      a { color: #215e77; }
+      button { font: inherit; padding: 10px 16px; border: 1px solid #215e77; border-radius: 6px; color: white; background: #215e77; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      #summary { padding: 14px; border: 1px solid #b7c4c9; border-radius: 6px; background: white; }
+      [data-state="passed"] { border-color: #528269 !important; }
+      [data-state="failed"] { border-color: #aa4848 !important; }
+      #results li { padding: 6px 0; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      #results pre { padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; background: #fff3f2; font: 12px/1.5 ui-monospace, monospace; }
+      .fixture { margin: 20px 0; padding: 14px; border: 1px solid #cbd5da; background: white; }
+      .fixture-note, #environment { color: #52656f; font-size: 13px; }
+      .viewport { max-width: 100%; overflow-x: auto; }
+      .score-container > music-system, .score-container > music-staff { width: 100%; }
+    </style>
+    <script type="module" src="/tests/event-markings-browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Event markings and interval harmonies</h1>
+      <p>Standard markings sit opposite the actual stem, or above when no stem is printed; legacy placement preferences cannot override that rule. Road interval figures keep their musical side: 5 above F can add C above; b3 below Bb can add G below. Harmony tones and ornament auxiliaries never become the next road’s reference, and markings do not change written time.</p>
+      <p><button id="run" type="button">Run event marking checks</button> <a href="/index.html#event-markings-heading">Open the workbook study</a> · <a href="/tests/three-roads-browser.html">Three-roads checks</a></p>
+    </header>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready to run event marking checks.</p>
+    <p id="environment"></p>
+    <ol id="results" aria-label="Event marking results"></ol>
+    <section aria-labelledby="fixtures-heading">
+      <h2 id="fixtures-heading">Visible inspection fixtures</h2>
+      <p class="fixture-note">Actual music-font glyphs and measured SVG are checked below. Ornament realization, playback, native printing, and saved PDFs are not tested.</p>
+      <p id="native-click-status" class="fixture-note" role="status" aria-live="polite">Optional click check: after the checks finish, click the ink of an articulation, ornament, or interval figure below. Each fixture reports the originating click’s isTrusted value and source chain, then the selected child or event. Untrusted or synthetic clicks are not native hit-testing evidence.</p>
+      <div id="fixtures"></div>
+    </section>
+  </body>
+</html>

@@ -4,6 +4,13 @@
 .system-row { max-width: 100%; overflow-x: auto; overflow-y: hidden; margin: 0 0 10px; }
 .system-row:focus-visible { outline: 2px solid #386f8a; outline-offset: 2px; }
 .notation-svg { display: block; max-width: none; background: #fff; }
+/* Inspect a system's source host rather than its generated drawing. SVG hit
+   rectangles opt into pointer events themselves, so inheritance is not enough. */
+:host(music-system) .surface { pointer-events: none; }
+:host(music-system) .notation-svg, :host(music-system) .notation-svg * { pointer-events: none !important; }
+/* Keep native disclosure controls and actual overflow scrollbars usable. */
+:host(music-system) .system-row[data-scrollable],
+:host(music-system) .diagnostics, :host(music-system) .transcript { pointer-events: auto; }
 .print { display: none; }
 .screen.measuring, .print.measuring { display: block !important; position: absolute; visibility: hidden; pointer-events: none; }
 :host([print-preview]) .screen { display: none; }

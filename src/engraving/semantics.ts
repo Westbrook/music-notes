@@ -1,9 +1,10 @@
-import { add, compare, equals, keyAlterations, meterBoundaries } from '../model/index.js';
-import type { Measure, Meter, MusicEvent, Pitch, Rational, Voice } from '../model/types.js';
+import { add, compare, equals, formatRational, keyAlterations, meterBoundaries } from '../model/index.js';
+import type { EventMarking, MarkingPlacement, Measure, Meter, MusicEvent, Pitch, Rational, Voice } from '../model/types.js';
+import type { InkBox } from './geometry.js';
 
 export interface EngravedAccidental {
   readonly index: number;
-  readonly type: '#' | 'b' | 'n' | '##' | 'bb';
+  readonly type: '#' | 'b' | 'n' | '##' | 'bb' | 'd' | 'db' | '+' | '++';
   readonly courtesy: boolean;
 }
 
@@ -15,14 +16,105 @@ export interface EngravedAccidental {
  */
 export function canShareRest(a: MusicEvent, b: MusicEvent): boolean {
   return a.kind === 'rest' && b.kind === 'rest'
+    // A marked rest owns its own fermata and source target, even when another
+    // voice has an otherwise identical rest and marking.
+    && !a.markings?.length && !b.markings?.length
     && a.duration === b.duration && a.dots === b.dots
     && Boolean(a.measureRest) === Boolean(b.measureRest)
     && equals(a.onset, b.onset) && equals(a.time, b.time);
 }
 
+/** Standard symbols always oppose the printed stem; only intervals author a side. */
+export function eventMarkingPlacement(marking: EventMarking, stem: 'up' | 'down' | 'none'): MarkingPlacement {
+  if (marking.kind === 'interval') return marking.placement;
+  // Legacy standard-mark placement remains serializable source data, but it
+  // cannot override this rule, including for fermatas, ornaments or polyphony.
+  return stem === 'up' ? 'below' : 'above';
+}
+
+/** Intervals stay nearest their head; longer symbols occupy successively outer positions. */
+export function eventMarkingOrder(marking: EventMarking): number {
+  if (marking.kind === 'interval') return marking.interval.number * 0.02 + marking.interval.alter * 0.001;
+  if (marking.kind === 'ornament') return 8;
+  return { staccato: 1, tenuto: 2, staccatissimo: 3, accent: 4, marcato: 5, fermata: 6 }[marking.type];
+}
+
+export interface MarkingPlacementRequest {
+  readonly head: InkBox;
+  readonly width: number;
+  readonly height: number;
+  readonly placement: MarkingPlacement;
+  readonly obstacles: readonly InkBox[];
+  /** Fermatas, marcato and ornaments conventionally stay outside the staff. */
+  readonly outsideStaff?: { readonly top: number; readonly bottom: number };
+  /** A bounded shift can avoid a stem without separating a wide figure from its head. */
+  readonly lateralShift?: number;
+  readonly preferredShift?: -1 | 1;
+}
+
+/**
+ * Find the closest clear ink box on the requested side. Every vertical move
+ * passes at least one obstacle, so crowded notation cannot create an unbounded
+ * retry loop. The algorithm does not move source notes or flip interval meaning.
+ */
+export function placeEventMarking(request: MarkingPlacementRequest): InkBox {
+  const { head, width, height, placement, obstacles, outsideStaff } = request;
+  const gap = 2;
+  const center = head.x + head.width / 2;
+  const limit = Math.min(Math.max(0, request.lateralShift ?? 0), width / 2);
+  const preferred = request.preferredShift ?? -1;
+  const shifts = limit ? [0, preferred * limit / 2, -preferred * limit / 2, preferred * limit, -preferred * limit] : [0];
+  const nearest = placement === 'above' ? head.y - height - 3 : head.y + head.height + 3;
+  const initial = outsideStaff ? placement === 'above'
+    ? Math.min(nearest, outsideStaff.top - height - 4)
+    : Math.max(nearest, outsideStaff.bottom + 4) : nearest;
+  let best: InkBox | undefined;
+  let bestCost = Infinity;
+  for (const shift of shifts) {
+    const x = center + shift - width / 2;
+    let y = initial;
+    const horizontal = obstacles.filter(box => x < box.x + box.width + gap && box.x < x + width + gap);
+    for (let iteration = 0; iteration <= horizontal.length; iteration++) {
+      const collisions = horizontal.filter(box => y < box.y + box.height + gap && box.y < y + height + gap);
+      if (!collisions.length) break;
+      y = placement === 'above'
+        ? Math.min(...collisions.map(box => box.y - gap - height))
+        : Math.max(...collisions.map(box => box.y + box.height + gap));
+    }
+    // A local lateral adjustment is preferable to jumping an entire stem,
+    // but never displace a clear centered symbol merely to save a pixel.
+    const cost = Math.abs(y - initial) + Math.abs(shift) * 1.5;
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = { x, y, width, height };
+    }
+  }
+  return best!;
+}
+
 const accidentalTypes: ReadonlyMap<number, EngravedAccidental['type']> = new Map([
-  [-2, 'bb'], [-1, 'b'], [0, 'n'], [1, '#'], [2, '##'],
+  [-2, 'bb'], [-1.5, 'db'], [-1, 'b'], [-0.5, 'd'], [0, 'n'],
+  [0.5, '+'], [1, '#'], [1.5, '++'], [2, '##'],
 ]);
+
+/** VexFlow's Stein–Zimmermann glyph codes stay inside the engraving adapter. */
+export function accidentalType(alter: number): EngravedAccidental['type'] | undefined {
+  return accidentalTypes.get(alter);
+}
+
+/** Differently altered notes on the same staff position cannot share a head. */
+export function hasSimultaneousPitchConflict(measure: Measure): boolean {
+  const positions = new Map<string, number>();
+  for (const voice of measure.voices) for (const event of voice.events) {
+    if (event.kind !== 'note' && event.kind !== 'chord') continue;
+    for (const pitch of event.pitches) {
+      const position = `${formatRational(event.onset)}:${pitch.step}:${pitch.octave}`;
+      if (positions.has(position) && positions.get(position) !== pitch.alter) return true;
+      positions.set(position, pitch.alter);
+    }
+  }
+  return false;
+}
 
 interface PitchOccurrence {
   readonly event: MusicEvent;
@@ -84,7 +176,7 @@ export function resolveAccidentals(measure: Measure): ReadonlyMap<string, readon
         const continuation = event.tie === 'end' || event.tie === 'continue';
         const forced = pitch.display === 'always' || pitch.display === 'courtesy';
         if (conflict || forced || (!continuation && previous !== pitch.alter)) {
-          const type = accidentalTypes.get(pitch.alter);
+          const type = accidentalType(pitch.alter);
           // Unsupported alterations are score errors; never disguise one as a natural.
           if (type !== undefined) {
             result.get(event.id)!.push(Object.freeze({ index, type, courtesy: pitch.display === 'courtesy' }));
@@ -108,6 +200,7 @@ const flaggedDurations = new Set<MusicEvent['duration']>([
 function beamableAttack(event: MusicEvent): boolean {
   if (event.measureRest || !flaggedDurations.has(event.duration)) return false;
   return ((event.kind === 'note' || event.kind === 'chord') && event.pitches.length > 0)
+    || event.kind === 'rhythm' || event.kind === 'road'
     || (event.kind === 'slash' && event.rhythmic);
 }
 

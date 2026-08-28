@@ -1,5 +1,8 @@
 export { MusicNote } from './music-note.js';
 export { MusicRest } from './music-rest.js';
+export { MusicRhythm } from './music-rhythm.js';
+export { MusicRoad } from './music-road.js';
+export { MusicArticulation, MusicOrnament, MusicInterval } from './music-event-markings.js';
 export { MusicMeter } from './music-meter.js';
 export { MusicTempo } from './music-tempo.js';
 export { MusicDynamics } from './music-dynamics.js';
@@ -8,6 +11,7 @@ export { MusicStaff } from './music-staff.js';
 export { MusicSystem } from './music-system.js';
 export { MusicTuplet, MusicVoice, MusicChord, MusicSlash, MusicDirection, MusicHarmony, MusicRehearsal } from './music-structure.js';
 export { MusicSurface } from './music-surface.js';
+export type { LayoutGeometry } from './music-surface.js';
 export { readScore, serializeScore } from '../dom/index.js';
 export * from '../model/index.js';
-export type { EngravingOptions, EngravingResult, HitRegion } from '../engraving/render.js';
+export type { EngravingOptions, EngravingResult, HitRegion, SourceGeometry, StaffGeometry, MeasureGeometry, NoteheadGeometry, EventGeometry, AnnotationGeometry, MarkingGeometry, TupletGeometry, SystemGeometry, InsertionAnchor } from '../engraving/render.js';

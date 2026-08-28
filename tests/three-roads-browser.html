@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Notes — three-roads checks</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { margin: 0 auto; max-width: 1100px; padding: 24px; }
+      h1 { margin: 0 0 8px; font-size: 28px; }
+      h2 { font-size: 20px; }
+      h3 { margin: 0 0 8px; font-size: 17px; }
+      p { max-width: 85ch; }
+      a { color: #215e77; }
+      button { font: inherit; padding: 10px 16px; border: 1px solid #215e77; border-radius: 6px; color: white; background: #215e77; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      #summary { padding: 14px; border: 1px solid #b7c4c9; border-radius: 6px; background: white; }
+      [data-state="passed"] { border-color: #528269 !important; }
+      [data-state="failed"] { border-color: #aa4848 !important; }
+      #results li { padding: 6px 0; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      #results pre { padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; background: #fff3f2; font: 12px/1.5 ui-monospace, monospace; }
+      .fixture { margin: 20px 0; padding: 14px; border: 1px solid #cbd5da; background: white; }
+      .fixture-note, #environment { color: #52656f; font-size: 13px; }
+      .viewport { max-width: 100%; overflow-x: auto; }
+      .score-container > music-system, .score-container > music-staff { width: 100%; }
+    </style>
+    <script type="module" src="/tests/three-roads-browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>3 roads music</h1>
+      <p>Top: choose a higher pitch. Middle: the same pitch. Bottom: any lower pitch. Choose a reference first, then compare each new attack with the last pitch in that voice; rests preserve it. These checks use the original top, middle, and bottom staff lines, with prescribed slash rhythms.</p>
+      <p><button id="run" type="button">Run three-roads checks</button> <a href="/index.html#three-roads-heading">Open the workbook study</a> · <a href="/tests/notation-browser.html">Quarter-tone and one-line checks</a></p>
+    </header>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready to run three-roads checks.</p>
+    <p id="environment"></p>
+    <ol id="results" aria-label="Three-roads results"></ol>
+    <section aria-labelledby="fixtures-heading">
+      <h2 id="fixtures-heading">Visible inspection fixtures</h2>
+      <p class="fixture-note">The exact pitches are chosen in performance. A tied middle-road continuation holds the pitch without a new attack. No playback, native print dialog, or saved PDF is verified here.</p>
+      <div id="fixtures"></div>
+    </section>
+  </body>
+</html>

@@ -1,5 +1,5 @@
-import { add, durationTime, equals, formatRational, meterTime, multiply, parseMeter, pitchText, rational, validateScore } from '../model/index';
-import type { Annotation, Measure, Meter, MusicEvent, Score, Tuplet, Voice } from '../model/types';
+import { add, durationTime, equals, formatRational, harmonyIntervalText, meterTime, multiply, parseMeter, pitchText, rational, validateScore } from '../model/index';
+import type { Annotation, EventMarking, Measure, Meter, MusicEvent, Score, Tuplet, Voice } from '../model/types';
 
 type Attribute = readonly [string, string | number | boolean | undefined];
 
@@ -55,6 +55,15 @@ export function serializeScore(score: Score): string {
     ]);
   };
 
+  const writeMarking = (marking: EventMarking, depth: number): void => {
+    leaf(depth, `music-${marking.kind}`, [
+      ['id', claim(marking.id)],
+      ...(marking.kind === 'interval' ? [['value', harmonyIntervalText(marking.interval)] as Attribute]
+        : [['type', marking.type] as Attribute]),
+      ['placement', marking.kind === 'interval' || marking.placement !== (marking.kind === 'articulation' ? 'auto' : 'above') ? marking.placement : undefined],
+    ]);
+  };
+
   const writeEvent = (event: MusicEvent, depth: number): void => {
     const pitched = event.kind === 'note' || event.kind === 'chord';
     requireValue(pitched || event.pitches.length === 0, `unpitched event "${event.id}" has pitches.`);
@@ -64,9 +73,10 @@ export function serializeScore(score: Score): string {
     requireValue(event.pitches.every(pitch => pitch.display === display), `chord "${event.id}" has different accidental display policies per pitch. The pitches attribute supports one shared accidental-display.`);
     requireValue(!event.measureRest || event.kind === 'rest', `only a rest can be a measure rest ("${event.id}").`);
     requireValue(!event.rhythmic || event.kind === 'slash', `only a slash can have the rhythmic flag ("${event.id}").`);
-    leaf(depth, `music-${event.kind}`, [
+    const values: Attribute[] = [
       ['id', claim(event.id)],
       [event.kind === 'chord' ? 'pitches' : 'pitch', pitched ? event.pitches.map(pitchText).join(' ') : undefined],
+      ['direction', event.pitchDirection],
       ['duration', event.measureRest && event.duration === 'whole' ? undefined : event.duration],
       ['measure', event.measureRest], ['dots', event.dots || undefined],
       ['accidental-display', display && display !== 'auto' ? display : undefined],
@@ -74,7 +84,13 @@ export function serializeScore(score: Score): string {
       ['stem', event.stem !== 'auto' ? event.stem : undefined],
       ['tie', event.tie !== 'none' ? event.tie : undefined],
       ['rhythmic', event.rhythmic],
-    ]);
+    ];
+    if (!event.markings?.length) leaf(depth, `music-${event.kind}`, values);
+    else {
+      open(depth, `music-${event.kind}`, values);
+      for (const marking of event.markings) writeMarking(marking, depth + 1);
+      close(depth, `music-${event.kind}`);
+    }
   };
 
   const writeVoice = (voice: Voice, measure: Measure, depth: number): void => {
@@ -128,7 +144,12 @@ export function serializeScore(score: Score): string {
 
   open(0, 'music-system', [['id', claim(score.id)], ['label', score.label || undefined], ['bracket', score.bracket !== 'none' ? score.bracket : undefined]]);
   for (const staff of score.staves) {
-    open(1, 'music-staff', [['id', claim(staff.id)], ['label', staff.label || undefined], ['clef', staff.clef !== 'treble' ? staff.clef : undefined], ['key', staff.key !== 'C' ? staff.key : undefined]]);
+    const pitched = (staff.notation ?? 'pitched') === 'pitched';
+    open(1, 'music-staff', [
+      ['id', claim(staff.id)], ['label', staff.label || undefined], ['notation', staff.notation],
+      ['clef', pitched && staff.clef !== 'treble' ? staff.clef : undefined],
+      ['key', pitched && staff.key !== 'C' ? staff.key : undefined],
+    ]);
     let previousMeter: Meter | undefined;
     let previousClef = staff.clef;
     let previousKey = staff.key;
@@ -141,7 +162,7 @@ export function serializeScore(score: Score): string {
         ['id', claim(measure.id)], ['number', measure.number],
         ['meter', meterChanged ? measure.meter.display : undefined],
         ['groups', meterChanged && measure.meter.explicitGroups ? measure.meter.groups.join('+') : undefined],
-        ['clef', measure.clef !== previousClef ? measure.clef : undefined], ['key', measure.key !== previousKey ? measure.key : undefined],
+        ['clef', pitched && measure.clef !== previousClef ? measure.clef : undefined], ['key', pitched && measure.key !== previousKey ? measure.key : undefined],
         ['break-before', measure.breakBefore !== 'auto' ? measure.breakBefore : undefined],
         ['keep-with-next', measure.keepWithNext], ['end-bar', measure.endBar !== 'single' ? measure.endBar : undefined],
         ['repeat-start', measure.repeatStart], ['pickup', measure.pickup], ['incomplete', measure.incomplete],

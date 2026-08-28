@@ -1,10 +1,11 @@
 import {
   add, durationTime, meterTime, multiply, parseDuration, parseMeter,
-  parsePitch, rational, validateClef, validateKey, validateScore,
+  parsePitch, rational, validateClef, validateKey, validatePitchDirection, validateScore,
+  parseHarmonyInterval, validateArticulationType, validateOrnamentType,
 } from '../model/index';
 import type {
-  Annotation, Clef, Diagnostic, Duration, Measure, Meter, MusicEvent, Rational,
-  Score, Staff, Tuplet, Voice,
+  Annotation, Clef, Diagnostic, Duration, EventMarking, Measure, Meter, MusicEvent, Rational,
+  Score, Staff, StaffNotation, Tuplet, Voice,
 } from '../model/types';
 import { isKnownAttribute, MUSIC_ATTRIBUTES } from './attributes';
 
@@ -23,8 +24,9 @@ interface VoiceDraft { id: string; events: MusicEvent[]; tuplets: TupletDraft[];
 const identities = new WeakMap<Element, Map<string, string>>();
 let identitySequence = 0;
 const MAX_TUPLET_DEPTH = 16;
-const rhythmTags = new Set(['music-note', 'music-chord', 'music-rest', 'music-slash']);
+const rhythmTags = new Set(['music-note', 'music-chord', 'music-rest', 'music-slash', 'music-rhythm', 'music-road']);
 const annotationTags = new Set(['music-tempo', 'music-dynamics', 'music-direction', 'music-harmony', 'music-rehearsal']);
+const markingTags = new Set(['music-articulation', 'music-ornament', 'music-interval']);
 const zero = rational(0);
 const one = rational(1);
 
@@ -145,10 +147,18 @@ class Reader {
     }
   }
 
-  context(element: Element, inherited: Context, measureId?: string): Context {
+  context(element: Element, inherited: Context, measureId?: string, notation: StaffNotation = 'pitched'): Context {
     let { meter, clef, key } = inherited;
-    if (element.hasAttribute('clef')) clef = this.attempt(element, 'invalid-clef', () => validateClef(element.getAttribute('clef')!), measureId) ?? clef;
-    if (element.hasAttribute('key')) key = this.attempt(element, 'invalid-key', () => validateKey(element.getAttribute('key')!), measureId) ?? key;
+    if (notation === 'rhythm' || notation === 'three-roads') {
+      clef = 'treble';
+      key = 'C';
+      if (element.hasAttribute('clef') || element.hasAttribute('key')) {
+        this.problem(element, `${notation}-pitch-context`, `A ${notation === 'rhythm' ? 'single-line rhythm' : '3 roads'} staff has no pitched clef or key. Remove clef and key attributes from this staff and its measures.`, measureId);
+      }
+    } else {
+      if (element.hasAttribute('clef')) clef = this.attempt(element, 'invalid-clef', () => validateClef(element.getAttribute('clef')!), measureId) ?? clef;
+      if (element.hasAttribute('key')) key = this.attempt(element, 'invalid-key', () => validateKey(element.getAttribute('key')!), measureId) ?? key;
+    }
     const signature = element.getAttribute('meter');
     const groups = element.getAttribute('groups');
     if (signature !== null || groups !== null) {
@@ -227,10 +237,46 @@ class Reader {
     return { ...result, ...(bpm !== undefined ? { bpm } : {}), ...(beat ? { beat } : {}), ...(dots !== undefined ? { dots } : {}) };
   }
 
+  eventMarkings(element: Element, measureId: string): EventMarking[] {
+    const children = [...element.children];
+    if ([...element.childNodes].some(node => node.nodeType === 3 && node.textContent?.trim())
+      || children.some(child => !markingTags.has(tagOf(child)))) {
+      this.problem(element, 'nonempty-rhythm-element', `<${tagOf(element)}> accepts only music-articulation, music-ornament, and music-interval children, not text or nested musical events. Custom HTML elements need explicit closing tags; XML-style self-closing tags do not close them.`, measureId);
+    }
+    const markings: EventMarking[] = [];
+    for (const child of children) {
+      const tag = tagOf(child);
+      if (!markingTags.has(tag)) continue;
+      this.attributes(child, measureId);
+      this.leaf(child, measureId);
+      const id = this.id(child);
+      if (tag === 'music-articulation') {
+        const type = this.attempt(child, 'invalid-articulation', () => validateArticulationType(child.getAttribute('type') ?? ''), measureId);
+        if (type) markings.push({ id, kind: 'articulation', type,
+          placement: this.choice(child, 'placement', ['auto', 'above', 'below'], 'auto', measureId) });
+      } else if (tag === 'music-ornament') {
+        const type = this.attempt(child, 'invalid-ornament', () => validateOrnamentType(child.getAttribute('type') ?? ''), measureId);
+        if (type) markings.push({ id, kind: 'ornament', type,
+          placement: this.choice(child, 'placement', ['above', 'below'], 'above', measureId) });
+      } else {
+        const interval = this.attempt(child, 'invalid-harmony-interval', () => parseHarmonyInterval(child.getAttribute('value') ?? ''), measureId);
+        const placement = child.getAttribute('placement');
+        if (placement !== 'above' && placement !== 'below') {
+          this.problem(child, 'invalid-interval-placement', 'An interval harmony needs explicit placement="above" or placement="below". This chooses its musical direction from the main pitch.', measureId);
+        } else if (interval) markings.push({ id, kind: 'interval', interval, placement });
+      }
+    }
+    return markings;
+  }
+
   event(element: Element, context: Context, voice: VoiceDraft, tuplets: readonly TupletDraft[], multiplier: Rational, measureId: string): void {
     this.attributes(element, measureId);
-    this.leaf(element, measureId);
+    const markings = this.eventMarkings(element, measureId);
     const kind = tagOf(element).replace('music-', '') as MusicEvent['kind'];
+    const pitchDirection = kind === 'road'
+      ? this.attempt(element, 'invalid-road-direction', () => validatePitchDirection(element.getAttribute('direction') ?? ''), measureId)
+      : undefined;
+    if (kind === 'road' && pitchDirection === undefined) return;
     const measureRest = kind === 'rest' && this.boolean(element, 'measure', measureId);
     const duration = this.attempt(element, 'invalid-duration', () => parseDuration(element.getAttribute('duration') ?? (measureRest ? 'whole' : 'quarter')), measureId);
     const dots = this.dots(element, measureId);
@@ -265,6 +311,8 @@ class Reader {
       id: this.id(element), kind, pitches, duration, dots, onset: voice.onset, time,
       tupletIds: tuplets.map(tuplet => tuplet.id), beam, stem, tie, measureRest,
       rhythmic: kind === 'slash' && this.boolean(element, 'rhythmic', measureId),
+      ...(pitchDirection !== undefined ? { pitchDirection } : {}),
+      ...(markings.length ? { markings } : {}),
     };
     voice.events.push(event);
     for (const tuplet of tuplets) tuplet.eventIds.push(event.id);
@@ -331,10 +379,10 @@ class Reader {
     return { id: voice.id, events: voice.events, tuplets: voice.tuplets };
   }
 
-  measure(element: Element, inherited: Context, defaultNumber: number): { measure: Measure; context: Context } {
+  measure(element: Element, inherited: Context, defaultNumber: number, notation: StaffNotation = 'pitched'): { measure: Measure; context: Context } {
     const id = this.id(element);
     this.attributes(element, id);
-    let context = this.context(element, inherited, id);
+    let context = this.context(element, inherited, id, notation);
     const children = [...element.children];
     let seenRhythm = false;
     let seenMeter = false;
@@ -378,19 +426,21 @@ class Reader {
 
   staff(element: Element, inherited: Context, standaloneMeasure = false): Staff {
     if (!standaloneMeasure) { this.attributes(element); this.containerText(element); }
-    const initial = standaloneMeasure ? inherited : this.context(element, inherited);
+    const notation = standaloneMeasure ? 'pitched' : this.choice(element, 'notation', ['pitched', 'rhythm', 'three-roads'], 'pitched');
+    const initial = standaloneMeasure ? inherited : this.context(element, inherited, undefined, notation);
     let context = initial;
     const measures: Measure[] = [];
     for (const child of standaloneMeasure ? [element] : [...element.children]) {
       if (tagOf(child) !== 'music-measure') { this.unexpected(child, element); continue; }
       const openingPickup = measures.length ? measures[0].pickup : child.hasAttribute('pickup');
-      const result = this.measure(child, context, measures.length + (openingPickup ? 0 : 1));
+      const result = this.measure(child, context, measures.length + (openingPickup ? 0 : 1), notation);
       measures.push(result.measure);
       context = result.context;
     }
     return {
       id: this.id(element, standaloneMeasure ? 'staff' : 'element'),
       label: standaloneMeasure ? '' : element.getAttribute('label') ?? '',
+      ...(!standaloneMeasure && element.hasAttribute('notation') ? { notation } : {}),
       clef: initial.clef, key: initial.key, measures,
     };
   }

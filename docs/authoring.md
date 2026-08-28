@@ -1,5 +1,7 @@
 # Authoring music
 
+This document describes the readable musical DOM grammar and the notation components' browser API.
+
 The light DOM is the editable source. A `music-staff` renders one part; a `music-system` contains parallel staves and renders their measures together. Measures belong directly to a staff. Notes and rests in a measure are sequential unless placed in separate `music-voice` containers.
 
 ```html
@@ -21,27 +23,146 @@ Custom HTML elements need explicit closing tags. XML-style `<music-note />` does
 
 ## Pitches, context, and durations
 
-Set `clef`, `key`, and `meter` on the root, staff, or a measure. Changes on a measure continue into following measures of that staff. Defaults are treble clef, C major, and 4/4. A nested `music-meter` is another way to set the measure's meter; place it before any notes, rests, or voices.
+Set `clef`, `key`, and `meter` on the root, staff, or a measure. Changes on a measure continue into following measures of that staff. Pitched notation defaults to treble clef, C major, and 4/4. A nested `music-meter` is another way to set the measure's meter; place it before any notes, rests, or voices. Use `notation="rhythm"` for a pitch-free single line, or `notation="three-roads"` for written rhythm with performer-chosen relative pitch directions, as described below.
 
 | Attribute | Values and meaning |
 | --- | --- |
 | `clef` | `treble`, `bass`, `alto`, `tenor`. Alto puts middle C on the third line; tenor on the fourth. |
 | `key` | Major/minor signatures such as `C`, `G`, `Bb`, `F#m`. This does not transpose authored pitches. |
-| `pitch` | An explicit spelling and octave, such as `C4`, `F#4`, `Bb3`, `F##4`, or `Bbb3`. A note requires a pitch. |
+| `pitch` | An explicit spelling and octave, such as `C4`, `F#4`, `Bb3`, `F##4`, `Bbb3`, or `Fqs4`. A pitched note requires a pitch. |
 | `pitches` | Space-separated chord pitches, such as `C4 E4 G4`. They share one rhythm. |
 | `duration` | `breve`, `whole`, `half`, `quarter`, `eighth`, `sixteenth`, `thirty-second`, `sixty-fourth`, `128th`. Default: `quarter`. |
 | `dots` | Integer `0`–`3`; legacy boolean `dotted` means one dot. |
 | `accidental-display` | `auto` (default), `always`, or `courtesy`. Chords use one policy for all pitches. |
 | `stem` | `auto` (default), `up`, or `down`. |
-| `tie` | `start`, `continue`, or `end` on consecutive events with matching pitches; omitted means no tie. |
+| `tie` | `start`, `continue`, or `end` in the same voice. Match pitched notes, sustain rhythm notes, or continue a road event with `direction="same"`; omitted means no tie. |
 
 `F4` is F natural even in G major; write `F#4` when you mean F sharp. The renderer uses key and measure context to decide which accidental glyphs to show. It does not change the pitch's meaning. Legacy `pitch="F4" accidental="sharp"` remains accepted, but conflicting explicit spellings, such as `pitch="F#4" accidental="flat"`, are diagnosed.
+
+### Quarter-tone accidentals
+
+The supported microtonal vocabulary is quarter-tone notation in 24 equal divisions of the octave (24-EDO), using one Stein–Zimmermann accidental family. Alterations are absolute offsets from the named natural, in semitones; they are not added to the key signature or the previous accidental.
+
+| Spelling | Accidental attribute | Alteration from the natural |
+| --- | --- | --- |
+| `Fqf4` | `quarter-flat` | −0.5 semitone (−50 cents) |
+| `Fqs4` | `quarter-sharp` | +0.5 semitone (+50 cents) |
+| `Ftqf4` | `three-quarter-flat` | −1.5 semitones (−150 cents) |
+| `Ftqs4` | `three-quarter-sharp` | +1.5 semitones (+150 cents) |
+
+For example, `<music-note pitch="F4" accidental="quarter-sharp"></music-note>` and `<music-note pitch="Fqs4"></music-note>` have the same pitch. Chords use the same suffixes, such as `pitches="C4 Eqs4 G4"`. Short `qf`, `qs`, `tqf`, and `tqs` accidental values are also accepted. An explicit suffix must agree with a separately supplied accidental. Canonical serialization uses the suffix spellings.
+
+A chord may contain at most two pitches at the same letter and octave, such as `Fqf4 Fqs4`; their heads remain distinct. Three or more at one staff position produce `unsupported-chord-cluster` instead of hiding a pitch. Use musically appropriate distinct spellings/staff positions or separate staves for a larger cluster. This limit applies to ordinary and quarter-tone alterations alike.
+
+Quarter-tone accidentals follow the same octave-specific, measure-local state and `accidental-display` policy as ordinary accidentals. A natural cancels the complete alteration. A tie preserves the exact spelling, including its quarter-tone alteration. A continued tie does not silently change the accidental state of later, untied attacks in a new bar. Text descriptions name these accidentals in words.
+
+Include a short legend in the performer's part, especially when mixing conventions from other scores. The workbook uses “24-EDO; quarter-tone signs”; its accompanying explanation gives the cent values. The library does not implement arbitrary cents, just-intonation ratios, nonstandard key signatures, selectable accidental systems, retuning, or playback. A text direction cannot add those musical capabilities. See the [notation expansion review](notation-expansion.md).
+
+### Single-line rhythm staff
+
+```html
+<music-staff notation="rhythm" label="Claps" meter="7/8" groups="2+2+3">
+  <music-measure>
+    <music-direction text="Clap the written rhythm"></music-direction>
+    <music-rhythm duration="quarter"></music-rhythm>
+    <music-rest duration="quarter"></music-rest>
+    <music-rhythm duration="quarter" dots="1"></music-rhythm>
+  </music-measure>
+  <music-measure end-bar="final">
+    <music-rest measure></music-rest>
+  </music-measure>
+</music-staff>
+```
+
+`notation="rhythm"` creates one actual staff line with ordinary duration-bearing noteheads, not a pitched staff with hidden notes. `music-rhythm` is valid only on a rhythm staff and has no pitch or accidental; its `duration`, `dots`, `stem`, `beam`, and `tie` describe a prescribed rhythm. Use the staff label or a direction to say what action or sound is intended. A rhythm staff does not imply a particular percussion instrument or MIDI sound.
+
+The staff retains meter, grouping, voices, tuplets, rests, annotations, barlines, and synchronized layout with pitched staves. It has no printed clef or key signature. Inherited system clef/key settings do not give it pitch; explicit `clef` or `key` attributes on the rhythm staff or its measures are diagnosed. Pitched `music-note` and `music-chord` events are rejected on it. Omitting `notation`, or using `notation="pitched"`, preserves the ordinary five-line staff. Changing an existing staff's notation never silently removes its pitches.
+
+When changing a pitched passage to rhythm notation, keep the staff and event kinds compatible and remove obsolete local clef/key settings. Rhythmic slashes are valid in both staff modes and preserve prescribed attacks; open slashes do not. For a tied passage, validate the complete replacement source, changing its pitched events to rhythm events and its staff mode together while preserving the intended tie chain. The reader diagnoses incompatible notation; it does not convert pitches or silently clear ties.
+
+Rests keep their written values. A whole-duration rest still lasts one whole note; a full-measure rest still follows the meter. `music-slash rhythmic` prescribes attacks with slash heads, while an open `music-slash` leaves attacks to the performer. Neither is a synonym for an ordinary rhythm note. Rhythm notes may tie to consecutive rhythm notes in the same voice, including across bars and systems: the continuation is not a new attack. They cannot tie to pitched notes, rests, or slashes.
+
+The text representation identifies the single-line rhythm staff and pitch-free rhythm events. Pitched notehead coordinates and pitch editing do not apply to rhythm notes. When rendering a staff separately, retain its notation, event identities, and required local instructions.
 
 A `music-rest` accepts the same duration and dot values as a note. `<music-rest measure></music-rest>` instead fills the current meter. It is not equivalent to `duration="whole"` in 3/4, 7/8, or 15/8. A measure rest cannot be dotted, scaled by tuplets, or combined with other events in its voice.
 
 Ordinary unbeamed rests in one voice keep their conventional staff positions even beside high or low notes. Beamed and polyphonic rests may move to accommodate their voices and neighboring notation. Only a full-measure rest is centered in the measure; other rests occupy their rhythmic positions.
 
 Boolean attributes use presence: `dotted`, `pickup`, `rhythmic`. Remove the attribute to disable it; do not write `dotted="false"`.
+
+### 3 roads music
+
+```html
+<music-staff notation="three-roads" label="3 roads music" meter="4/4">
+  <music-measure>
+    <music-direction text="Choose a reference pitch; top higher, middle same, bottom lower."></music-direction>
+    <music-road direction="same" duration="quarter"></music-road>
+    <music-road direction="higher" duration="eighth"></music-road>
+    <music-road direction="higher" duration="eighth"></music-road>
+    <music-road direction="same" duration="quarter"></music-road>
+    <music-road direction="lower" duration="quarter"></music-road>
+  </music-measure>
+</music-staff>
+```
+
+This graphic scoring approach keeps the original five-line staff's **top, middle, and bottom lines**, at their original spacing. It has no clef or key. Every `music-road` prescribes its written rhythm using duration-specific slash heads, stems, flags, beams, and dots. Its required `direction` is one of:
+
+| Direction | Staff line | Performer instruction |
+| --- | --- | --- |
+| `higher` | Top | Choose any pitch higher than the previous main pitch. |
+| `same` | Middle | Use the same pitch as the previous main pitch. |
+| `lower` | Bottom | Choose any pitch lower than the previous main pitch. |
+
+Choose a comfortable reference pitch before the first attack, separately for each voice. An opening `same` sounds that reference. Higher/lower instructions compare with the last **main pitch** in that voice, including through rests and barlines; two successive top-road events ask for two upward moves. Added harmony tones and ornament auxiliaries never replace that reference. The roads do not specify absolute register, interval size, tuning, or scale. Author an explicit direction if a section or repeat should reset the reference. Place the legend and any performance restrictions on the staff so they remain in extracted parts.
+
+Only `music-road`, rests, tuplets, voices, and annotations belong on this staff. An ordinary pitched note, a single-line rhythm note, or an open improvisation slash would omit or contradict a road instruction and is rejected. Inherited system clef/key settings are ignored; explicit local clef/key attributes are errors. Rests keep their exact rhythm but do not choose a new reference pitch. The example in the workbook remains distinct from both “Clapped pulse” and “Room to improvise.”
+
+A tie can start on any road, but every `tie="continue"` or `tie="end"` must use **`direction="same"` on the middle line**. It sustains the previously chosen pitch without another attack. Untied middle-road events do reattack. Tying into `higher` or `lower` is an error, even if the previous head used that road. Ties remain in one voice and may cross bars or systems; rests cannot interrupt a tie.
+
+When a road carries interval harmonies, the tie sustains the entire sonority. Repeat exactly the same interval values and above/below directions on every tied segment. Source IDs and child order may differ; adding, dropping, or changing an interval inside the tie is rejected. There is no implicit inheritance from the first segment.
+
+Changing an occupied staff to a different notation must not guess a conversion. Use an all-rest staff or validate a complete source change with compatible event kinds. An embedding editor must preserve direction during duration edits and timing during direction edits. Road events have no fixed pitch, so pitch dragging, A–G pitch entry, and accidental controls must not invent one.
+
+## Articulations, ornaments, and interval harmonies
+
+Attach markings as direct children of their event. They share that event's onset, consume no additional time, and keep their own source IDs. They are not measure annotations or separate tuplet members.
+
+```html
+<music-note pitch="F4" duration="quarter">
+  <music-articulation type="accent"></music-articulation>
+  <music-articulation type="staccato"></music-articulation>
+</music-note>
+<music-note pitch="G4" duration="half">
+  <music-ornament type="trill"></music-ornament>
+</music-note>
+```
+
+| Element | Vocabulary | Placement and scope |
+| --- | --- | --- |
+| `music-articulation` | `accent`, `staccato`, `tenuto`, `marcato`, `staccatissimo`, `fermata` | Opposite the printed stem, or above a stemless event; notes, chords, rhythm notes, road events, and rhythmic slashes. Rests and open slashes accept only `fermata`. |
+| `music-ornament` | `trill`, `turn`, `inverted-turn`, `upper-mordent`, `lower-mordent` | Opposite the printed stem, or above a stemless event; a single pitched note or a road's main pitch. Chords need a separate pitched voice identifying the ornamented tone. |
+| `music-interval` | Required `value`: `1` through `13`, optionally prefixed by `b` or `#` | Required `placement="above"` or `"below"`; road events only. This side is musical meaning, never changed to avoid a collision. |
+
+All standard markings follow the stem actually drawn: up stem → below, down stem → above, no stem → above. This includes beamed notes, multiple voices, ornaments, and fermatas. A harmony figure's side has no effect on this rule. Legacy articulation `placement="auto|above|below"` and ornament `placement="above|below"` attributes remain valid source data and round-trip unchanged, but no longer override the engraved side. Omit them in new markup; interval placement remains required and meaningful.
+
+Different articulation types may combine, such as accent plus staccato. Repeating the same articulation or ornament type on one event is an error, even on opposite sides. Markings stay on their authored tie segment. Put an attack accent at the start, a release mark at the end, and a fermata where the hold is intended; markings do not break ties, invent attacks, or change exact written time. Ornaments use standard symbols but do not generate auxiliary pitches or playback. Supply a performance instruction when the upper/lower neighbor, tuning, starting note, or speed matters, especially on an unkeyed road staff.
+
+```html
+<music-road direction="same" duration="quarter">
+  <music-interval value="5" placement="above"></music-interval>
+</music-road>
+<music-road direction="higher" duration="quarter">
+  <music-interval value="b3" placement="below"></music-interval>
+</music-road>
+```
+
+Each interval refers independently to that event's chosen **main pitch**. A `5` above F adds C above; a `b3` below B♭ adds G below. Figures use major/perfect distances: `1`–`13` represent 0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, and 21 semitones. `b` reduces the distance by one semitone and `#` increases it by one; only then does above/below determine the direction. Thus `b3` below is −3 semitones, while an unaltered `3` below is −4. Compound intervals keep their octave: `13` is not reduced to `6`. These figures specify distances, not key-relative scale degrees or chord-symbol extensions.
+
+Multiple figures may appear on either side. An identical interval on the same side is rejected; the same value on opposite sides is allowed. Distinct spellings such as `#4` and `b5` remain distinct. Unicode `♭`/`♯` and surrounding whitespace are accepted; canonical HTML uses `b`/`#`. Explicit `1` means unison. `b1` is rejected because it reverses the declared side. Values above 13, leading zeros, signs, double alterations, quality prefixes such as `m3`, and quarter-tone interval figures are not supported.
+
+The model stores an optional `MusicEvent.markings` array of `ArticulationMarking`, `OrnamentMarking`, and `IntervalMarking` values. An interval contains `{ number, alter }`, not a realized pitch. `parseHarmonyInterval`, `harmonyIntervalText`, `harmonyIntervalSemitones`, `harmonyIntervalOffset`, and `harmonyIntervalDescription` expose the same rules without a renderer. Existing `music-harmony` remains free-text chord-symbol notation anchored in a measure; it is not converted to these event-relative figures. See the [markings review](event-markings.md) for performer guidance and verification.
+
+An embedding editor should validate marking changes together as one reversible transaction. Standard marking placement is automatic. Ordinary duration, stem, and direction edits must preserve existing children. Compatible event conversions must preserve them too; incompatible conversions require removing the conflicting marking explicitly. Source edits, saved documents, duplication, and standalone staff rendering must preserve supported markings and their identity relationships.
 
 ## Meter and beaming
 
@@ -79,7 +200,7 @@ A tuplet scales written durations by `normal / actual`. Three eighths in a `3:2`
 </music-measure>
 ```
 
-The second group is valid with two children: its quarter plus eighth represent three written eighth-note units. `actual` is not a required child count. Use `bracket="auto"`, `"yes"`, or `"no"`; boolean `ratio` requests the full ratio label. Notes, rests, and chords may be mixed, and wrappers may nest. The model keeps each wrapper and multiplies its timing ratio exactly. Supported counts are `actual` 2–64 and `normal` 1–64, with a nesting limit of 16; extreme inputs can exceed safe arithmetic or practical engraving limits and are diagnosed.
+The second group is valid with two children: its quarter plus eighth represent three written eighth-note units. `actual` is not a required child count. Use `bracket="auto"`, `"yes"`, or `"no"`; boolean `ratio` requests the full ratio label. Pitched notes/chords, rhythm notes, road events, and rests retain their written values inside tuplets, subject to the containing staff's notation; wrappers may nest. The model keeps each wrapper and multiplies its timing ratio exactly. Supported counts are `actual` 2–64 and `normal` 1–64, with a nesting limit of 16; extreme inputs can exceed safe arithmetic or practical engraving limits and are diagnosed.
 
 Legacy `triplet="start"` / `triplet="end"` remains available for a 3:2 group in one container. Prefer wrappers for new music: their boundaries are visible in the HTML and cannot accidentally extend into the next measure. Cross-bar tuplets are not supported.
 
@@ -103,7 +224,7 @@ IDs identify source elements, so keep them unique in the score, including separa
 
 Mark a short opening measure `pickup`; it defaults to measure number 0, followed by full bars 1, 2, and so on. Use `incomplete` for a deliberate short ending or an unfinished draft. These flags permit short duration, not overflowing measures. A full score still needs matching measure counts and compatible timing across staves.
 
-Ties use `tie="start"` and `tie="end"`, or `tie="continue"` in the middle of a chain. They connect the same pitches within the same voice and may cross measures and line breaks. Keep voice containers in consistent order across those measures: the first voice continues the first voice, regardless of its element ID. Write the full pitch spelling on both ends, including sharps or flats. Chord ties connect the complete set of pitches. A tie is not a slur, and the current API does not provide general slurs.
+Ties use `tie="start"` and `tie="end"`, or `tie="continue"` in the middle of a chain. They connect the same pitches, consecutive pitch-free rhythm notes, or road events with `same` continuations, within the same voice and may cross measures and line breaks. Keep voice containers in consistent order across those measures: the first voice continues the first voice, regardless of its element ID. For pitched ties, write the full pitch spelling on both ends, including ordinary or quarter-tone accidentals. Chord ties connect the complete set of pitches. A rhythm tie carries the duration without prescribing another attack; it does not acquire a pitch. A road tie holds the performer's chosen pitch, with its continuation on the middle road. Rest/slash ties and ties between these different notation kinds are unsupported. A tie is not a slur, and the current API does not provide general slurs.
 
 ## Directions, harmony, and improvisation
 
@@ -124,7 +245,7 @@ Harmony sits nearest the staff, with a shared baseline where symbols fit beside 
 
 ## Systems and paper
 
-Automatic wrapping is the default. Without break attributes or a measure-count limit, the renderer chooses systems from the notation's spacing needs and the available width. Measures stay in source order; all parts use the same line breaks. Clefs repeat at new systems, and authored ties continue across breaks. Automatic layout does not add these choices to the source DOM.
+Automatic wrapping is the default. Without break attributes or a measure-count limit, the renderer chooses systems from the notation's spacing needs and the available width. Measures stay in source order; all parts use the same line breaks. Pitched clefs repeat at new systems, rhythm staves remain one line without a clef, and authored ties continue across breaks. Automatic layout does not add these choices to the source DOM.
 
 A short opening `pickup` stays with the following bar when they fit together. This automatic preference applies only at the start of the score; a later short measure does not imply a new phrase. It does not change `keep-with-next` in the DOM or model. Explicit breaks and measure limits still win, and a pair that cannot fit may split.
 
@@ -153,7 +274,7 @@ Screen layout responds to the available width and may add automatic line breaks,
 In the supplied workbook, the controls have distinct effects:
 
 - **Use print layout on screen (680px)** toggles `print-preview` on all score roots. It fixes their wrapping width without zooming the notation. Short examples can look unchanged when they fit at both widths; a narrow window can scroll the fixed layout. Turning this off restores responsive wrapping and does not disable printing.
-- **Open print dialog…** requests printing of all nine score views and their headings and explanations, including both versions of the ensemble. Printing uses each root's fixed print projection regardless of the checkbox. The toolbar, HTML source snippets, and score transcripts are excluded from print. This is the workbook's printing scope; an embedding application controls its own surrounding page content.
+- **Open print dialog…** requests printing of all twelve score views and their headings and explanations, including both versions of the ensemble, the quarter-tone/rhythm study, 3 roads music, and the markings/harmony study. Printing uses each root's fixed print projection regardless of the checkbox. The toolbar, HTML source snippets, and score transcripts are excluded from print. This is the workbook's printing scope; an embedding application controls its own surrounding page content.
 
 The button waits for the current score renders to settle and blocks the request on any reported error; warnings are reported but do not block printing. Repeated clicks while it prepares do not issue duplicate requests. Its status confirms only that printing was requested, not that a native dialog opened or pages were produced correctly. If no dialog appears, open the workbook in a browser that supports printing and use its Print command after the notation is ready and errors are resolved. The current test workflow verifies fixed print projections, but has not verified native dialogs or the resulting PDF/paper pagination.
 
@@ -161,7 +282,7 @@ There is no automatic search for safe page turns. Without an authored page break
 
 ## Read, edit, and serialize
 
-After loading the components, the rendering root exposes `score`, `diagnostics`, `renderComplete`, `toJSON()`, `toHTML()`, `getSource(id)`, and `getHitRegions()`. `score` is the latest model snapshot and is undefined before the first render. `toJSON()` returns a validated `Score` clone. Wait for `renderComplete` after changing the source before inspecting rendered geometry.
+After loading the components, the rendering root exposes `score`, `diagnostics`, `renderComplete`, `renderRevision`, `toJSON()`, `toHTML()`, `getSource(id)`, `getHitRegions()`, and `getLayoutGeometry()`. `score` is the latest model snapshot and is undefined before the first render. `toJSON()` returns a validated `Score` clone. Wait for `renderComplete` after changing the source before inspecting rendered geometry.
 
 ```js
 const staff = document.querySelector('#pitch-study');
@@ -175,7 +296,15 @@ const html = staff.toHTML();
 const json = JSON.stringify(staff.toJSON(), null, 2);
 ```
 
-`notation-render` announces a completed render, `notation-diagnostics` reports validation results, and `notation-select` identifies a selected notation event. Hit regions connect bounds in each system's SVG viewBox to source IDs for the displayed screen or print-preview layout. They are an integration point for a future editing UI, not an editor themselves. Mutate source attributes, supported component properties, or child elements. Do not use generated SVG as the source of truth.
+`notation-render` announces a completed render, `notation-diagnostics` reports validation results, and `notation-select` identifies a selected notation event. Hit regions connect bounds in each system's SVG viewBox to source IDs for the displayed screen or print-preview layout. Mutate source attributes, supported component properties, or child elements. Do not use generated SVG as the source of truth.
+
+The `music-system` drawing is inert to pointer inspection: its SVG and every SVG descendant have `pointer-events: none`, so a fitting score targets the source system host. Click selection still works through measured event, marking, annotation, and tuplet geometry, including fixed print preview. The component prevents the default of a handled coordinate click; embedding editors should check `event.defaultPrevented` before applying their own blank-space selection fallback. Transcript/diagnostic disclosures and rows that actually overflow remain interactive for native controls and scrolling. Standalone `music-staff` and `music-measure` surfaces retain their existing SVG pointer targets.
+
+`getLayoutGeometry()` returns the completed projection's identity, revision, score ID, and system geometry, or `undefined` while rendering is pending or invalid. Systems expose complete SVG dimensions, visible ink, measure ranges (end exclusive), staff/measure lanes, event/annotation/tuplet bounds, and insertion anchors with exact rational onsets. Coordinates belong to each system's SVG viewBox; transform them through that SVG's screen matrix for overlays. Generated implicit voice IDs are not persistent edit addresses: retain actual staff, measure, and event IDs plus the voice's position. Recheck projection identity and revision before using geometry after an edit or resize.
+
+The renderer also exposes each attached marking in `SystemGeometry.markings`, with its own `sourceId`, owning `eventId`, final bounds, and resolved placement. Its SVG group carries those two identities. `getSource(markingId)` resolves the child element, but `getHitRegions()` still contains rhythmic events only; marking children are not extra attacks. An embedding editor can use `eventId` to resolve a selected marking's owner without discarding the child's identity.
+
+Rendered events also expose `noteheads`: painted head bounds and centers in original `MusicEvent.pitches` order, including displaced chord seconds. Rhythm notes, road events, rests, and slashes have no pitched heads. These bounds exclude stems, flags, dots, and accidentals; `anchorY` remains the staff center and must not be mistaken for a note's pitch. Check `notation` before interpreting staff geometry: a rhythm staff has coincident top/bottom lines; a three-roads staff has a full five-line span but still has no absolute pitch positions. Its underlying `staffSpace` is 10px, so adjacent visible roads are 20px apart. The notation elements themselves remain source/rendering components and acquire no editing gestures.
 
 `renderComplete` is a `Promise<void>` and picks up pending source edits. For a container-width change that must be laid out immediately, use `await staff.refresh()`; otherwise the resize observer schedules layout when it observes the new size. `refresh()` also returns a `Promise<void>`.
 
@@ -194,10 +323,12 @@ const threeEighths = add(rational(1, 8), rational(1, 4));
 
 Model time is a reduced `{ numerator, denominator }` fraction in **whole-note units**. An event's `duration` and `dots` are written values; `time` includes its tuplet ratios and `onset` gives its position in the voice. Keep these exact until a display or playback boundary. The model does not depend on a DOM or VexFlow.
 
+Check `Staff.notation` before interpreting its clef/key fields. For compatibility, rhythm and three-roads models retain neutral `clef: 'treble'` and `key: 'C'` defaults, but these do not describe a printed clef, a pitch mapping, or a tuning reference. Canonical HTML omits that irrelevant pitch context. A rhythm event has `kind: 'rhythm'` and `pitches: []`. A road event has `kind: 'road'`, `pitches: []`, and required `pitchDirection: 'higher' | 'same' | 'lower'`; no other event kind may carry `pitchDirection`. Its `rhythmic` flag stays false, as that flag belongs only to slash events. `validatePitchDirection` validates the explicit vocabulary, without substituting a direction.
+
 Serialization emits canonical, explicitly closed HTML with model IDs, voices, and tuplet structure. It preserves supported musical data, not original indentation, comments, application metadata, CSS, or root layout preferences. Save those separately if your editor needs them. It throws when a programmatic model cannot be serialized without losing musical information.
 
 Errors include malformed values, unknown notation, conflicting attributes, unbalanced groups, and incorrect measure duration. The root retains a textual representation and diagnostics when engraving would be misleading. Each diagnostic has a `sourceId` that can be resolved back to the authored element. Fix errors before treating the result as a performable score; short drafts should be marked `incomplete` deliberately.
 
 ## Scope
 
-The system does not yet implement instrument transposition, microtonal tuning, independent polymeter, cross-staff beams, cross-bar tuplets, general slurs, articulations/ornaments, arbitrary graphical scores, automatic rhythm rewriting, playback, or a visual editing surface. Harmony is authored text, not analyzed or transposed automatically. The [design review](design-review.md) records the reasoning and acceptance checks for the supported foundation.
+Quarter-tone notation is limited to the documented 24-EDO spellings and one accidental family; the rhythm staff is a fixed single-line, pitch-free part. The three-roads staff is a specific graphic scoring vocabulary for prescribed rhythm and relative pitch direction, not a general drawing surface. Articulations, ornaments, and relative harmony figures are limited to the vocabulary above; ornament accidentals, trill extension lines, and realized ornament playback are not implemented. The system does not yet implement arbitrary tuning systems or cent values, instrument transposition, independent polymeter, cross-staff beams, cross-bar tuplets, general slurs, other arbitrary graphical scores, automatic rhythm rewriting, or playback. Chord symbols remain authored text, not analyzed or transposed automatically. The [design review](design-review.md), [notation expansion review](notation-expansion.md), and [markings review](event-markings.md) record the reasoning and acceptance checks.

@@ -1,21 +1,24 @@
 import VexFlow, {
   Accidental, Barline, Beam, Dot, Element as EngravingElement, Formatter, Fraction,
   Renderer, Stave, StaveConnector, StaveModifier, StaveNote, StaveTie, Stem,
-  SVGContext, Tuplet as EngravedTuplet, Voice as EngravedVoice,
+  SVGContext, TimeSignature, Tuplet as EngravedTuplet, Voice as EngravedVoice, prefix,
 } from 'vexflow/bravura';
 import { add, compare, durationTime, equals, formatRational, rational, subtract, toNumber } from '../model/index.js';
-import type { Annotation, Clef, Diagnostic, Duration, Measure, MusicEvent, Rational, Score } from '../model/types.js';
+import type { Annotation, Clef, Diagnostic, Duration, EventMarking, MarkingPlacement, Measure, MusicEvent, Rational, Score, Staff } from '../model/types.js';
 import { planSystems } from './layout.js';
 import type { SystemLayout } from './layout.js';
-import { canShareRest, groupBeams, resolveAccidentals } from './semantics.js';
+import { canShareRest, groupBeams, hasSimultaneousPitchConflict, resolveAccidentals } from './semantics.js';
 import { moveInk, overlapsInkX, unionInk, visibleInk } from './geometry.js';
 import type { InkBox } from './geometry.js';
+import { drawEventMarkings, MarkedStaveNote, printedHeadInk } from './event-markings.js';
 
 const DURATION: Record<Duration, string> = {
   breve: '1/2', whole: 'w', half: 'h', quarter: 'q', eighth: '8',
   sixteenth: '16', 'thirty-second': '32', 'sixty-fourth': '64', '128th': '128',
 };
 const SLASH_KEY: Record<Clef, string> = { treble: 'b/4', bass: 'd/3', alto: 'c/4', tenor: 'a/3' };
+// These keys select engine coordinates only; road events never acquire pitches.
+const ROAD_KEY = { higher: 'f/5', same: 'b/4', lower: 'e/4' } as const;
 const BARLINE = {
   single: VexFlow.BarlineType.SINGLE, double: VexFlow.BarlineType.DOUBLE,
   final: VexFlow.BarlineType.END, 'repeat-end': VexFlow.BarlineType.REPEAT_END, none: VexFlow.BarlineType.NONE,
@@ -49,10 +52,134 @@ export interface HitRegion {
   readonly onset: Rational;
 }
 
+/** Painted source bounds in the named system's SVG viewBox coordinates. */
+export interface SourceGeometry extends InkBox {
+  readonly sourceId: string;
+  readonly system: number;
+}
+
+export interface StaffGeometry extends SourceGeometry {
+  readonly topLine: number;
+  readonly bottomLine: number;
+  /** Actual notation and staff-space size; a one-line staff has equal line bounds. */
+  readonly notation?: Staff['notation'];
+  readonly staffSpace?: number;
+  readonly measureIds: readonly string[];
+}
+
+/**
+ * A selectable measure lane: its barline interval and the final staff ink height.
+ * Header and note positions are measured by the adapter, never inferred by UI.
+ */
+export interface MeasureGeometry extends SourceGeometry {
+  readonly staffId: string;
+  /** Original, zero-based measure column, independent of displayed numbering. */
+  readonly measureIndex: number;
+  readonly topLine: number;
+  readonly bottomLine: number;
+  readonly notation?: Staff['notation'];
+  readonly staffSpace?: number;
+  readonly noteStartX: number;
+  readonly noteEndX: number;
+}
+
+/** One pitched notehead's painted ink, excluding its stem, accidental and dots. */
+export interface NoteheadGeometry extends InkBox {
+  /** Original index into MusicEvent.pitches, not the engine's vertical sort order. */
+  readonly pitchIndex: number;
+  readonly centerX: number;
+  readonly centerY: number;
+}
+
+export interface EventGeometry extends HitRegion {
+  readonly staffId: string;
+  readonly measureId: string;
+  readonly voiceId: string;
+  readonly eventIndex: number;
+  /** The formatter's onset x and the final staff's center line y. */
+  readonly anchorX: number;
+  readonly anchorY: number;
+  /** Actual painted bounds, before the minimum pointer target is added. */
+  readonly ink: InkBox;
+  /** All source events sharing this ink, including this event itself. */
+  readonly sharedSourceIds: readonly string[];
+  /** Always supplied by renderScore; pitchless events have none. Optional for older adapters. */
+  readonly noteheads?: readonly NoteheadGeometry[];
+}
+
+export interface AnnotationGeometry extends SourceGeometry {
+  readonly staffId: string;
+  readonly measureId: string;
+  readonly kind: Annotation['kind'];
+  readonly onset: Rational;
+}
+
+/** Event-local symbols retain their child source IDs without becoming event hits. */
+export interface MarkingGeometry extends SourceGeometry {
+  readonly staffId: string;
+  readonly measureId: string;
+  readonly voiceId: string;
+  readonly eventId: string;
+  readonly kind: EventMarking['kind'];
+  /** Resolved display side; an interval always retains its authored musical side. */
+  readonly placement: MarkingPlacement;
+}
+
+export interface TupletGeometry extends SourceGeometry {
+  readonly staffId: string;
+  readonly measureId: string;
+  readonly voiceId: string;
+  readonly eventIds: readonly string[];
+}
+
+/**
+ * A musical boundary in one voice, including its start and its append position.
+ * sourceId is the voice's original source (or the measure for a voiceless draft).
+ * beforeId/afterId preserve adjacent event identities, including inside tuplets.
+ * x follows the shared formatter timeline; y/height span the final staff lines.
+ */
+export interface InsertionAnchor {
+  readonly sourceId: string;
+  readonly system: number;
+  readonly staffId: string;
+  readonly measureId: string;
+  readonly voiceId?: string;
+  readonly eventIndex: number;
+  readonly beforeId?: string;
+  readonly afterId?: string;
+  readonly onset: Rational;
+  readonly x: number;
+  readonly y: number;
+  readonly height: number;
+}
+
+/** Complete, final SVG dimensions and source geometry for one unbroken system. */
+export interface SystemGeometry {
+  readonly index: number;
+  readonly start: number;
+  /** Exclusive end index into the original measure columns. */
+  readonly end: number;
+  readonly width: number;
+  readonly height: number;
+  readonly viewBox: InkBox;
+  readonly ink: InkBox;
+  readonly pageBreak: boolean;
+  readonly staves: readonly StaffGeometry[];
+  readonly measures: readonly MeasureGeometry[];
+  readonly events: readonly EventGeometry[];
+  readonly annotations: readonly AnnotationGeometry[];
+  /** Always supplied by renderScore; optional for older adapters. */
+  readonly markings?: readonly MarkingGeometry[];
+  readonly tuplets: readonly TupletGeometry[];
+  readonly anchors: readonly InsertionAnchor[];
+}
+
 export interface EngravingResult {
   readonly systems: readonly SystemLayout[];
   readonly hitRegions: readonly HitRegion[];
   readonly diagnostics: readonly Diagnostic[];
+  /** Always supplied by renderScore; optional for older adapter implementations. */
+  readonly systemGeometry?: readonly SystemGeometry[];
 }
 
 interface TextPart { text: string; family: string; size: number; weight?: string; style?: string }
@@ -72,6 +199,7 @@ interface PreparedColumn {
   formatter: Formatter;
   voices: EngravedVoice[];
   tail: number;
+  separateUnisons: boolean;
 }
 interface DrawnNote { event: MusicEvent; note: StaveNote; group: SVGGElement; staffGroup: SVGGElement; context: SVGContext; system: number }
 interface DrawnSystem {
@@ -83,13 +211,66 @@ interface DrawnSystem {
   width: number;
 }
 
-/** Set the clef context without adding a redundant printed clef at key changes. */
+/** Center repeat dots on the single line, independently of its extended barline. */
+class RhythmBarline extends Barline {
+  override drawRepeatBar(stave: Stave, x: number, begin: boolean): void {
+    const context = stave.checkContext();
+    const top = stave.getTopLineTopY();
+    const bottom = stave.getBottomLineBottomY();
+    context.fillRect(x + (begin ? 3 : -5), top, 1, bottom - top);
+    context.fillRect(x - 2, top, 3, bottom - top);
+    const center = stave.getYForLine(0) + 0.5;
+    const dotX = x + (begin ? 8 : -8);
+    for (const offset of [-0.5, 0.5]) {
+      context.beginPath();
+      context.arc(dotX, center + offset * stave.getSpacingBetweenLines(), 2, 0, Math.PI * 2, false);
+      context.fill();
+    }
+  }
+}
+
+/** Set musical context without inventing pitches for rhythm or relative roads. */
 class ContextStave extends Stave {
   private incomingTieStart?: number;
+  readonly rhythm: boolean;
+  readonly threeRoads: boolean;
 
-  constructor(x: number, width: number, clef: Clef) {
-    super(x, 0, width);
+  constructor(x: number, width: number, clef: Clef, notation: Staff['notation']) {
+    super(x, 0, width, { numLines: notation === 'rhythm' ? 1 : 5 });
     this.clef = clef;
+    this.rhythm = notation === 'rhythm';
+    this.threeRoads = notation === 'three-roads';
+    if (this.threeRoads) {
+      // Keep the original five-line coordinates and full outer span. The roads
+      // are its top, middle, and bottom lines, not three adjacent staff lines.
+      this.setConfigForLines([true, false, true, false, true].map(visible => ({ visible })));
+    }
+    if (this.rhythm) {
+      this.modifiers[0] = new RhythmBarline(VexFlow.BarlineType.SINGLE).setStave(this);
+      this.modifiers[1] = new RhythmBarline(VexFlow.BarlineType.SINGLE)
+        .setPosition(StaveModifier.Position.END).setStave(this);
+    }
+  }
+
+  override getYForNote(line: number): number {
+    // VexFlow fixes the center of a five-line staff at note line 3 even when
+    // numLines changes. Keep its note/rest coordinates centered on our line.
+    return this.rhythm ? this.getYForLine(3 - line) : super.getYForNote(line);
+  }
+
+  hasVisibleLineForNote(line: number): boolean {
+    const staffLine = (this.rhythm ? 3 : 5) - line;
+    return Number.isInteger(staffLine) && this.getConfigForLines()[staffLine]?.visible === true;
+  }
+
+  override getTopLineTopY(): number {
+    // These engine methods bound barlines/connectors, not published staff-line
+    // geometry. Single-line bars extend one staff space in either direction.
+    return super.getTopLineTopY() - (this.rhythm ? this.getSpacingBetweenLines() : 0);
+  }
+
+  override getBottomLineBottomY(): number {
+    return super.getBottomLineBottomY() + (this.rhythm ? this.getSpacingBetweenLines() : 0);
   }
 
   reserveIncomingTieSpace(): void {
@@ -99,6 +280,28 @@ class ContextStave extends Stave {
 
   override getTieStartX(): number {
     return this.incomingTieStart ?? super.getTieStartX();
+  }
+}
+
+/** VexFlow otherwise reserves the missing four lines below a rhythm tuplet. */
+class StaffTuplet extends EngravedTuplet {
+  override getYPosition(): number {
+    const stave = this.notes[0].checkStave();
+    if (!(stave instanceof ContextStave) || !stave.rhythm || this.options.location !== -1) {
+      return super.getYPosition();
+    }
+    const spacing = stave.getSpacingBetweenLines();
+    let y = stave.getYForLine(0) + 2 * spacing;
+    for (const member of this.notes) {
+      const note = member as StaveNote;
+      const textLine = note.getModifierContext()?.getState().textLine ?? 0;
+      if (textLine > 0) y = Math.max(y, stave.getYForLine(textLine + 1) + 2 * spacing);
+      if (note.hasStem() || note.isRest()) {
+        const extents = note.getStemExtents();
+        y = Math.max(y, note.getStemDirection() === Stem.UP ? extents.baseY + 2 * spacing : extents.topY + spacing);
+      }
+    }
+    return y + this.getNestedTupletCount() * EngravedTuplet.NESTING_OFFSET + this.options.yOffset;
   }
 }
 
@@ -178,29 +381,40 @@ function measureAnnotation(annotation: Annotation): MeasuredAnnotation {
   return { annotation, parts, width, ink: unionInk(boxes)! };
 }
 
-function createStave(measure: Measure, previous: Measure | undefined, x: number, width: number, firstInLine: boolean): ContextStave {
-  const stave = new ContextStave(x, width, measure.clef);
+function createStave(measure: Measure, previous: Measure | undefined, x: number, width: number, firstInLine: boolean, notation: Staff['notation']): ContextStave {
+  const stave = new ContextStave(x, width, measure.clef, notation);
   const changedKey = previous !== undefined && previous.key !== measure.key;
   const changedClef = previous !== undefined && previous.clef !== measure.clef;
-  if (firstInLine || changedClef) stave.addClef(measure.clef);
-  if (firstInLine || changedKey) stave.addKeySignature(measure.key, changedKey ? previous?.key : undefined);
-  if (!previous || previous.meter.display !== measure.meter.display) stave.addTimeSignature(measure.meter.display);
+  if (!stave.rhythm && !stave.threeRoads) {
+    if (firstInLine || changedClef) stave.addClef(measure.clef);
+    if (firstInLine || changedKey) stave.addKeySignature(measure.key, changedKey ? previous?.key : undefined);
+  }
+  if (!previous || previous.meter.display !== measure.meter.display) {
+    const signature = new TimeSignature(measure.meter.display);
+    if (stave.rhythm) { signature.topLine = -1; signature.bottomLine = 1; }
+    stave.addModifier(signature);
+  }
   stave.setBegBarType(measure.repeatStart ? VexFlow.BarlineType.REPEAT_BEGIN : firstInLine ? VexFlow.BarlineType.SINGLE : VexFlow.BarlineType.NONE);
   stave.setEndBarType(BARLINE[measure.endBar]);
   return stave;
 }
 
-function createNote(event: MusicEvent, measure: Measure, voiceIndex: number): StaveNote {
+function createNote(event: MusicEvent, measure: Measure, voiceIndex: number, stave: ContextStave): StaveNote {
   const silentRhythm = event.kind === 'slash' && !event.rhythmic;
   const duration = event.measureRest ? 'w' : silentRhythm ? 'q' : DURATION[event.duration];
-  const keys = event.kind === 'rest' ? ['r/4'] : event.kind === 'slash' ? [SLASH_KEY[measure.clef]]
-    : event.pitches.map((pitch) => `${pitch.step.toLowerCase()}${pitch.alter > 0 ? '#'.repeat(pitch.alter) : 'b'.repeat(-pitch.alter)}/${pitch.octave}`);
+  // Engine keys carry diatonic position only. Printed accidentals below carry
+  // the exact alteration; fractional alterations must never be rounded here.
+  const keys = event.kind === 'rest' ? ['r/4'] : event.kind === 'rhythm' ? ['b/4']
+    : event.kind === 'road' ? [ROAD_KEY[event.pitchDirection!]]
+    : event.kind === 'slash' ? [SLASH_KEY[measure.clef]]
+    : event.pitches.map((pitch) => `${pitch.step.toLowerCase()}/${pitch.octave}`);
   const direction = event.stem === 'up' ? Stem.UP : event.stem === 'down' ? Stem.DOWN
-    : measure.voices.length > 1 ? voiceIndex % 2 === 0 ? Stem.UP : Stem.DOWN : undefined;
-  const note = new StaveNote({
+    : measure.voices.length > 1 ? voiceIndex % 2 === 0 ? Stem.UP : Stem.DOWN
+      : stave.rhythm ? Stem.UP : undefined;
+  const note = new MarkedStaveNote({
     clef: measure.clef, keys, duration,
     dots: silentRhythm || event.measureRest ? 0 : event.dots,
-    type: event.kind === 'rest' ? 'r' : event.kind === 'slash' ? 's' : 'n',
+    type: event.kind === 'rest' ? 'r' : event.kind === 'slash' || event.kind === 'road' ? 's' : 'n',
     autoStem: direction === undefined,
     stemDirection: direction,
     alignCenter: event.measureRest,
@@ -208,7 +422,10 @@ function createNote(event: MusicEvent, measure: Measure, voiceIndex: number): St
       event.measureRest ? event.time.numerator : durationTime(event.duration, event.dots).numerator,
       event.measureRest ? event.time.denominator : durationTime(event.duration, event.dots).denominator,
     ) } : {}),
-  });
+  }).reserveMarkings(event.markings ?? []);
+  // Whole rests normally hang from the fourth of five lines. On reduced staves
+  // use the visible middle line; half rests sit on it, whole rests hang below.
+  if ((stave.rhythm || stave.threeRoads) && event.kind === 'rest') note.setKeyLine(0, 3);
   if (silentRhythm) note.getStem()?.setVisibility(false);
   if (!silentRhythm && !event.measureRest) {
     for (let dot = 0; dot < event.dots; dot++) Dot.buildAndAttach([note], { all: true });
@@ -238,8 +455,8 @@ function coalesceAccidentals(measure: Measure) {
   })]));
 }
 
-function prepareStaff(measure: Measure, previous: Measure | undefined, x: number, width: number, firstInLine: boolean): PreparedStaff {
-  const stave = createStave(measure, previous, x, width, firstInLine);
+function prepareStaff(measure: Measure, previous: Measure | undefined, x: number, width: number, firstInLine: boolean, notation: Staff['notation']): PreparedStaff {
+  const stave = createStave(measure, previous, x, width, firstInLine, notation);
   const notes = new Map<string, StaveNote>();
   const events = new Map<string, MusicEvent>();
   const beams: Beam[] = [];
@@ -248,7 +465,7 @@ function prepareStaff(measure: Measure, previous: Measure | undefined, x: number
   const voices = measure.voices.map((voice, voiceIndex) => {
     const restLines = new Map<StaveNote, number>();
     const voiceNotes = voice.events.map((event) => {
-      const note = createNote(event, measure, voiceIndex).setStave(stave);
+      const note = createNote(event, measure, voiceIndex, stave).setStave(stave);
       if (event.kind === 'rest') restLines.set(note, note.getKeyLine(0));
       for (const accidental of accidentals.get(event.id) ?? []) {
         const modifier = new Accidental(accidental.type);
@@ -267,7 +484,7 @@ function prepareStaff(measure: Measure, previous: Measure | undefined, x: number
       const memberEvents = group.eventIds.map((id) => events.get(id)!);
       const ownDepth = memberEvents[0].tupletIds.indexOf(group.id);
       const minDepth = Math.min(...memberEvents.map((event) => event.tupletIds.length));
-      const tuplet = new EngravedTuplet(members, {
+      const tuplet = new StaffTuplet(members, {
         numNotes: group.actual, notesOccupied: group.normal,
         ratioed: group.showRatio || Math.abs(group.actual - group.normal) > 1,
         bracketed: true,
@@ -280,7 +497,7 @@ function prepareStaff(measure: Measure, previous: Measure | undefined, x: number
       const members = ids.map((id) => notes.get(id)!);
       const requestedStem = ids.map((id) => events.get(id)!.stem).find((stem) => stem !== 'auto');
       if (requestedStem) members.forEach((note) => note.setStemDirection(requestedStem === 'up' ? Stem.UP : Stem.DOWN));
-      const autoStem = measure.voices.length === 1 && ids.every((id) => events.get(id)?.stem === 'auto');
+      const autoStem = !stave.rhythm && measure.voices.length === 1 && ids.every((id) => events.get(id)?.stem === 'auto');
       beams.push(new Beam(members, autoStem));
     }
     for (const group of voice.tuplets) {
@@ -310,7 +527,7 @@ function prepareStaff(measure: Measure, previous: Measure | undefined, x: number
 }
 
 function prepareColumn(score: Score, index: number, x: number, width: number, firstInLine: boolean): PreparedColumn {
-  const staves = score.staves.map((staff) => prepareStaff(staff.measures[index], staff.measures[index - 1], x, width, firstInLine));
+  const staves = score.staves.map((staff) => prepareStaff(staff.measures[index], staff.measures[index - 1], x, width, firstInLine, staff.notation));
   alignHeaders(staves.map(staff => staff.stave), firstInLine && staves.some(staff => startsWithTie(staff.measure)));
   const formatter = new Formatter();
   staves.forEach((staff) => { if (staff.voices.length) formatter.joinVoices(staff.voices); });
@@ -319,7 +536,21 @@ function prepareColumn(score: Score, index: number, x: number, width: number, fi
   // cannot be lost beyond the bar/system edge. Initial directions affect minima.
   const tail = Math.max(14, ...staves.flatMap((staff) => staff.measure.annotations
     .filter((annotation) => annotation.onset.numerator > 0).map((annotation) => measureAnnotation(annotation).width + 12)));
-  return { staves, formatter, voices, tail };
+  return { staves, formatter, voices, tail,
+    separateUnisons: staves.some(staff => hasSimultaneousPitchConflict(staff.measure)) };
+}
+
+function formatColumn<T>(column: PreparedColumn, format: () => T): T {
+  // VexFlow's shared-head rule ignores alterations. Disable it for a column
+  // containing conflicting spellings, in both width measurement and drawing.
+  // Formatting is synchronous; always restore the engine's global preference.
+  const unison = VexFlow.UNISON;
+  try {
+    if (column.separateUnisons) VexFlow.UNISON = false;
+    return format();
+  } finally {
+    VexFlow.UNISON = unison;
+  }
 }
 
 function rhythmicWeight(staves: readonly PreparedStaff[]): number {
@@ -341,12 +572,12 @@ function columnSizes(score: Score) {
     const column = prepareColumn(score, index, 0, 2000, false);
     const prefix = Math.max(...column.staves.map((staff) => staff.stave.getNoteStartX()));
     const firstStaves = score.staves.map((staff) => createStave(
-      staff.measures[index], staff.measures[index - 1], 0, 2000, true,
+      staff.measures[index], staff.measures[index - 1], 0, 2000, true, staff.notation,
     ));
     alignHeaders(firstStaves, score.staves.some(staff => startsWithTie(staff.measures[index])));
     const firstPrefix = Math.max(...firstStaves.map(stave => stave.getNoteStartX()));
     const musicWidth = column.voices.some((voice) => voice.getTickables().length)
-      ? column.formatter.preCalculateMinTotalWidth(column.voices) : 40;
+      ? formatColumn(column, () => column.formatter.preCalculateMinTotalWidth(column.voices)) : 40;
     const initialText = Math.max(0, ...column.staves.flatMap((staff) => staff.measure.annotations
       .filter((annotation) => annotation.onset.numerator === 0).map((annotation) => measureAnnotation(annotation).width)));
     const minimum = Math.ceil(prefix + Math.max(musicWidth + column.tail, initialText + 12) + 28);
@@ -370,11 +601,11 @@ function columnSizes(score: Score) {
   });
 }
 
-function annotationX(annotation: Annotation, column: PreparedColumn): number {
+function onsetX(onset: Rational, column: PreparedColumn): number {
   const all = column.staves.flatMap((staff) => [...staff.events.values()].map((event) => ({
     onset: event.onset, x: staff.notes.get(event.id)!.getAbsoluteX(),
   }))).sort((a, b) => compare(a.onset, b.onset));
-  const exact = all.find((entry) => equals(entry.onset, annotation.onset));
+  const exact = all.find((entry) => equals(entry.onset, onset));
   if (exact) return exact.x;
   const stave = column.staves[0].stave;
   const duration = toNumber(column.staves[0].measure.meter.numerator === 0 ? rational(1) : rational(
@@ -382,17 +613,20 @@ function annotationX(annotation: Annotation, column: PreparedColumn): number {
   let left = { onset: rational(0), x: stave.getNoteStartX() + 10 };
   let right = { onset: rational(column.staves[0].measure.meter.numerator, column.staves[0].measure.meter.denominator), x: stave.getNoteEndX() - column.tail };
   for (const entry of all) {
-    if (compare(entry.onset, annotation.onset) < 0) left = entry;
-    if (compare(entry.onset, annotation.onset) > 0) { right = entry; break; }
+    if (compare(entry.onset, onset) < 0) left = entry;
+    if (compare(entry.onset, onset) > 0) { right = entry; break; }
   }
   const range = toNumber(right.onset) - toNumber(left.onset);
-  const position = range > 0 ? (toNumber(annotation.onset) - toNumber(left.onset)) / range : toNumber(annotation.onset) / duration;
+  const position = range > 0 ? (toNumber(onset) - toNumber(left.onset)) / range : toNumber(onset) / duration;
   return left.x + Math.max(0, Math.min(1, position)) * (right.x - left.x);
 }
 
 function placeAnnotations(columns: PreparedColumn[], staffIndex: number, musicInk: readonly InkBox[]): PlacedAnnotation[] {
+  const stave = columns[0].staves[staffIndex].stave;
+  const topLine = stave.getYForLine(0);
+  const bottomLine = stave.getYForLine(stave.getNumLines() - 1);
   const measured = columns.flatMap((column) => column.staves[staffIndex].measure.annotations.map((annotation) => ({
-    ...measureAnnotation(annotation), x: annotationX(annotation, column), y: 0,
+    ...measureAnnotation(annotation), x: onsetX(annotation.onset, column), y: 0,
   })));
   for (const placement of ['above', 'below'] as const) {
     const obstacles = [...musicInk];
@@ -416,8 +650,8 @@ function placeAnnotations(columns: PreparedColumn[], staffIndex: number, musicIn
           const inset = above ? item.ink.y + item.ink.height : item.ink.y;
           const relevant = obstacles.filter(box => overlapsInkX(moveInk(item.ink, item.x, 0), box));
           const edges = relevant.map(box => above ? box.y : box.y + box.height);
-          return above ? Math.min(40, ...edges) - ANNOTATION_GAP - inset
-            : Math.max(80, ...edges) + ANNOTATION_GAP - inset;
+          return above ? Math.min(topLine, ...edges) - ANNOTATION_GAP - inset
+            : Math.max(bottomLine, ...edges) + ANNOTATION_GAP - inset;
         });
         const y = above ? Math.min(...positions) : Math.max(...positions);
         for (const item of lane) {
@@ -477,22 +711,39 @@ function drawTuplets(staff: PreparedStaff, context: SVGContext, staffGroup: SVGG
   }
 }
 
-/** Move a rest by whole staff spaces, retaining its tick context and modifiers. */
-function redrawRest(drawn: DrawnNote, line: number): InkBox {
-  const { note, event, context, group, staffGroup } = drawn;
+/** Rectangular rests need a real supporting glyph when displaced off a line. */
+function restGlyph(note: StaveNote, event: MusicEvent, line: number): string {
   const duration = event.measureRest ? 'whole' : event.duration;
-  const outside = line < 1 || line > note.checkStave().getNumLines();
+  const stave = note.checkStave();
+  const outside = stave instanceof ContextStave ? !stave.hasVisibleLineForNote(line)
+    : line < 1 || line > stave.getNumLines();
   let glyph = REST_GLYPH[duration];
   if (outside) {
     if (duration === 'whole') glyph = Glyphs.restWholeLegerLine;
     else if (duration === 'half') glyph = Glyphs.restHalfLegerLine;
     else if (duration === 'breve') glyph = Glyphs.restDoubleWholeLegerLine;
   }
+  return glyph;
+}
+
+function positionLedgerRestDots(note: StaveNote, glyph: string): void {
+  // VexFlow recognizes the standard rest glyphs when locating modifiers, but
+  // not their supporting-ledger variants. Keep dots off that supporting line.
+  const shift = glyph === Glyphs.restHalfLegerLine ? -0.5
+    : glyph === Glyphs.restWholeLegerLine || glyph === Glyphs.restDoubleWholeLegerLine ? 0.5 : undefined;
+  if (shift !== undefined) for (const dot of Dot.getDots(note)) dot.setDotShiftY(shift);
+}
+
+/** Move a rest by whole staff spaces, retaining its tick context and modifiers. */
+function redrawRest(drawn: DrawnNote, line: number): InkBox {
+  const { note, event, context, group, staffGroup } = drawn;
   note.setKeyLine(0, line);
   // Choose the glyph explicitly after rebuilding the head. Only rectangular
   // rests require a supporting ledger line; displaced shorter rests do not.
+  const glyph = restGlyph(note, event, line);
   note.noteHeads[0].setText(glyph);
   note.preFormat();
+  positionLedgerRestDots(note, glyph);
   const ink = context.openGroup('rest-ink');
   note.setContext(context).draw();
   context.closeGroup();
@@ -568,6 +819,9 @@ function drawTies(score: Score, notes: Map<string, DrawnNote>): void {
     group.dataset.endSourceId = last.event.id;
     group.dataset.boundary = boundary;
     if (boundary === 'incoming') group.dataset.headerEndX = String(owner.note.checkStave().getTieStartX());
+    // An outer road can have the opposite automatic stem from its middle-road
+    // continuation. Match the unbroken tie's direction on both system halves.
+    if (first.event.kind === 'road') tie.setDirection(last.note.getStemDirection());
     tie.setContext(owner.context).draw();
     owner.context.closeGroup();
     owner.staffGroup.append(group);
@@ -580,8 +834,10 @@ function drawTies(score: Score, notes: Map<string, DrawnNote>): void {
         if (event.tie === 'end' || event.tie === 'continue') {
           const first = pending.get(voiceIndex);
           if (first) {
-            const indexes = first.event.pitches.map((_, index) => index);
-            const lastIndexes = first.event.pitches.map((pitch) => event.pitches.findIndex((candidate) =>
+            const pitchless = (first.event.kind === 'rhythm' && event.kind === 'rhythm')
+              || (first.event.kind === 'road' && event.kind === 'road');
+            const indexes = pitchless ? [0] : first.event.pitches.map((_, index) => index);
+            const lastIndexes = pitchless ? [0] : first.event.pitches.map((pitch) => event.pitches.findIndex((candidate) =>
               candidate.step === pitch.step && candidate.octave === pitch.octave && candidate.alter === pitch.alter));
             if (first.system === current.system) {
               draw(current, new StaveTie({ firstNote: first.note, lastNote: current.note, firstIndexes: indexes, lastIndexes }), first, current, 'within');
@@ -645,12 +901,117 @@ function drawConnectors(system: DrawnSystem, score: Score, diagnostics: Diagnost
   });
 }
 
+function noteheadGeometry(drawn: DrawnNote): readonly NoteheadGeometry[] {
+  if (drawn.event.kind !== 'note' && drawn.event.kind !== 'chord') return [];
+  // VexFlow 5's public noteHeads getter keeps the original key indices even
+  // though its chord-displacement calculation sorts pitches internally. Our
+  // keys were created in event.pitches order, so this is a stable source map.
+  return printedHeadInk(drawn.note, drawn.group, drawn.context.svg, drawn.event.id).map((bounds, pitchIndex) => {
+    return { pitchIndex, ...bounds, centerX: bounds.x + bounds.width / 2, centerY: bounds.y + bounds.height / 2 };
+  });
+}
+
+/** Publish only final geometry, after rest recovery, tuplets, staff shifts and ties. */
+function systemGeometry(
+  drawn: DrawnSystem, score: Score, layout: SystemLayout, index: number,
+  viewBox: InkBox, ink: InkBox, hits: readonly HitRegion[],
+  notes: ReadonlyMap<string, DrawnNote>, eventInk: ReadonlyMap<string, InkBox>,
+): SystemGeometry {
+  const staves: StaffGeometry[] = [];
+  const measures: MeasureGeometry[] = [];
+  const events: EventGeometry[] = [];
+  const annotations: AnnotationGeometry[] = [];
+  const markings: MarkingGeometry[] = [];
+  const tuplets: TupletGeometry[] = [];
+  const anchors: InsertionAnchor[] = [];
+  const hitById = new Map(hits.map(hit => [hit.sourceId, hit]));
+  drawn.staffGroups.forEach((group, staffIndex) => {
+    const staffModel = score.staves[staffIndex];
+    const staffInk = unionInk(visibleInk(group, drawn.context.svg))!;
+    const firstStave = drawn.columns[0].staves[staffIndex].stave;
+    staves.push({ sourceId: staffModel.id, system: index, ...staffInk,
+      topLine: firstStave.getYForLine(0), bottomLine: firstStave.getYForLine(firstStave.getNumLines() - 1),
+      notation: staffModel.notation ?? 'pitched', staffSpace: firstStave.getSpacingBetweenLines(),
+      measureIds: drawn.columns.map(column => column.staves[staffIndex].measure.id) });
+    const annotationGroups = new Map([...group.querySelectorAll<SVGGElement>('g.vf-music-annotation')]
+      .map(element => [element.dataset.sourceId!, element]));
+    const markingGroups = new Map([...group.querySelectorAll<SVGGElement>('g.vf-music-marking')]
+      .map(element => [element.dataset.sourceId!, element]));
+    const tupletGroups = new Map([...group.querySelectorAll<SVGGElement>('g.vf-music-tuplet')]
+      .map(element => [element.dataset.sourceId!, element]));
+    drawn.columns.forEach((column, offset) => {
+      const staff = column.staves[staffIndex];
+      const measure = staff.measure;
+      const topLine = staff.stave.getYForLine(0);
+      const bottomLine = staff.stave.getYForLine(staff.stave.getNumLines() - 1);
+      const ancestry = { system: index, staffId: staffModel.id, measureId: measure.id };
+      measures.push({ sourceId: measure.id, system: index, staffId: staffModel.id, measureIndex: layout.start + offset,
+        x: staff.stave.getX(), y: staffInk.y, width: staff.stave.getWidth(), height: staffInk.height,
+        topLine, bottomLine, notation: staffModel.notation ?? 'pitched', staffSpace: staff.stave.getSpacingBetweenLines(),
+        noteStartX: staff.stave.getNoteStartX(), noteEndX: staff.stave.getNoteEndX() });
+
+      const inkOwners = new Map<string, string[]>();
+      for (const id of staff.events.keys()) {
+        const owner = notes.get(id)!.group.dataset.coalescedWith ?? id;
+        const siblings = inkOwners.get(owner) ?? [];
+        siblings.push(id);
+        inkOwners.set(owner, siblings);
+      }
+      for (const voice of measure.voices) {
+        voice.events.forEach((event, eventIndex) => {
+          const note = notes.get(event.id)!;
+          const owner = note.group.dataset.coalescedWith ?? event.id;
+          events.push({ ...hitById.get(event.id)!, staffId: staffModel.id, measureId: measure.id,
+            voiceId: voice.id, eventIndex, anchorX: note.note.getAbsoluteX(), anchorY: (topLine + bottomLine) / 2,
+            ink: eventInk.get(event.id)!, sharedSourceIds: inkOwners.get(owner)!, noteheads: noteheadGeometry(note) });
+          for (const marking of event.markings ?? []) {
+            const element = markingGroups.get(marking.id);
+            const bounds = element && unionInk(visibleInk(element, drawn.context.svg));
+            if (!bounds) throw new Error(`No printed geometry could be located for event marking ${marking.id}.`);
+            markings.push({ sourceId: marking.id, ...ancestry, voiceId: voice.id, eventId: event.id,
+              kind: marking.kind, placement: element!.dataset.placement as MarkingPlacement, ...bounds });
+          }
+        });
+        for (let eventIndex = 0; eventIndex <= voice.events.length; eventIndex++) {
+          const before = voice.events[eventIndex];
+          const after = voice.events[eventIndex - 1];
+          const onset = before?.onset ?? (after ? add(after.onset, after.time) : rational(0));
+          anchors.push({ sourceId: voice.id, ...ancestry, voiceId: voice.id, eventIndex,
+            ...(before ? { beforeId: before.id } : {}), ...(after ? { afterId: after.id } : {}),
+            onset, x: onsetX(onset, column), y: topLine, height: bottomLine - topLine });
+        }
+        for (const tuplet of voice.tuplets) {
+          const element = tupletGroups.get(tuplet.id);
+          const bounds = element && unionInk(visibleInk(element, drawn.context.svg));
+          if (bounds) tuplets.push({ sourceId: tuplet.id, ...ancestry, voiceId: voice.id,
+            eventIds: [...tuplet.eventIds], ...bounds });
+        }
+      }
+      if (!measure.voices.length) {
+        const onset = rational(0);
+        anchors.push({ sourceId: measure.id, ...ancestry, eventIndex: 0, onset,
+          x: onsetX(onset, column), y: topLine, height: bottomLine - topLine });
+      }
+      for (const annotation of measure.annotations) {
+        const element = annotationGroups.get(annotation.id);
+        const bounds = element && unionInk(visibleInk(element, drawn.context.svg));
+        if (bounds) annotations.push({ sourceId: annotation.id, ...ancestry,
+          kind: annotation.kind, onset: annotation.onset, ...bounds });
+      }
+    });
+  });
+  return { index, start: layout.start, end: layout.end, width: viewBox.width, height: viewBox.height,
+    viewBox, ink, pageBreak: layout.pageBreak, staves, measures, events, annotations, markings, tuplets, anchors };
+}
+
 /** Engrave a validated score. All staves share one formatter per measure column. */
 export function renderScore(container: HTMLElement, score: Score, options: EngravingOptions): EngravingResult {
   const diagnostics: Diagnostic[] = [];
   const hitRegions: HitRegion[] = [];
+  const geometry: SystemGeometry[] = [];
+  const eventInk = new Map<string, InkBox>();
   container.replaceChildren();
-  if (!score.staves.length || !score.staves[0].measures.length) return { systems: [], hitRegions, diagnostics };
+  if (!score.staves.length || !score.staves[0].measures.length) return { systems: [], hitRegions, diagnostics, systemGeometry: geometry };
   const labelsWidth = Math.max(0, ...score.staves.map((staff) => staff.label ? textWidth(staff.label) + 14 : 0));
   const left = 12 + labelsWidth + (score.bracket === 'none' ? 0 : 20);
   const viewportWidth = Number.isFinite(options.width) ? Math.max(1, Math.floor(options.width)) : 1;
@@ -662,6 +1023,7 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
   systems.forEach((system, systemIndex) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'system-row';
+    wrapper.dataset.systemIndex = String(systemIndex);
     wrapper.dataset.startMeasure = String(system.start);
     wrapper.dataset.endMeasure = String(system.end);
     if (system.pageBreak) wrapper.classList.add('page-break');
@@ -683,7 +1045,8 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
       column.staves.forEach((staff) => staff.stave.setNoteStartX(noteStart).setContext(context));
       const noteEnd = Math.min(...column.staves.map((staff) => staff.stave.getNoteEndX()));
       if (column.voices.some((voice) => voice.getTickables().length)) {
-        column.formatter.format(column.voices, Math.max(20, noteEnd - noteStart - column.tail - 12), { alignRests: false, context });
+        formatColumn(column, () => column.formatter.format(column.voices,
+          Math.max(20, noteEnd - noteStart - column.tail - 12), { alignRests: false, context }));
       }
       columns.push(column);
       x += width;
@@ -695,6 +1058,7 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
     score.staves.forEach((staffModel, staffIndex) => {
       const staffGroup = context.openGroup('music-staff');
       staffGroup.dataset.staffId = staffModel.id;
+      staffGroup.dataset.notation = staffModel.notation ?? 'pitched';
       staffGroups.push(staffGroup);
       columns.forEach((column) => {
         const staff = column.staves[staffIndex];
@@ -707,8 +1071,20 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
           group.dataset.staffId = staffModel.id;
           group.dataset.measureId = staff.measure.id;
           group.dataset.kind = event.kind;
+          // A lookup ID, not a claim that a stem is printed. Beam strokes live
+          // outside this event group; whole values and hidden stems have no ink.
+          const stem = note.getStem();
+          if (stem) group.dataset.stemId = prefix(stem.getAttribute('id'));
+          if (event.kind === 'road') group.dataset.pitchDirection = event.pitchDirection;
           group.dataset.x = String(note.getAbsoluteX());
           group.dataset.duration = formatRational(event.time);
+          // Voice collision formatting may displace a rectangular rest onto a
+          // hidden line. Give it a supporting SMuFL ledger-rest glyph instead.
+          if ((staff.stave.rhythm || staff.stave.threeRoads) && event.kind === 'rest') {
+            const glyph = restGlyph(note, event, note.getKeyLine(0));
+            note.noteHeads[0].setText(glyph);
+            positionLedgerRestDots(note, glyph);
+          }
           note.setContext(context).draw();
           context.closeGroup();
           drawnNotes.set(id, { event, note, group, staffGroup, context, system: systemIndex });
@@ -725,6 +1101,7 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
   drawTies(score, drawnNotes);
   drawnSystems.forEach((system, index) => {
     const { context, columns } = system;
+    const firstHit = hitRegions.length;
     let cursor = 8;
     system.staffGroups.forEach((group, staffIndex) => {
       for (const column of columns) {
@@ -738,12 +1115,18 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
           drawTuplets(staff, context, group);
         }
       }
+      drawEventMarkings(columns.flatMap(column => {
+        const measure = column.staves[staffIndex].measure;
+        return measure.voices.flatMap(voice => voice.events.map(event => drawnNotes.get(event.id)!));
+      }), group);
       const annotations = placeAnnotations(columns, staffIndex, visibleInk(group));
       annotations.forEach(item => group.append(drawAnnotation(item, context)));
       const label = score.staves[staffIndex].label;
       if (label) {
         const labelGroup = context.openGroup('staff-label');
-        context.setFont('Academico', '13px').fillText(label, 8, 64);
+        const stave = columns[0].staves[staffIndex].stave;
+        const center = (stave.getYForLine(0) + stave.getYForLine(stave.getNumLines() - 1)) / 2;
+        context.setFont('Academico', '13px').fillText(label, 8, center + 4);
         context.closeGroup();
         group.append(labelGroup);
       }
@@ -763,8 +1146,9 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
       const bounds = unionInk(visibleInk(group))!;
       const shift = cursor - bounds.y;
       group.setAttribute('transform', `translate(0 ${shift})`);
-      group.dataset.topLine = String(40 + shift);
-      group.dataset.bottomLine = String(80 + shift);
+      const firstStave = columns[0].staves[staffIndex].stave;
+      group.dataset.topLine = String(firstStave.getYForLine(0) + shift);
+      group.dataset.bottomLine = String(firstStave.getYForLine(firstStave.getNumLines() - 1) + shift);
       for (const column of columns) {
         const staff = column.staves[staffIndex];
         staff.stave.setY(shift);
@@ -788,6 +1172,7 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
             }
           }
           if (!ink) throw new Error(`No printed notation could be located for event ${id}.`);
+          eventInk.set(id, moveInk(ink, 0, shift));
           const width = Math.max(10, ink.width);
           const height = Math.max(12, ink.height);
           const box = { x: ink.x - (width - ink.width) / 2, y: ink.y - (height - ink.height) / 2, width, height };
@@ -795,7 +1180,10 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
           for (const [name, value] of Object.entries(box)) target.setAttribute(name, String(value));
           target.setAttribute('opacity', '0');
           target.setAttribute('pointer-events', 'all');
-          if (!noteGroup.dataset.coalescedWith) noteGroup.append(target);
+          // Keep the event's enlarged fallback target behind its painted
+          // children. A rectangle above them would swallow native clicks on
+          // child markings and incorrectly select their parent event instead.
+          if (!noteGroup.dataset.coalescedWith) noteGroup.prepend(target);
           hitRegions.push({ sourceId: id, system: index, ...moveInk(box, 0, shift), onset: event.onset });
         }
       }
@@ -812,6 +1200,8 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
     const height = Math.ceil(box.y + box.height + 8 - minY);
     system.renderer.resize(width, height);
     system.context.setViewBox(minX, minY, width, height);
+    geometry.push(systemGeometry(system, score, systems[index], index,
+      { x: minX, y: minY, width, height }, box, hitRegions.slice(firstHit), drawnNotes, eventInk));
     if (width > viewportWidth) {
       system.wrapper.classList.add('overflow');
       system.wrapper.tabIndex = 0;
@@ -819,5 +1209,5 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
         message: `System ${index + 1} needs ${width}px to keep its notation readable. Scroll horizontally or use a wider page.` });
     }
   });
-  return { systems, hitRegions, diagnostics };
+  return { systems, hitRegions, diagnostics, systemGeometry: geometry };
 }

@@ -431,11 +431,11 @@ describe('authored gallery fixtures', () => {
     };
   }
 
-  it('reads and round-trips all nine gallery scores without changing their authored HTML', () => {
+  it('reads and round-trips all twelve gallery scores without changing their authored HTML', () => {
     const roots = [...gallery().querySelectorAll('[data-score]')];
     expect(roots.map(root => root.id).sort()).toEqual([
       'pitch-study', 'seven-study', 'fifteen-study', 'five-study', 'tuplet-study',
-      'improv-study', 'piano-study', 'ensemble-auto-study', 'ensemble-study',
+      'improv-study', 'piano-study', 'ensemble-auto-study', 'ensemble-study', 'microtone-rhythm-study', 'three-roads-study', 'event-markings-study',
     ].sort());
     for (const root of roots) {
       const before = root.outerHTML;

@@ -1,8 +1,10 @@
 import { durationTime } from './duration';
 import { meterTime, parseMeter } from './meter';
+import { validatePitchDirection } from './notation';
+import { harmonyIntervalText, validateArticulationType, validateHarmonyInterval, validateOrnamentType } from './event-markings';
 import { pitchText, validateClef, validateKey } from './pitch';
 import { add, compare, divide, equals, formatRational, multiply, rational } from './rational';
-import type { Diagnostic, Duration, Measure, Meter, MusicEvent, Rational, Score, Tuplet, Voice } from './types';
+import type { Diagnostic, Duration, EventMarking, Measure, Meter, MusicEvent, Rational, Score, Tuplet, Voice } from './types';
 
 const ZERO = rational(0);
 const WRITTEN_UNITS = (['breve', 'whole', 'half', 'quarter', 'eighth', 'sixteenth', 'thirty-second', 'sixty-fourth', '128th'] satisfies Duration[])
@@ -18,7 +20,8 @@ interface EventInfo {
   onset?: Rational;
   time?: Rational;
   written?: Rational;
-  pitchSignature?: string;
+  tieSignature?: string;
+  harmonySignature?: string;
   tupletIds: readonly string[];
 }
 
@@ -126,28 +129,91 @@ class ScoreValidator {
     }, 'invalid-meter', sourceId, sourceId);
   }
 
+  markings(event: MusicEvent, eventId: string, measureId: string): string {
+    const intervals: string[] = [];
+    const signatures = new Set<string>();
+    for (const [index, marking] of (event.markings === undefined ? [] : this.array<EventMarking>(event.markings, 'Event markings', eventId, measureId)).entries()) {
+      if (!isObject(marking)) {
+        this.issue('invalid-event-marking', 'Each attached marking must be an articulation, ornament, or interval object.', eventId, measureId);
+        continue;
+      }
+      const id = this.id(marking.id, `${eventId}:marking-${index + 1}`, measureId);
+      this.choice(marking.kind, ['articulation', 'ornament', 'interval'], 'Marking kind', id, measureId);
+      if (['onset', 'time', 'duration', 'dots', 'tupletIds'].some(field => Object.hasOwn(marking, field))) {
+        this.issue('invalid-event-marking', 'Attached markings share their event\'s onset and written duration; they cannot declare time or tuplet membership.', id, measureId);
+      }
+      let signature: string | undefined;
+      if (marking.kind === 'articulation') {
+        const type = this.attempt(() => validateArticulationType(marking.type), 'invalid-articulation', id, measureId);
+        this.choice(marking.placement, ['auto', 'above', 'below'], 'Articulation placement', id, measureId);
+        if ((event.kind === 'rest' || (event.kind === 'slash' && !event.rhythmic)) && marking.type !== 'fermata') {
+          this.issue('invalid-marking-context', 'Rests and open improvisation slashes accept only a fermata, not attack or release articulations. Use written rhythm for prescribed attacks.', id, measureId);
+        }
+        if (type) signature = `articulation:${type}`;
+      } else if (marking.kind === 'ornament') {
+        const type = this.attempt(() => validateOrnamentType(marking.type), 'invalid-ornament', id, measureId);
+        this.choice(marking.placement, ['above', 'below'], 'Ornament placement', id, measureId);
+        if (event.kind !== 'note' && event.kind !== 'road') {
+          this.issue('invalid-marking-context', 'Pitch ornaments need a single pitched note or a road event\'s chosen main pitch. Use a separate pitched voice to identify an ornamented chord tone.', id, measureId);
+        }
+        if (type) signature = `ornament:${type}`;
+      } else if (marking.kind === 'interval') {
+        const interval = this.attempt(() => validateHarmonyInterval(marking.interval), 'invalid-harmony-interval', id, measureId);
+        const placement = this.choice(marking.placement, ['above', 'below'], 'Interval direction', id, measureId);
+        if (event.kind !== 'road') this.issue('interval-on-non-road-event', 'Relative interval harmonies attach only to music-road events. Use explicit pitches for a written chord, or music-harmony for a chord-symbol annotation.', id, measureId);
+        if (interval && placement) {
+          signature = `interval:${marking.placement}:${harmonyIntervalText(interval)}`;
+          intervals.push(signature);
+        }
+      }
+      if (signature) {
+        if (signatures.has(signature)) this.issue('duplicate-event-marking', 'Do not repeat an articulation or ornament type, or the same written harmony interval on the same side of an event.', id, measureId);
+        signatures.add(signature);
+      }
+    }
+    return intervals.sort().join('|');
+  }
+
   event(event: MusicEvent, index: number, voiceId: string, measureId: string): EventInfo | undefined {
     if (!isObject(event)) {
       this.issue('invalid-event', 'Each voice event must be a musical event object.', voiceId, measureId);
       return undefined;
     }
     const id = this.id(event.id, `${voiceId}:event-${index + 1}`, measureId);
-    this.choice(event.kind, ['note', 'chord', 'rest', 'slash'], 'Event kind', id, measureId);
+    this.choice(event.kind, ['note', 'chord', 'rest', 'slash', 'rhythm', 'road'], 'Event kind', id, measureId);
     this.choice(event.beam, ['auto', 'start', 'continue', 'end', 'none'], 'Beam policy', id, measureId);
     this.choice(event.stem, ['auto', 'up', 'down'], 'Stem direction', id, measureId);
     this.choice(event.tie, ['none', 'start', 'continue', 'end'], 'Tie policy', id, measureId);
     this.boolean(event.measureRest, 'measureRest', id, measureId);
     this.boolean(event.rhythmic, 'rhythmic', id, measureId);
-    if (event.rhythmic && event.kind !== 'slash') this.issue('invalid-rhythmic-flag', 'Only slash events can have the rhythmic flag; pitched notes already carry their written rhythm.', id, measureId);
+    if (event.rhythmic && event.kind !== 'slash') this.issue('invalid-rhythmic-flag', 'Only slash events can have the rhythmic flag; pitched, rhythm, and road notes already carry their written rhythm.', id, measureId);
+    const pitchDirection = event.kind === 'road'
+      ? this.attempt(() => validatePitchDirection(event.pitchDirection ?? ''), 'invalid-road-direction', id, measureId)
+      : undefined;
+    if (event.kind !== 'road' && event.pitchDirection !== undefined) {
+      this.issue('invalid-road-direction', 'Only road events can carry a relative pitch direction.', id, measureId);
+    }
+    const harmonySignature = this.markings(event, id, measureId);
     const pitches = this.array(event.pitches, 'Event pitches', id, measureId);
     const pitchNames = pitches.map(pitch => this.attempt(() => pitchText(pitch), 'invalid-pitch', id, measureId));
     if ((event.kind === 'note' && pitches.length !== 1)
       || (event.kind === 'chord' && pitches.length < 2)
-      || ((event.kind === 'rest' || event.kind === 'slash') && pitches.length !== 0)) {
-      this.issue('invalid-event-pitches', 'Notes need one pitch, chords need at least two, and rests/slashes cannot contain pitches.', id, measureId);
+      || ((event.kind === 'rest' || event.kind === 'slash' || event.kind === 'rhythm' || event.kind === 'road') && pitches.length !== 0)) {
+      this.issue('invalid-event-pitches', 'Notes need one pitch, chords need at least two, and rests, slashes, rhythm notes, and road events cannot contain pitches.', id, measureId);
     }
     if (new Set(pitchNames.filter(name => name !== undefined)).size !== pitchNames.filter(name => name !== undefined).length) {
       this.issue('duplicate-chord-pitch', 'A chord cannot repeat the same spelled pitch.', id, measureId);
+    }
+    if (event.kind === 'chord') {
+      const positions = new Map<string, number>();
+      pitches.forEach((pitch, pitchIndex) => {
+        if (pitchNames[pitchIndex] === undefined) return;
+        const position = `${pitch.step}:${pitch.octave}`;
+        positions.set(position, (positions.get(position) ?? 0) + 1);
+      });
+      if ([...positions.values()].some(count => count > 2)) {
+        this.issue('unsupported-chord-cluster', 'A chord supports at most two pitches on the same letter and octave. More would overlap noteheads; respell onto distinct staff positions or use separate staves.', id, measureId);
+      }
     }
     const ids = this.array(event.tupletIds, 'Event tupletIds', id, measureId);
     if (ids.some(value => typeof value !== 'string' || !value)) this.issue('invalid-tuplet-reference', 'Tuplet references must be nonempty IDs.', id, measureId);
@@ -160,7 +226,10 @@ class ScoreValidator {
         if (!Number.isSafeInteger(event.dots)) throw new RangeError('Event dots must be an integer from 0 to 3.');
         return durationTime(event.duration, event.dots);
       }, 'invalid-duration', id, measureId),
-      pitchSignature: pitches.length > 0 && pitchNames.every(name => name !== undefined) ? [...pitchNames].sort().join('|') : undefined,
+      tieSignature: event.kind === 'rhythm' && pitches.length === 0 ? 'rhythm'
+        : event.kind === 'road' && pitches.length === 0 && pitchDirection !== undefined ? 'road'
+        : pitches.length > 0 && pitchNames.every(name => name !== undefined) ? `pitch:${[...pitchNames].sort().join('|')}` : undefined,
+      harmonySignature,
       tupletIds: ids.filter(value => typeof value === 'string'),
     };
   }
@@ -254,7 +323,7 @@ class ScoreValidator {
       }
       if (policy === 'end') {
         if (!anchor(group[0]) || !anchor(info) || group.filter(anchor).length < 2) {
-          this.issue('invalid-beam-anchors', 'A beam must begin and end on beamable notes/chords/rhythmic slashes and have at least two such anchors.', group[0].id, measureId);
+          this.issue('invalid-beam-anchors', 'A beam must begin and end on beamable notes, chords, rhythm notes, or rhythmic slashes and have at least two such anchors.', group[0].id, measureId);
         }
         const directions = new Set(group.filter(anchor).map(value => value.event.stem).filter(value => value !== 'auto'));
         if (directions.size > 1) this.issue('beam-stem-conflict', 'One beam cannot contain conflicting explicit stem directions.', group[0].id, measureId);
@@ -301,7 +370,7 @@ class ScoreValidator {
       const info = this.event(event, eventIndex, id, measureId);
       return info ? [info] : [];
     });
-    if (events.length === 0) this.issue('empty-voice', 'A voice must contain notes, rests, or slashes; use a measure rest for a silent bar.', id, measureId);
+    if (events.length === 0) this.issue('empty-voice', 'A voice must contain notes, rhythm notes, rests, or slashes; use a measure rest for a silent bar.', id, measureId);
     const tuplets = this.tuplets(voice, events, id, measureId);
     let total: Rational | undefined = ZERO;
     for (const info of events) {
@@ -408,17 +477,24 @@ class ScoreValidator {
       measure.voices.forEach((voice, voiceIndex) => {
         for (const event of voice.events) {
           const policy = event.event.tie;
-          const pitched = (event.event.kind === 'note' || event.event.kind === 'chord') && event.pitchSignature !== undefined;
-          if (policy !== 'none' && !pitched) this.issue('invalid-tie', 'Ties require pitched notes or complete pitched chords; rest and slash ties are not supported.', event.id, measure.id);
+          const tieable = (event.event.kind === 'note' || event.event.kind === 'chord' || event.event.kind === 'rhythm' || event.event.kind === 'road') && event.tieSignature !== undefined;
+          if (policy !== 'none' && !tieable) this.issue('invalid-tie', 'Ties require pitched notes, complete pitched chords, rhythm notes, or road events; rest and slash ties are not supported.', event.id, measure.id);
+          if (event.event.kind === 'road' && (policy === 'continue' || policy === 'end') && event.event.pitchDirection !== 'same') {
+            this.issue('invalid-road-tie-direction', 'A tied road continuation must use direction="same" on the middle line: sustain the previous pitch without a new attack or pitch change.', event.id, measure.id);
+          }
           const previous = pending.get(voiceIndex);
           if (previous && (policy === 'end' || policy === 'continue')) {
-            if (!pitched || event.pitchSignature !== previous.event.pitchSignature) this.issue('tie-pitch-mismatch', 'Tied events must have exactly the same spelled pitches and octaves, including every chord pitch.', event.id, measure.id);
+            if (!tieable || event.tieSignature !== previous.event.tieSignature) this.issue('tie-pitch-mismatch', 'Tied events must both be rhythm notes, both be road events with a same-direction continuation, or have exactly the same spelled pitches and octaves, including every chord pitch.', event.id, measure.id);
+            if (event.event.kind === 'road' && previous.event.event.kind === 'road'
+              && event.harmonySignature !== previous.event.harmonySignature) {
+              this.issue('road-tie-harmony-mismatch', 'A road tie sustains the main pitch and its complete harmony. Repeat the same intervals and above/below directions on every tied segment; do not add, remove, or change harmony tones inside the tie.', event.id, measure.id);
+            }
           } else {
             if (previous) this.issue('unclosed-tie', 'A tie must continue or end on the immediately following event in this voice.', previous.event.id, previous.measureId);
             if (policy === 'continue' || policy === 'end') this.issue('orphan-tie', `tie="${policy}" needs a preceding tie start in the same voice.`, event.id, measure.id);
           }
           pending.delete(voiceIndex);
-          if ((policy === 'start' || policy === 'continue') && pitched) pending.set(voiceIndex, { event, measureId: measure.id });
+          if ((policy === 'start' || policy === 'continue') && tieable) pending.set(voiceIndex, { event, measureId: measure.id });
         }
       });
     }
@@ -467,9 +543,31 @@ class ScoreValidator {
       }
       const staffId = this.id(staff.id, `${id}:staff-${staffIndex + 1}`);
       this.string(staff.label, 'Staff label', staffId);
+      if (staff.notation !== undefined) this.choice(staff.notation, ['pitched', 'rhythm', 'three-roads'], 'Staff notation', staffId);
       this.clefAndKey(staff.clef, staff.key, staffId);
+      const rhythm = staff.notation === 'rhythm';
+      const roads = staff.notation === 'three-roads';
+      if ((rhythm || roads) && (staff.clef !== 'treble' || staff.key !== 'C')) {
+        this.issue(`${staff.notation}-pitch-context`, `A ${roads ? '3 roads' : 'rhythm'} staff has no pitched clef or key; retain neutral treble/C model defaults, which are not printed.`, staffId);
+      }
       const measures = this.array(staff.measures, 'Staff measures', staffId).flatMap((measure, measureIndex) => {
         const info = this.measure(measure, measureIndex, staffId);
+        if (info) {
+          if ((rhythm || roads) && (measure.clef !== 'treble' || measure.key !== 'C')) {
+            this.issue(`${staff.notation}-pitch-context`, `${roads ? '3 roads' : 'Rhythm'} measures have no pitched clef or key; retain neutral treble/C model defaults, which are not printed.`, info.id, info.id);
+          }
+          for (const voice of info.voices) for (const event of voice.events) {
+            if (roads && event.event.kind !== 'road' && event.event.kind !== 'rest') {
+              this.issue('incompatible-event-on-three-roads-staff', 'A 3 roads staff accepts music-road events with an explicit higher/same/lower direction and rests. Use another staff for pitches, rhythm notes, or open improvisation slashes.', event.id, info.id);
+            } else if (!roads && event.event.kind === 'road') {
+              this.issue('road-event-on-other-staff', 'A music-road event needs a music-staff with notation="three-roads".', event.id, info.id);
+            } else if (rhythm && (event.event.kind === 'note' || event.event.kind === 'chord')) {
+              this.issue('pitched-event-on-rhythm-staff', 'A single-line rhythm staff cannot represent pitches. Use music-rhythm for a pitch-free duration, or keep the pitched staff.', event.id, info.id);
+            } else if (!rhythm && !roads && event.event.kind === 'rhythm') {
+              this.issue('rhythm-event-on-pitched-staff', 'A music-rhythm event needs a music-staff with notation="rhythm". Use a pitched note or a slash on a pitched staff.', event.id, info.id);
+            }
+          }
+        }
         return info ? [info] : [];
       });
       if (measures.length === 0) this.issue('empty-staff', 'A staff must contain at least one measure.', staffId);

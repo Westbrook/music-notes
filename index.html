@@ -19,7 +19,7 @@
           <a class="source-link" href="#source-example">Read the markup</a>
         </div>
         <p id="print-layout-help" class="toolbar-help">The checkbox fixes score wrapping at the print width; it does not show paper pages. Short scores may look unchanged. Try the <a href="#ensemble-auto-heading">automatic ensemble</a> in a narrow window to see the difference.</p>
-        <p id="print-dialog-help" class="toolbar-help">Printing includes all nine scores and their explanations, without source snippets or text transcripts. It always uses the print layout, whether the checkbox is on or off. Choose paper and margins in your browser’s dialog, then Print or Save as PDF if offered. If no dialog opens here, use a browser with printing support.</p>
+        <p id="print-dialog-help" class="toolbar-help">Printing includes all twelve scores and their explanations, without source snippets or text transcripts. It always uses the print layout, whether the checkbox is on or off. Choose paper and margins in your browser’s dialog, then Print or Save as PDF if offered. If no dialog opens here, use a browser with printing support.</p>
         <p id="workbook-status" class="workbook-status" role="status" aria-live="polite" aria-atomic="true">Scores follow the window width.</p>
       </header>
 
@@ -380,7 +380,210 @@
         <p class="layout-note">Both versions use the same 680px print width. <strong>Use print layout on screen</strong> fixes the system layout; it does not show physical paper pages. Without a requested page break, the browser handles ordinary pagination. The manual page marker illustrates an author choice, not an automatically calculated safe turn. Review the final pages with your paper settings and playing tempo.</p>
       </section>
 
-      <p class="page-footer">Eight original studies, with the ensemble shown in two layouts, written directly in this page’s HTML. Read <code>docs/authoring.md</code> for the data API and <code>docs/design-review.md</code> for the review criteria and current limits. There is no playback or editing UI; the score model and source links are the foundation for those future tools.</p>
+      <section class="study" aria-labelledby="microtone-rhythm-heading">
+        <div class="study-head"><span class="study-number">09</span><h2 id="microtone-rhythm-heading">Quarter-tones and a clapped pulse</h2></div>
+        <p>The melody uses Stein–Zimmermann signs in 24 equal divisions of the octave: quarter-sharp/flat mean ±50 cents from the natural, and three-quarter-sharp/flat mean ±150 cents. The lower staff has one line and no pitch; clap its written attacks. Both parts share 7/8 grouped 2 + 2 + 3.</p>
+        <music-system id="microtone-rhythm-study" data-score bracket="bracket" max-measures="2" measure-numbers="all" print-width="680" aria-label="Quarter-tone melody with a single-line clapped rhythm">
+          <music-staff id="quarter-tone-melody" clef="treble" label="Melody">
+            <music-measure meter="7/8" groups="2+2+3">
+              <music-direction text="24-EDO; quarter-tone signs"></music-direction>
+              <music-note pitch="F4" duration="quarter"></music-note>
+              <music-note pitch="Fqs4" duration="quarter"></music-note>
+              <music-note pitch="F#4" duration="quarter" dots="1"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="Fqs4" duration="quarter"></music-note>
+              <music-note pitch="F4" duration="quarter"></music-note>
+              <music-note pitch="Fqf4" duration="quarter" dots="1"></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="Gtqs4" duration="quarter"></music-note>
+              <music-note pitch="Btqf3" duration="quarter"></music-note>
+              <music-note pitch="G4" duration="quarter" dots="1"></music-note>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-rest measure></music-rest>
+            </music-measure>
+          </music-staff>
+          <music-staff id="clapped-rhythm" notation="rhythm" label="Claps">
+            <music-measure meter="7/8" groups="2+2+3">
+              <music-direction text="Clap"></music-direction>
+              <music-rhythm duration="quarter"></music-rhythm>
+              <music-rest duration="quarter"></music-rest>
+              <music-rhythm duration="quarter" dots="1"></music-rhythm>
+            </music-measure>
+            <music-measure>
+              <music-rhythm duration="sixteenth"></music-rhythm>
+              <music-rhythm duration="sixteenth"></music-rhythm>
+              <music-rest duration="eighth"></music-rest>
+              <music-tuplet actual="3" normal="2" bracket="yes" ratio>
+                <music-rhythm duration="quarter"></music-rhythm>
+                <music-rest duration="eighth"></music-rest>
+              </music-tuplet>
+              <music-rhythm duration="quarter" dots="1"></music-rhythm>
+            </music-measure>
+            <music-measure>
+              <music-rhythm duration="quarter"></music-rhythm>
+              <music-rhythm duration="quarter"></music-rhythm>
+              <music-rhythm duration="quarter" dots="1"></music-rhythm>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-rest measure></music-rest>
+            </music-measure>
+          </music-staff>
+        </music-system>
+        <p>The second rhythm bar includes a quarter note and an eighth rest inside 3:2: two written events span three eighth-note units, scaled to one quarter. The final rest fills all seven eighths. The part labels and brief instructions belong to their own staves, so each remains meaningful when extracted.</p>
+        <details>
+          <summary>Pitch spelling and a pitch-free rhythm part</summary>
+          <pre><code>&lt;music-note pitch="Fqs4" duration="quarter"&gt;&lt;/music-note&gt;
+&lt;!-- qf / qs / tqf / tqs: quarter-flat/sharp, three-quarter-flat/sharp --&gt;
+
+&lt;music-staff notation="rhythm" label="Claps"&gt;
+  &lt;music-measure meter="7/8" groups="2+2+3"&gt;
+    &lt;music-rhythm duration="quarter"&gt;&lt;/music-rhythm&gt;
+    &lt;music-rest duration="quarter"&gt;&lt;/music-rest&gt;
+    &lt;music-rhythm duration="quarter" dots="1"&gt;&lt;/music-rhythm&gt;
+  &lt;/music-measure&gt;
+&lt;/music-staff&gt;</code></pre>
+        </details>
+      </section>
+
+      <section class="study" aria-labelledby="three-roads-heading">
+        <div class="study-head"><span class="study-number">10</span><h2 id="three-roads-heading">3 roads music</h2></div>
+        <p>Choose a comfortable reference pitch before the first attack. The top road means choose any higher pitch, the middle means the same pitch, and the bottom means any lower pitch. Compare each new attack with the last main pitch in that voice; rests keep that reference. The rhythm is written, but the movement between main pitches has no fixed interval, register, or absolute pitch.</p>
+        <music-staff id="three-roads-study" data-score notation="three-roads" label="3 roads" meter="4/4" max-measures="2" measure-numbers="all" print-width="680" aria-label="Three roads: chosen pitch with written rhythm">
+          <music-measure>
+            <music-direction text="Compare with last main pitch"></music-direction>
+            <music-direction text="Bottom: lower"></music-direction>
+            <music-direction text="Top: higher · middle: same"></music-direction>
+            <music-direction text="Choose a reference pitch first"></music-direction>
+            <music-road direction="same" duration="quarter"></music-road>
+            <music-road direction="higher" duration="eighth"></music-road>
+            <music-road direction="higher" duration="eighth"></music-road>
+            <music-road direction="same" duration="quarter"></music-road>
+            <music-road direction="lower" duration="quarter"></music-road>
+          </music-measure>
+          <music-measure>
+            <music-direction text="Rests keep the reference"></music-direction>
+            <music-road direction="lower" duration="quarter"></music-road>
+            <music-rest duration="quarter"></music-rest>
+            <music-road direction="same" duration="quarter"></music-road>
+            <music-road direction="higher" duration="quarter"></music-road>
+          </music-measure>
+          <music-measure>
+            <music-tuplet actual="3" normal="2" bracket="yes">
+              <music-road direction="same" duration="eighth"></music-road>
+              <music-road direction="higher" duration="eighth"></music-road>
+              <music-road direction="higher" duration="eighth"></music-road>
+            </music-tuplet>
+            <music-road direction="lower" duration="quarter"></music-road>
+            <music-road direction="same" duration="half" tie="start"></music-road>
+          </music-measure>
+          <music-measure end-bar="final">
+            <music-road direction="same" duration="quarter" tie="end"></music-road>
+            <music-rest duration="quarter"></music-rest>
+            <music-road direction="lower" duration="quarter"></music-road>
+            <music-road direction="same" duration="quarter"></music-road>
+          </music-measure>
+        </music-staff>
+        <p>Only the top, middle, and bottom lines of a normal five-line staff remain, at their original spacing. Slash heads prescribe the rhythm, as in “Room to improvise.” Two top-road attacks each move higher; an untied middle-road slash repeats the previous main pitch. The tied middle-road continuation in the last bar holds the pitch without another attack.</p>
+        <details>
+          <summary>Directions carry meaning without fixing pitches</summary>
+          <pre><code>&lt;music-staff notation="three-roads" meter="4/4"&gt;
+  &lt;music-measure&gt;
+    &lt;music-road direction="same" duration="quarter"&gt;&lt;/music-road&gt;
+    &lt;music-road direction="higher" duration="eighth"&gt;&lt;/music-road&gt;
+    &lt;music-road direction="higher" duration="eighth"&gt;&lt;/music-road&gt;
+    &lt;music-road direction="same" duration="quarter"&gt;&lt;/music-road&gt;
+    &lt;music-road direction="lower" duration="quarter"&gt;&lt;/music-road&gt;
+  &lt;/music-measure&gt;
+&lt;/music-staff&gt;</code></pre>
+        </details>
+      </section>
+
+      <section class="study" aria-labelledby="event-markings-heading">
+        <div class="study-head"><span class="study-number">11</span><h2 id="event-markings-heading">Mark the attack; add a harmony</h2></div>
+        <p>Articulations and ornaments sit opposite the printed stem, or above when there is no stem. Staccato changes how a note is released, not its written duration. On the three-roads staff, each interval figure adds a harmony above or below that event’s main pitch. Harmony notes and ornament auxiliaries never change the next road’s main-pitch reference.</p>
+        <music-system id="event-markings-study" data-score bracket="bracket" max-measures="2" measure-numbers="all" print-width="680" aria-label="Articulated notes and three-roads interval harmonies">
+          <music-staff id="marked-pitched-part" clef="treble" label="Pitched">
+            <music-measure meter="4/4">
+              <music-note pitch="F4" duration="quarter"><music-articulation type="accent"></music-articulation></music-note>
+              <music-note pitch="A4" duration="quarter"><music-articulation type="staccato"></music-articulation></music-note>
+              <music-note pitch="C5" duration="half"><music-ornament type="trill"></music-ornament></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="Bb4" duration="whole"><music-articulation type="fermata"></music-articulation></music-note>
+            </music-measure>
+            <music-measure>
+              <music-note pitch="C5" duration="eighth"><music-ornament type="turn"></music-ornament></music-note>
+              <music-note pitch="D5" duration="eighth"><music-articulation type="staccatissimo"></music-articulation></music-note>
+              <music-note pitch="E5" duration="quarter"><music-articulation type="tenuto"></music-articulation></music-note>
+              <music-note pitch="A4" duration="half"><music-articulation type="marcato"></music-articulation></music-note>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-rest measure><music-articulation type="fermata"></music-articulation></music-rest>
+            </music-measure>
+          </music-staff>
+          <music-staff id="marked-road-part" notation="three-roads" label="3 roads">
+            <music-measure meter="4/4">
+              <music-direction text="Intervals: from the main pitch"></music-direction>
+              <music-direction text="Follow last main; rests keep it"></music-direction>
+              <music-direction text="Top: higher · mid: same · low: lower"></music-direction>
+              <music-direction text="Choose a main reference first"></music-direction>
+              <music-road direction="same" duration="half">
+                <music-interval value="5" placement="above"></music-interval>
+                <music-articulation type="accent"></music-articulation>
+              </music-road>
+              <music-road direction="higher" duration="quarter">
+                <music-interval value="b3" placement="below"></music-interval>
+                <music-articulation type="staccato"></music-articulation>
+              </music-road>
+              <music-road direction="same" duration="quarter"><music-articulation type="tenuto"></music-articulation></music-road>
+            </music-measure>
+            <music-measure>
+              <music-road direction="lower" duration="half">
+                <music-interval value="3" placement="above"></music-interval>
+                <music-interval value="5" placement="above"></music-interval>
+                <music-ornament type="turn"></music-ornament>
+              </music-road>
+              <music-road direction="same" duration="half">
+                <music-interval value="#11" placement="above"></music-interval>
+                <music-interval value="13" placement="below"></music-interval>
+              </music-road>
+            </music-measure>
+            <music-measure>
+              <music-road direction="same" duration="whole" tie="start">
+                <music-interval value="5" placement="above"></music-interval>
+                <music-interval value="b3" placement="below"></music-interval>
+                <music-articulation type="accent"></music-articulation>
+              </music-road>
+            </music-measure>
+            <music-measure end-bar="final">
+              <music-road direction="same" duration="half" tie="end">
+                <music-interval value="b3" placement="below"></music-interval>
+                <music-interval value="5" placement="above"></music-interval>
+                <music-articulation type="tenuto"></music-articulation>
+              </music-road>
+              <music-rest duration="half"></music-rest>
+            </music-measure>
+          </music-staff>
+        </music-system>
+        <p>One possible realization of the first two road events: choose F as the first main pitch and <strong>5 above adds C above</strong>; choose Bb for the next main pitch and <strong>b3 below adds G below</strong>. These pitches explain the interval rule; they are not stored as road pitches. Compound intervals retain their size through 13. The final tie holds the same complete harmony; both ends explicitly carry the same interval set.</p>
+        <details>
+          <summary>Markings are children of their musical event</summary>
+          <pre><code>&lt;music-note pitch="F4" duration="quarter"&gt;
+  &lt;music-articulation type="staccato"&gt;&lt;/music-articulation&gt;
+  &lt;music-ornament type="trill"&gt;&lt;/music-ornament&gt;
+&lt;/music-note&gt;
+
+&lt;music-road direction="same" duration="half"&gt;
+  &lt;music-interval value="5" placement="above"&gt;&lt;/music-interval&gt;
+  &lt;music-interval value="b3" placement="below"&gt;&lt;/music-interval&gt;
+&lt;/music-road&gt;</code></pre>
+        </details>
+      </section>
+
+      <p class="page-footer">Eleven original studies, with the ensemble shown in two layouts, written directly in this page’s HTML. Read <code>docs/authoring.md</code> for the notation API and <code>docs/design-review.md</code> for the review criteria and current limits. Playback is not implemented.</p>
     </main>
     <script type="module" src="/src/workbook.ts"></script>
   </body>

@@ -12,7 +12,7 @@ vi.mock('../src/engraving/render.js', () => ({ engravingReady: engine.ready, ren
 
 // Resolve the mocked backend before multiple surfaces import it concurrently.
 import '../src/engraving/render.js';
-import { MusicNote, MusicSurface, readScore } from '../src/components/index.js';
+import { MusicNote, MusicStaff, MusicSurface, readScore } from '../src/components/index.js';
 
 function draw(container: HTMLElement, score: Score, options: EngravingOptions): EngravingResult {
   const events = score.staves.flatMap(staff => staff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)));
@@ -196,6 +196,31 @@ describe('reflected authoring properties', () => {
     expect(pending.getAttribute('pitch')).toBe('D5');
   });
 
+  it('reflects attached marking properties and replays values set before upgrade', () => {
+    const articulation = document.createElement('music-articulation');
+    expect(articulation.placement).toBe('auto');
+    articulation.type = 'staccato'; articulation.placement = 'below';
+    expect(articulation.getAttribute('type')).toBe('staccato');
+    expect(articulation.getAttribute('placement')).toBe('below');
+    const ornament = document.createElement('music-ornament');
+    expect(ornament.placement).toBe('above');
+    ornament.type = 'trill'; ornament.placement = 'below';
+    expect(ornament.getAttribute('type')).toBe('trill');
+    expect(ornament.getAttribute('placement')).toBe('below');
+    const interval = document.createElement('music-interval');
+    expect(interval.hasAttribute('placement')).toBe(false);
+    for (const [name, value] of Object.entries({ value: 'b3', placement: 'below' })) {
+      Object.defineProperty(interval, name, { value, writable: true, configurable: true, enumerable: true });
+    }
+    document.body.append(interval);
+    expect(interval.getAttribute('value')).toBe('b3');
+    expect(interval.getAttribute('placement')).toBe('below');
+    expect(Object.hasOwn(interval, 'value')).toBe(false);
+    interval.value = '13'; interval.placement = 'above';
+    expect(interval.getAttribute('value')).toBe('13');
+    expect(interval.getAttribute('placement')).toBe('above');
+  });
+
   it('replays inherited surface and measure properties on first connection', async () => {
     const root = document.createElement('music-measure');
     root.innerHTML = '<music-note pitch="C4" duration="quarter"></music-note>';
@@ -297,6 +322,143 @@ describe('surface ownership and real DOM observation', () => {
     text.nodeValue = 'Very freely';
     await vi.waitFor(() => expect(root.score!.staves[0].measures[0].annotations[0].text).toBe('Very freely'));
     expect(root.shadowRoot!.querySelector('.transcript pre')!.textContent).toContain('Very freely');
+  });
+
+  it('describes rhythm events without a fabricated pitch, clef, or key', async () => {
+    const root = mount('<music-staff notation="rhythm" label="Claps"><music-measure><music-rhythm></music-rhythm><music-rest></music-rest><music-slash rhythmic></music-slash><music-slash></music-slash></music-measure></music-staff>');
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    const transcript = root.shadowRoot!.querySelector('.transcript pre')!.textContent!;
+    expect(transcript).toContain('Claps; single-line rhythm staff; pitch unspecified');
+    expect(transcript).toContain('rhythm note; pitch unspecified');
+    expect(transcript).toContain('rhythmic slash');
+    expect(transcript).toContain('improvised beat slash');
+    expect(transcript).not.toMatch(/treble|key C|B4/);
+    const event = root.querySelector('music-rhythm')!;
+    event.duration = 'eighth';
+    event.dots = 1;
+    expect(event.getAttribute('duration')).toBe('eighth');
+    expect(event.getAttribute('dots')).toBe('1');
+    await root.renderComplete;
+    expect(root.diagnostics.some(issue => issue.code === 'measure-underfull')).toBe(true);
+  });
+
+  it('reflects staff mode changes and rejects hiding pitched notes on a rhythm line', async () => {
+    const root = mount<MusicStaff>('<music-staff><music-measure><music-note id="stable-pitch" pitch="Cqs4" duration="whole"></music-note></music-measure></music-staff>');
+    await root.renderComplete;
+    expect(root.notation).toBe('pitched');
+    expect(root.shadowRoot!.querySelector('.transcript pre')!.textContent).toContain('C quarter-sharp 4');
+    const source = root.getSource('stable-pitch');
+    root.notation = 'rhythm';
+    expect(root.getAttribute('notation')).toBe('rhythm');
+    await root.renderComplete;
+    expect(root.diagnostics.some(issue => issue.code === 'pitched-event-on-rhythm-staff')).toBe(true);
+    expect(root.shadowRoot!.querySelector('.screen svg')).toBeNull();
+    expect(source?.getAttribute('pitch')).toBe('Cqs4');
+    root.notation = 'pitched';
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    expect(root.getSource('stable-pitch')).toBe(source);
+  });
+
+  it('describes relative road directions and observes edits without assigning a pitch', async () => {
+    const root = mount<MusicStaff>('<music-staff notation="three-roads" label="Explore"><music-measure><music-road id="road" direction="higher" duration="half" tie="start"></music-road><music-road direction="same" duration="half" tie="end"></music-road></music-measure><music-measure><music-rest duration="half"></music-rest><music-road direction="lower" duration="half"></music-road></music-measure></music-staff>');
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    expect(root.notation).toBe('three-roads');
+    const transcript = () => root.shadowRoot!.querySelector('.transcript pre')!.textContent!;
+    expect(transcript()).toContain('3 roads music; top higher, middle same, bottom lower');
+    expect(transcript()).toContain('Choose a starting reference pitch for each voice');
+    expect(transcript()).toContain('rests preserve the reference');
+    expect(transcript()).toContain('higher, top road, half');
+    expect(transcript()).toContain('same, middle road; sustain without a new attack, half');
+    expect(transcript()).toContain('lower, bottom road, half');
+    expect(transcript()).not.toMatch(/treble|key C|B4|F5|E4|improvised beat slash/);
+    const road = root.querySelector('music-road')!;
+    const source = root.getSource('road');
+    road.direction = 'lower';
+    expect(road.getAttribute('direction')).toBe('lower');
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    expect(root.score!.staves[0].measures[0].voices[0].events[0]).toMatchObject({ pitchDirection: 'lower', pitches: [] });
+    expect(root.getSource('road')).toBe(source);
+    road.removeAttribute('direction');
+    await root.renderComplete;
+    expect(root.diagnostics.some(issue => issue.code === 'invalid-road-direction')).toBe(true);
+    expect(root.shadowRoot!.querySelector('.screen svg')).toBeNull();
+    road.direction = 'higher';
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    expect(root.toHTML()).toContain('direction="higher"');
+  });
+
+  it('keeps attached markings source-addressable and describes their performer meaning', async () => {
+    const root = mount<MusicStaff>(`<music-staff notation="three-roads"><music-measure>
+      <music-road id="marked-road" direction="same" duration="whole">
+        <music-articulation id="attack" type="accent"></music-articulation>
+        <music-ornament id="ornament" type="trill"></music-ornament>
+        <music-interval id="harmony-above" value="5" placement="above"></music-interval>
+        <music-interval id="harmony-below" value="b3" placement="below"></music-interval>
+      </music-road>
+    </music-measure></music-staff>`);
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    const voice = () => root.score!.staves[0].measures[0].voices[0];
+    expect(voice().events).toHaveLength(1);
+    expect(voice().events[0]).toMatchObject({ pitches: [], onset: { numerator: 0, denominator: 1 }, time: { numerator: 1, denominator: 1 } });
+    const transcript = () => root.shadowRoot!.querySelector('.transcript pre')!.textContent!;
+    expect(transcript()).toContain('last main pitch');
+    expect(transcript()).toContain('Harmony tones and ornament auxiliaries do not change that reference');
+    expect(transcript()).toContain('accent');
+    expect(transcript()).toContain('trill');
+    expect(transcript()).not.toMatch(/trill (above|below)/);
+    expect(transcript()).toContain('harmony 5: perfect fifth above the main pitch');
+    expect(transcript()).toContain('harmony b3: minor third below the main pitch');
+    expect(transcript()).not.toMatch(/treble|key C|B4|F5|E4/);
+    for (const id of ['attack', 'ornament', 'harmony-above', 'harmony-below']) {
+      expect(root.getSource(id)).toBe(root.querySelector(`#${id}`));
+    }
+    // Child identities do not become separate rhythmic hit targets.
+    expect(root.getHitRegions().map(region => region.sourceId)).toEqual(['marked-road']);
+    const interval = root.querySelector('music-interval')!;
+    engine.render.mockClear();
+    interval.value = '♯11'; interval.placement = 'below';
+    root.querySelector('music-articulation')!.type = 'tenuto';
+    await root.renderComplete;
+    expect(engine.render).toHaveBeenCalledTimes(2);
+    expect(voice().events[0].markings).toContainEqual({ id: 'harmony-above', kind: 'interval', interval: { number: 11, alter: 1 }, placement: 'below' });
+    expect(root.getSource('harmony-above')).toBe(interval);
+    expect(root.toHTML()).toContain('value="#11" placement="below"');
+    expect(transcript()).toContain('harmony #11: augmented eleventh below the main pitch');
+    expect(transcript()).toContain('tenuto');
+    expect(voice().events[0].time).toEqual({ numerator: 1, denominator: 1 });
+  });
+
+  it('invalidates both projections for malformed interval children and restores them after repair', async () => {
+    const root = mount<MusicStaff>('<music-staff notation="three-roads"><music-measure><music-road id="road" direction="same" duration="whole"><music-interval id="distance" value="13" placement="above"></music-interval></music-road></music-measure></music-staff>');
+    await root.renderComplete;
+    const interval = root.querySelector('music-interval')!;
+    const oldPrint = root.shadowRoot!.querySelector('.print svg');
+    interval.value = '14';
+    await root.renderComplete;
+    expect(root.diagnostics.some(issue => issue.code === 'invalid-harmony-interval' && issue.sourceId === 'distance')).toBe(true);
+    expect(root.shadowRoot!.querySelector('svg')).toBeNull();
+    expect(root.getHitRegions()).toEqual([]);
+    interval.value = 'b3';
+    interval.removeAttribute('placement');
+    await root.renderComplete;
+    expect(root.diagnostics.some(issue => issue.code === 'invalid-interval-placement' && issue.sourceId === 'distance')).toBe(true);
+    expect(root.shadowRoot!.querySelector('svg')).toBeNull();
+    interval.placement = 'below';
+    await root.renderComplete;
+    expect(root.diagnostics).toEqual([]);
+    expect(root.shadowRoot!.querySelector('.print svg')).not.toBe(oldPrint);
+    expect(root.getSource('distance')).toBe(interval);
+    interval.remove();
+    await root.renderComplete;
+    expect(root.score!.staves[0].measures[0].voices[0].events[0].markings).toBeUndefined();
+    expect(root.getSource('distance')).toBeUndefined();
+    expect(root.getHitRegions()).toHaveLength(1);
   });
 
   it('makes renderComplete await an immediately preceding unobserved-attribute mutation', async () => {

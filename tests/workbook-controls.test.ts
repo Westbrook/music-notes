@@ -71,9 +71,9 @@ afterEach(() => {
 });
 
 describe('workbook controls', () => {
-  it('applies the actual checkbox to all nine gallery scores and restores responsive layout', () => {
+  it('applies the actual checkbox to all twelve gallery scores and restores responsive layout', () => {
     const view = fixture();
-    expect(view.scores).toHaveLength(9);
+    expect(view.scores).toHaveLength(12);
     expect(view.status.textContent).toContain('Responsive score layout');
     expect(view.scores.every(score => !score.hasAttribute('print-preview'))).toBe(true);
     changePreview(view, true);
@@ -102,19 +102,19 @@ describe('workbook controls', () => {
     expect([...view.root.querySelectorAll('[data-score]')].every(score => !score.hasAttribute('print-preview'))).toBe(true);
     changePreview(view, true);
     expect(added.hasAttribute('print-preview')).toBe(true);
-    expect([...view.root.querySelectorAll('[data-score]')]).toHaveLength(9);
+    expect([...view.root.querySelectorAll('[data-score]')]).toHaveLength(12);
   });
 
-  it('waits for the ninth score and restores the button after requesting the dialog', async () => {
+  it('waits for the final score, including the interval harmony study, before requesting the dialog', async () => {
     const view = fixture();
-    const ninth = deferred();
-    view.states[8].completion = ninth.promise;
+    const last = deferred();
+    view.states.at(-1)!.completion = last.promise;
     view.printButton.click();
     expect(view.printButton.disabled).toBe(true);
     expect(view.status.textContent).toContain('Preparing scores');
     await nextTask();
     expect(view.requestPrint).not.toHaveBeenCalled();
-    ninth.resolve();
+    last.resolve();
     await nextTask();
     expect(view.requestPrint).toHaveBeenCalledExactlyOnceWith();
     expect(view.printButton.disabled).toBe(false);
