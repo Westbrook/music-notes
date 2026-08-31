@@ -37,6 +37,17 @@ function draw(container: HTMLElement, score: Score, options: EngravingOptions): 
   return { systems: [], hitRegions, diagnostics: [] };
 }
 
+function drawFrame(container: HTMLElement, score: Score, options: EngravingOptions): EngravingResult {
+  const result = draw(container, score, options);
+  const svg = container.querySelector('svg')!;
+  svg.classList.add('notation-svg');
+  const row = document.createElement('div'); row.className = 'system-row';
+  container.replaceChildren(row); row.append(svg);
+  return { ...result, systemGeometry: [{ index: 0, start: 0, end: 1, width: options.width, height: 50,
+    viewBox: { x: 0, y: 0, width: options.width, height: 50 }, ink: { x: 0, y: 0, width: options.width, height: 50 },
+    pageBreak: false, staves: [], measures: [], events: [], annotations: [], tuplets: [], anchors: [] }] };
+}
+
 function mount<T extends MusicSurface = MusicSurface>(html = '<music-measure><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure>'): T {
   const template = document.createElement('template');
   template.innerHTML = html;
@@ -517,6 +528,9 @@ describe('surface ownership and real DOM observation', () => {
     expect(bar.shadowRoot!.querySelector<HTMLElement>('.surface')!.hidden).toBe(true);
     expect(staff.shadowRoot!.querySelector('svg')).toBeNull();
     expect(bar.shadowRoot!.querySelector('svg')).toBeNull();
+    // Source-only surfaces do not allocate disclosures or engraving mounts.
+    expect(staff.shadowRoot!.querySelector('.loading,.diagnostics,.screen,.print,.transcript')).toBeNull();
+    expect(bar.shadowRoot!.querySelector('.loading,.diagnostics,.screen,.print,.transcript')).toBeNull();
     engine.render.mockClear();
     note(root).pitch = 'E4';
     await root.renderComplete;
@@ -569,6 +583,209 @@ describe('surface ownership and real DOM observation', () => {
     expect(observe).toHaveBeenCalledTimes(2);
     expect(engine.render).toHaveBeenCalledTimes(2);
     expect(firstPitch(root)).toBe('F');
+  });
+});
+
+describe('Lit surface presentation lifecycle', () => {
+  it('preserves shell identity, native disclosure focus, and cached print nodes while updating the view', async () => {
+    const size = viewport(720);
+    const root = mount();
+    await root.renderComplete;
+    const selectors = ['.surface', '.screen', '.print', '.loading', '.diagnostics', '.diagnostics summary', '.transcript', '.transcript summary', '.transcript pre'];
+    const shell = selectors.map(selector => root.shadowRoot!.querySelector(selector));
+    const transcript = root.shadowRoot!.querySelector<HTMLDetailsElement>('.transcript')!;
+    const summary = transcript.querySelector('summary')!;
+    const source = note(root);
+    // Integrations may add their own shadow stylesheet after initial rendering.
+    const integrationStyle = document.createElement('style');
+    integrationStyle.textContent = '.transcript { color: navy; }';
+    root.shadowRoot!.append(integrationStyle);
+    transcript.open = true;
+    summary.focus();
+    root.label = 'Edited score';
+    source.pitch = 'D4';
+    await root.renderComplete;
+    const printed = root.shadowRoot!.querySelector('.print svg');
+    size.resize(440);
+    await root.renderComplete;
+    expect(selectors.map(selector => root.shadowRoot!.querySelector(selector))).toEqual(shell);
+    expect(root.shadowRoot!.querySelector('.print svg')).toBe(printed);
+    expect(integrationStyle.parentNode).toBe(root.shadowRoot);
+    expect(root.getSource('note')).toBe(source);
+    expect(transcript.open).toBe(true);
+    expect(root.shadowRoot!.activeElement).toBe(summary);
+    expect(transcript.textContent).toContain('D4');
+    expect(root.shadowRoot!.querySelector('.surface')!.getAttribute('aria-label')).toBe('Edited score');
+  });
+
+  it('lazily initializes a previously nested source surface when it becomes a root', async () => {
+    const root = mount('<music-system><music-staff><music-measure><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure></music-staff></music-system>');
+    await root.renderComplete;
+    const staff = root.querySelector('music-staff')!;
+    const shell = staff.shadowRoot!.querySelector<HTMLElement>('.surface')!;
+    const source = note(root);
+    expect(staff.shadowRoot!.querySelector('.screen')).toBeNull();
+    document.body.append(staff);
+    await staff.renderComplete;
+    const screen = staff.shadowRoot!.querySelector('.screen');
+    expect(staff.shadowRoot!.querySelector('.surface')).toBe(shell);
+    expect(shell.hidden).toBe(false);
+    expect(firstPitch(staff)).toBe('C');
+    expect(staff.getSource('note')).toBe(source);
+    root.append(staff);
+    await root.renderComplete;
+    expect(shell.hidden).toBe(true);
+    expect(staff.shadowRoot!.querySelector('.screen')).toBe(screen);
+    document.body.append(staff);
+    await staff.renderComplete;
+    expect(shell.hidden).toBe(false);
+    expect(staff.shadowRoot!.querySelectorAll('.screen')).toHaveLength(1);
+    expect(staff.shadowRoot!.querySelector('.screen')).toBe(screen);
+  });
+
+  it.each(['notation-diagnostics', 'notation-render'])('commits the accessible view before %s and renderComplete', async eventName => {
+    const root = mount();
+    root.label = 'A <b>literal</b> score';
+    note(root).pitch = 'invalid';
+    const snapshots: object[] = [];
+    root.addEventListener(eventName, () => {
+      const surface = root.shadowRoot!.querySelector('.surface')!;
+      const diagnostics = root.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!;
+      snapshots.push({
+        label: surface.getAttribute('aria-label'), role: surface.getAttribute('role'),
+        description: root.shadowRoot!.querySelector('.transcript pre')!.textContent,
+        diagnosticsHidden: diagnostics.hidden, errors: diagnostics.hasAttribute('data-errors'),
+        loadingHidden: root.shadowRoot!.querySelector<HTMLElement>('.loading')!.hidden,
+      });
+    });
+    await root.renderComplete;
+    expect(snapshots).toEqual([expect.objectContaining({
+      label: 'A <b>literal</b> score', role: 'group', description: expect.stringContaining('A <b>literal</b> score'),
+      diagnosticsHidden: false, errors: true, loadingHidden: true,
+    })]);
+    expect(root.shadowRoot!.querySelector('b')).toBeNull();
+    note(root).pitch = 'C4';
+    await root.renderComplete;
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[1]).toMatchObject({ description: expect.stringContaining('C4'), diagnosticsHidden: true, errors: false, loadingHidden: true });
+  });
+
+  it('preserves a native diagnostics disclosure choice until a fresh error state needs attention', async () => {
+    const root = mount();
+    note(root).pitch = 'invalid';
+    await root.renderComplete;
+    const diagnostics = root.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!;
+    expect(diagnostics.open).toBe(true);
+    diagnostics.open = false;
+    root.label = 'Still reviewing this issue';
+    await root.renderComplete;
+    expect(diagnostics.open).toBe(false);
+    note(root).pitch = 'C4';
+    await root.renderComplete;
+    expect(diagnostics.hidden).toBe(true);
+    expect(diagnostics.hasAttribute('data-errors')).toBe(false);
+    note(root).pitch = 'invalid again';
+    await root.renderComplete;
+    expect(diagnostics.hidden).toBe(false);
+    expect(diagnostics.hasAttribute('data-errors')).toBe(true);
+    expect(diagnostics.open).toBe(true);
+  });
+});
+
+describe('public score integration boundaries', () => {
+  it('returns current measured frames and retains a cached print projection across viewport-only resize', async () => {
+    const size = viewport(720);
+    engine.render.mockImplementation(drawFrame);
+    const root = mount();
+    expect(root.getRenderedProjection()).toBeUndefined();
+    await root.renderComplete;
+    const first = root.getRenderedProjection()!;
+    expect(first.surface).toBe(root);
+    expect(first.renderRevision).toBe(root.renderRevision);
+    expect(root.isProjectionCurrent(first)).toBe(true);
+    expect(first.layout).toBe(root.getLayoutGeometry());
+    expect(first.frames).toHaveLength(1);
+    expect(first.frames[0].system).toBe(first.layout.systems[0]);
+    expect(first.frames[0].row?.contains(first.frames[0].svg)).toBe(true);
+    expect(root.getRenderedProjection()).toBe(first);
+    note(root).pitch = 'D4';
+    expect(root.isProjectionCurrent(first)).toBe(false);
+    expect(root.getRenderedProjection()).toBeUndefined();
+    await root.renderComplete;
+    expect(root.getRenderedProjection()!.layout).not.toBe(first.layout);
+    root.printPreview = true;
+    await root.renderComplete;
+    const printed = root.getRenderedProjection()!;
+    expect(printed.layout.projection).toBe('print');
+    size.resize(420);
+    expect(root.isProjectionCurrent(printed)).toBe(true);
+    expect(root.getRenderedProjection()).toBe(printed);
+    await root.renderComplete;
+    expect(root.getRenderedProjection()).toBe(printed);
+    printed.frames[0].svg.remove();
+    expect(root.isProjectionCurrent(printed)).toBe(false);
+    expect(root.getRenderedProjection()).toBeUndefined();
+    await root.refresh();
+    expect(root.getRenderedProjection()).toBeDefined();
+    root.remove();
+    expect(root.getRenderedProjection()).toBeUndefined();
+  });
+
+  it('changes diagnostic presentation without engraving or hiding errors and the transcript', async () => {
+    viewport(720);
+    engine.render.mockImplementation((container, score, options) => ({ ...drawFrame(container, score, options),
+      diagnostics: [{ severity: 'warning', code: 'notice', sourceId: score.id, message: 'Review this passage.' }] }));
+    const root = mount();
+    await root.renderComplete;
+    const projection = root.getRenderedProjection();
+    const panel = root.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!;
+    const transcript = root.shadowRoot!.querySelector<HTMLElement>('.transcript')!;
+    const diagnosticBounds = new DOMRect(0, 0, 100, 20), transcriptBounds = new DOMRect(0, 70, 100, 20);
+    for (const [element, bounds] of [[panel, diagnosticBounds], [transcript, transcriptBounds]] as const) {
+      vi.spyOn(element, 'getClientRects').mockReturnValue([bounds] as unknown as DOMRectList);
+      vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(bounds);
+    }
+    expect(panel.hidden).toBe(false);
+    expect(root.getNativeControlBounds()).toEqual([diagnosticBounds, transcriptBounds]);
+    engine.render.mockClear();
+    root.diagnosticsPresentation = 'errors';
+    expect(root.getAttribute('data-diagnostics-presentation')).toBe('errors');
+    await root.renderComplete; await nextTask();
+    expect(panel.hidden).toBe(true);
+    expect(root.getNativeControlBounds()).toEqual([transcriptBounds]);
+    expect(root.getRenderedProjection()).toBe(projection);
+    expect(root.diagnostics).toHaveLength(2);
+    expect(engine.render).not.toHaveBeenCalled();
+    root.diagnosticsPresentation = 'all';
+    expect(panel.hidden).toBe(false);
+    root.diagnosticsPresentation = 'errors';
+    note(root).pitch = 'invalid';
+    await root.renderComplete;
+    expect(panel.hidden).toBe(false); expect(panel.open).toBe(true);
+    expect(panel.hasAttribute('data-errors')).toBe(true);
+    expect(transcript.hidden).toBe(false);
+  });
+
+  it('notifies an outer host about the exact internal scroll owner without reengraving', async () => {
+    viewport(720);
+    engine.render.mockImplementation(drawFrame);
+    const root = mount();
+    const outer = document.createElement('div');
+    outer.attachShadow({ mode: 'open' }).append(root); document.body.append(outer);
+    await root.renderComplete;
+    const projection = root.getRenderedProjection()!;
+    const scroller = projection.frames[0].row!;
+    const listener = vi.fn();
+    outer.addEventListener('notation-viewport-change', listener);
+    engine.render.mockClear();
+    scroller.dispatchEvent(new Event('scroll'));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0]).toMatchObject({ bubbles: true, composed: true,
+      detail: { scroller, layout: projection.layout } });
+    await root.renderComplete; await nextTask();
+    expect(engine.render).not.toHaveBeenCalled();
+    root.remove(); scroller.dispatchEvent(new Event('scroll'));
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 });
 

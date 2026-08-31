@@ -4,6 +4,7 @@
  * The engraving adapter supplies explicit diagnostics and an empty SVG only;
  * no notation geometry, native popovers, pixels, physical input or PDF is claimed.
  */
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngravingOptions, EngravingResult } from '../src/engraving/render.js';
 import type { Diagnostic, Score } from '../src/model/types.js';
@@ -14,7 +15,6 @@ const engine = vi.hoisted(() => ({
 }));
 vi.mock('../src/engraving/render.js', () => ({ engravingReady: engine.ready, renderScore: engine.render }));
 import '../src/engraving/render.js';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { MusicSurface } from '../src/components/music-surface.js';
 import { createProject } from '../src/authoring/project.js';
@@ -23,8 +23,6 @@ import type { RecoveryStorage } from '../src/authoring/storage.js';
 import type { AuthorCommand, AuthorProject } from '../src/authoring/types.js';
 import type { PointerFeedback } from '../src/authoring/staff-interaction.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const empty = '<music-staff id="lead" label="Lead"><music-measure id="bar" number="12" meter="4/4" incomplete><music-voice id="voice"></music-voice></music-measure></music-staff>';
 const partial = empty.replace('</music-voice>', '<music-note id="written" pitch="F4" duration="quarter"></music-note></music-voice>');
 const complete = partial.replace('duration="quarter"', 'duration="whole"');
@@ -38,7 +36,7 @@ class ResizeObserverDouble implements ResizeObserver {
   observe(): void {} unobserve(): void {} disconnect(): void {}
 }
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+  const element = findAuthorControl(document, id);
   if (!element) throw new Error(`Missing actual Author control #${id}.`);
   return element as T;
 }
@@ -68,7 +66,10 @@ async function settled(expected: 'ready' | 'error' = 'ready'): Promise<void> {
   throw new Error(`Author did not settle as ${expected}: ${document.body.dataset.renderState}.`);
 }
 function available(element: HTMLElement): boolean {
-  return !element.closest('[hidden],[inert],[aria-hidden="true"]') && !element.matches(':disabled');
+  for (let parent: HTMLElement | null = element; parent; parent = authorControlParent(parent)) {
+    if (parent.matches('[hidden],[inert],[aria-hidden="true"]')) return false;
+  }
+  return !element.matches(':disabled');
 }
 async function click(id: string): Promise<void> {
   const element = el(id); expect(available(element), `#${id} is reachable`).toBe(true);
@@ -82,7 +83,7 @@ async function field(id: string, value: string): Promise<void> {
   element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); await nextTask();
 }
 async function key(key: string): Promise<void> {
-  expect(document.activeElement).toBe(el('score-editor'));
+  expect(authorActiveElement(document)).toBe(el('score-editor'));
   const event = new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true });
   el('score-editor').dispatchEvent(event); expect(event.defaultPrevented).toBe(true); await settled();
 }
@@ -144,7 +145,7 @@ async function startWriting(): Promise<void> {
   // customizable select's initial selected option as a browser does.
   await field('event-duration', 'quarter'); await field('event-dots', '0');
   await click('close-entry-value'); await click('toggle-entry');
-  expect(document.body.dataset.entryMode).toBe('true'); expect(document.activeElement).toBe(el('score-editor'));
+  expect(document.body.dataset.entryMode).toBe('true'); expect(authorActiveElement(document)).toBe(el('score-editor'));
 }
 function publish(surface: MusicSurface, diagnostics: readonly Diagnostic[] = surface.diagnostics): void {
   surface.dispatchEvent(new CustomEvent('notation-diagnostics', { bubbles: true, composed: true, detail: { diagnostics } }));
@@ -152,7 +153,7 @@ function publish(surface: MusicSurface, diagnostics: readonly Diagnostic[] = sur
 
 beforeEach(async () => {
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell; adapterNotices = () => [];
+  mountAuthorFixture(); adapterNotices = () => [];
   vi.stubGlobal('ResizeObserver', ResizeObserverDouble);
   for (const panel of document.querySelectorAll<HTMLElement>('[popover]')) Object.defineProperties(panel, {
     showPopover: { configurable: true, value: undefined }, hidePopover: { configurable: true, value: undefined },
@@ -248,18 +249,21 @@ describe('notation notices through the actual Author workspace', () => {
   it('suppresses ordinary warnings only on the owned Author surface and leaves standalone component delivery intact', async () => {
     mount(); await settled();
     const owned = surface(), authorPanel = owned.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!;
-    expect(owned.shadowRoot!.querySelectorAll('style[data-author-notation-review]')).toHaveLength(1);
+    expect(owned.diagnosticsPresentation).toBe('errors');
     expect(authorPanel.matches('.diagnostics:not([data-errors])')).toBe(true);
-    expect(getComputedStyle(authorPanel).display).toBe('none');
+    expect(authorPanel.hidden).toBe(true);
+    // Happy DOM does not apply Lit's adopted stylesheets. The browser harness
+    // checks the actual display rule; this fixture checks the native hidden state.
     const holder = document.createElement('div'); holder.innerHTML = empty.replaceAll('id="', 'id="standalone-');
     const standalone = holder.firstElementChild as MusicSurface; document.body.append(standalone); await standalone.refresh();
     const panel = standalone.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!;
-    expect(standalone.shadowRoot!.querySelector('style[data-author-notation-review]')).toBeNull();
+    expect(standalone.diagnosticsPresentation).toBe('all');
     expect(panel.hidden).toBe(false); expect(panel.hasAttribute('data-errors')).toBe(false);
     expect(getComputedStyle(panel).display).not.toBe('none');
     expect(panel.querySelectorAll('li')).toHaveLength(2); requireNotices(['empty-voice', 'incomplete-measure']);
     await click('view-read'); await settled(); await click('view-write'); await settled();
-    expect(surface()).toBe(owned); expect(owned.shadowRoot!.querySelectorAll('style[data-author-notation-review]')).toHaveLength(1);
+    expect(surface()).toBe(owned); expect(owned.diagnosticsPresentation).toBe('errors');
+    expect(owned.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!.hidden).toBe(true);
   });
 
   it.each(['screen', 'print', 'thrown'] as const)('retains the fatal %s component panel and root render error instead of filtering errors into an innocuous warning list', async failure => {

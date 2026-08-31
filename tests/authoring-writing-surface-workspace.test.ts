@@ -4,16 +4,14 @@
  * Only engraving dispatch is stubbed. Public notation-select and keyboard
  * events qualify routing and musical state, not trusted input, pixels or PDF.
  */
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import { add, pitchText } from '../src/model/index.js';
 import type { MusicEvent } from '../src/model/types.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const abcSource = `<music-staff id="lead" label="Lead">
   <music-measure id="bar-a" number="12" meter="4/4"><music-voice id="voice-a"><music-note id="a" pitch="F4" duration="whole"></music-note></music-voice></music-measure>
   <music-measure id="bar-b" number="13"><music-voice id="voice-b"><music-note id="b" pitch="F4" duration="whole"></music-note></music-voice></music-measure>
@@ -29,13 +27,14 @@ let widthDescriptor: PropertyDescriptor | undefined;
 const actions: string[] = [];
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+  const element = findAuthorControl(document, id);
   if (!element) throw new Error(`Missing actual Author control #${id}.`);
   return element as T;
 }
 function available(element: HTMLElement): boolean {
   if (element.closest('[hidden],[inert],[aria-hidden="true"]') || element.matches(':disabled')) return false;
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) {
+    if (parent.matches('[hidden],[inert],[aria-hidden="true"]')) return false;
     if (parent instanceof HTMLDetailsElement && !parent.open && !parent.querySelector(':scope > summary')?.contains(element)) return false;
   }
   return true;
@@ -43,7 +42,7 @@ function available(element: HTMLElement): boolean {
 async function flush(): Promise<void> { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
 async function disclose(element: HTMLElement): Promise<void> {
   const parents: HTMLDetailsElement[] = [];
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parents.unshift(parent);
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) if (parent instanceof HTMLDetailsElement) parents.unshift(parent);
   for (const details of parents) if (!details.open) {
     const summary = details.querySelector<HTMLElement>(':scope > summary');
     expect(summary).not.toBeNull(); expect(available(summary!)).toBe(true);
@@ -78,7 +77,7 @@ async function select(id: string): Promise<void> {
   } })); await flush();
 }
 /** Focus must come from the real Write/Select route, not this event helper. */
-async function press(key: string, options: KeyboardEventInit = {}, target = document.activeElement): Promise<KeyboardEvent> {
+async function press(key: string, options: KeyboardEventInit = {}, target = authorActiveElement(document)): Promise<KeyboardEvent> {
   expect(target).toBeInstanceOf(HTMLElement); actions.push(`key:${key}`);
   const event = new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true, ...options });
   target!.dispatchEvent(event); await flush(); return event;
@@ -143,7 +142,7 @@ beforeEach(() => {
   widthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell; actions.length = 0;
+  mountAuthorFixture(); actions.length = 0;
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
 });
@@ -158,7 +157,7 @@ describe('fixed writing intent keeps three musical owners separate', () => {
     expect(draft).toMatchObject({ target: 'a', state: 'dirty', pitch: 'Gqf4' }); expect(selection.ids).toEqual(['b']);
     expect(el('palette-owner-label').textContent).toMatch(/^Selected/i); expect(el('selection-controls-context').textContent).toMatch(/(?:bar|measure)\s*13/i);
     const actionStart = actions.length; await click('toggle-entry'); writing(true);
-    expect(actions.slice(actionStart)).toEqual(['click:toggle-entry']); expect(document.activeElement).toBe(el('score-editor'));
+    expect(actions.slice(actionStart)).toEqual(['click:toggle-entry']); expect(authorActiveElement(document)).toBe(el('score-editor'));
     expect(app!.session.cursor).toEqual({ staffId: 'lead', measureId: 'bar-c', voiceIndex: 0, eventId: 'c' });
     expect(app!.session.selection).toEqual(selection); expect(recipe()).toEqual(palette); expect(heldDraft()).toEqual(draft); noEdit(before);
     expect(el('palette-owner-label').textContent).toMatch(/^New notes/i);
@@ -180,7 +179,7 @@ describe('fixed writing intent keeps three musical owners separate', () => {
   });
   it('clicking active Write notes only returns score focus and explicit Select parks the same destination', async () => {
     mount(); await startC(true); const before = accepted(), palette = recipe(), draft = heldDraft(), selection = app!.session.selection;
-    el('document-menu-trigger').focus(); await click('toggle-entry'); writing(true); expect(document.activeElement).toBe(el('score-editor'));
+    el('document-menu-trigger').focus(); await click('toggle-entry'); writing(true); expect(authorActiveElement(document)).toBe(el('score-editor'));
     noEdit(before); expect(recipe()).toEqual(palette); expect(heldDraft()).toEqual(draft); expect(app!.session.selection).toEqual(selection);
     await click('select-mode'); writing(false); noEdit(before); expect(recipe()).toEqual(palette); expect(heldDraft()).toEqual(draft);
     await click('toggle-entry'); writing(true); noEdit(before); expect(app!.session.selection).toEqual(selection);
@@ -249,11 +248,11 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
     expect(el<HTMLInputElement>('continuation-enabled').checked).toBe(false);
     const initial = accepted(), checkpoints = [initial.source], eventIds: string[] = [], expectedPitches: string[] = [];
     const insertionTargets: ReturnType<typeof historyTarget>[] = [];
-    actions.length = 0; await click('toggle-entry'); writing(true); noEdit(initial); expect(document.activeElement).toBe(el('score-editor'));
+    actions.length = 0; await click('toggle-entry'); writing(true); noEdit(initial); expect(authorActiveElement(document)).toBe(el('score-editor'));
     // Choose the recipe once through real controls. This also avoids treating
     // happy-dom's customizable-select default handling as native qualification.
     await click('entry-value-trigger'); await field('event-duration', 'quarter'); await field('event-dots', '0'); await click('close-entry-value');
-    await click('toggle-entry'); writing(true); noEdit(initial); expect(document.activeElement).toBe(el('score-editor'));
+    await click('toggle-entry'); writing(true); noEdit(initial); expect(authorActiveElement(document)).toBe(el('score-editor'));
     expect(actions).toEqual(['click:toggle-entry', 'click:entry-value-trigger', 'field:event-duration', 'field:event-dots', 'click:close-entry-value', 'click:toggle-entry']);
     actions.length = 0; // The second Write activation above only returns focus.
     for (let index = 0; index < 32; index++) {
@@ -300,7 +299,7 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
   it('alternates notes and authored quarter rests through N/R then Enter, without Properties or per-event Insert', async () => {
     mount(emptyBars(2)); expect(allEvents()).toEqual([]); const initial = accepted(), checkpoints = [initial.source];
     const insertionTargets: ReturnType<typeof historyTarget>[] = [];
-    actions.length = 0; await click('toggle-entry'); writing(true); expect(document.activeElement).toBe(el('score-editor'));
+    actions.length = 0; await click('toggle-entry'); writing(true); expect(authorActiveElement(document)).toBe(el('score-editor'));
     await click('entry-value-trigger'); await field('event-duration', 'quarter'); await field('event-dots', '0'); await click('close-entry-value');
     await click('toggle-entry'); writing(true); noEdit(initial); actions.length = 0;
     const ids: string[] = [];
@@ -356,14 +355,14 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
     const insertionTargets: ReturnType<typeof historyTarget>[] = [];
     const originalIds = new Set([app!.session.source.id, ...[...app!.session.source.querySelectorAll('[id]')].map(node => node.id)]);
     let valueMenus = 0, pitchMenus = 0, plannedPitch = 'F4', plannedDuration: Step[1] = 'quarter', plannedDots: Step[2] = 0;
-    actions.length = 0; await click('toggle-entry'); writing(true); noEdit(initial); expect(document.activeElement).toBe(el('score-editor'));
+    actions.length = 0; await click('toggle-entry'); writing(true); noEdit(initial); expect(authorActiveElement(document)).toBe(el('score-editor'));
     const choosePitch = async (pitch: string) => {
       const before = accepted(), selection = app!.session.selection; pitchMenus++;
       await click('entry-settings-trigger'); expect(el('entry-settings').hidden).toBe(false); await field('event-pitch', pitch);
       await click('close-entry-settings'); expect(el('entry-settings').hidden).toBe(true);
       // Already writing: this activation returns focus, without another mode choice.
       await click('toggle-entry'); writing(true); noEdit(before); expect(app!.session.selection).toEqual(selection);
-      expect(document.activeElement).toBe(el('score-editor')); expect(el<HTMLInputElement>('event-pitch').value).toBe(pitch);
+      expect(authorActiveElement(document)).toBe(el('score-editor')); expect(el<HTMLInputElement>('event-pitch').value).toBe(pitch);
     };
     const chooseValue = async (duration: Step[1], dots: Step[2]) => {
       const before = accepted(), selection = app!.session.selection; valueMenus++;
@@ -371,7 +370,7 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
       await field('event-duration', duration); await field('event-dots', String(dots));
       await click('close-entry-value'); expect(el('entry-value-chooser').hidden).toBe(true);
       await click('toggle-entry'); writing(true); noEdit(before); expect(app!.session.selection).toEqual(selection);
-      expect(document.activeElement).toBe(el('score-editor'));
+      expect(authorActiveElement(document)).toBe(el('score-editor'));
     };
     await choosePitch(plannedPitch); await chooseValue(plannedDuration, plannedDots); noEdit(initial);
     for (const [barIndex, steps] of bars.entries()) {
@@ -385,7 +384,7 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
       let onset = 0;
       for (const [kind, duration, dots, spelling] of steps) {
         const beforeChoice = accepted(), previousRecipe = recipe(), selection = app!.session.selection;
-        expect(document.activeElement).toBe(el('score-editor')); const chosen = await press(kind);
+        expect(authorActiveElement(document)).toBe(el('score-editor')); const chosen = await press(kind);
         expect(chosen.defaultPrevented).toBe(true); writing(true); noEdit(beforeChoice); expect(app!.session.selection).toEqual(selection);
         expect(el<HTMLSelectElement>('event-kind').value).toBe(kind === 'N' ? 'note' : 'rest'); expect(recipe().measureRest).toBe(false);
         for (const id of ['event-pitch', 'event-duration', 'event-dots', 'event-accidental-display', 'event-stem', 'event-beam', 'insert-position']) {
@@ -476,7 +475,7 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
     const pitch = el<HTMLInputElement>('event-pitch'); expect(available(pitch)).toBe(true); pitch.focus();
     for (const key of ['N', 'R', 'Enter', 'ArrowLeft', 'ArrowRight']) {
       const native = await press(key); expect(native.defaultPrevented).toBe(false); noEdit(before); expect(recipe()).toEqual(original);
-      expect(document.activeElement).toBe(pitch);
+      expect(authorActiveElement(document)).toBe(pitch);
     }
   });
 
@@ -547,7 +546,7 @@ describe('correction and explicit recovery preserve the saved writing owner', ()
     await field('source-input', raw); await click('close-source'); writing(true); const before = accepted();
     expect(before.pending).toBe(raw);
     await click('view-read'); await click('view-pages'); await click('view-write'); writing(true); noEdit(before);
-    await click('toggle-entry'); expect(document.activeElement).toBe(el('score-editor')); writing(true); noEdit(before);
+    await click('toggle-entry'); expect(authorActiveElement(document)).toBe(el('score-editor')); writing(true); noEdit(before);
     const rejected = await press('Enter'); expect(rejected.defaultPrevented).toBe(true); noEdit(before);
     expect(app!.session.project.pendingSource).toBe(raw); expect(el<HTMLTextAreaElement>('source-input').value).toBe(raw);
     expect(recipe()).toEqual(palette); expect(heldDraft()).toEqual(draft); expect(el('author-errors').textContent).toMatch(/Apply or Revert|Source draft/i);
@@ -558,7 +557,7 @@ describe('correction and explicit recovery preserve the saved writing owner', ()
     const before = accepted(), palette = recipe(), draft = heldDraft();
     await click('view-read'); await click('view-pages'); await click('view-write'); writing(true); noEdit(before);
     expect(recipe()).toEqual(palette); expect(el<HTMLInputElement>('event-pitch').value).toBe('not-a-pitch'); expect(heldDraft()).toEqual(draft);
-    await click('toggle-entry'); expect(document.activeElement).toBe(el('score-editor')); noEdit(before);
+    await click('toggle-entry'); expect(authorActiveElement(document)).toBe(el('score-editor')); noEdit(before);
     await press('Enter'); noEdit(before); expect(recipe()).toEqual(palette); expect(heldDraft()).toEqual(draft);
     expect(el('author-errors').hidden).toBe(false); expect(el('author-errors').textContent).toMatch(/pitch/i);
   });

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { rational } from '../src/model/index.js';
 import { EditorSession } from '../src/authoring/editor.js';
 import { InspectorForms } from '../src/authoring/inspector-forms.js';
@@ -8,7 +8,6 @@ import type { InspectorContext } from '../src/authoring/inspector-forms.js';
 import { createProject } from '../src/authoring/project.js';
 import type { EventInput } from '../src/authoring/types.js';
 
-const shell = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const openSlash = `<music-slash id="open" duration="quarter" data-chart="reserve-time"><!-- owner comment --><music-articulation id="fermata" type="fermata" placement="below" data-keep="yes"><!-- mark comment --></music-articulation></music-slash>`;
 const afterNote = '<music-note id="after" pitch="F#4" duration="quarter" data-keep="after"></music-note>';
 const staff = (events: string, notation = 'pitched') => `<music-staff id="staff" label="Lead" notation="${notation}" data-keep="staff"><music-measure id="a" number="8" meter="4/4" incomplete>${events}</music-measure></music-staff>`;
@@ -29,7 +28,7 @@ function accepted(session: EditorSession) {
 }
 
 function fixture(html = source) {
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   el('workspace-tools').hidden = false; el('selection-inspector').hidden = false; el<HTMLDetailsElement>('event-details').open = true;
   const session = new EditorSession(createProject(html, 'Nominal span')); session.select('open');
   const context: InspectorContext = { mode: 'write', partId: 'score', cursor: { staffId: 'staff', measureId: 'a', voiceIndex: 0, eventId: 'open' },

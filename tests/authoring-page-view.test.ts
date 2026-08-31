@@ -9,7 +9,7 @@ vi.mock('../src/engraving/geometry.js', async importOriginal => ({
   ...await importOriginal<typeof import('../src/engraving/geometry.js')>(), visibleInk: mocks.ink,
 }));
 
-import { inspectPageContainment, renderPageView, updatePagePreflight } from '../src/authoring/page-view.js';
+import { inspectPageContainment, renderPageView, setPagePreflightMessage, updatePagePreflight } from '../src/authoring/page-view.js';
 import { createProject } from '../src/authoring/project.js';
 import { CSS_PIXELS_PER_MM } from '../src/authoring/pages.js';
 
@@ -182,6 +182,71 @@ describe('page furniture and mounted verification', () => {
     expect(output.querySelector('.draft-stamp')?.textContent).toBe('DRAFT - not ready for performance');
     expect(updatePagePreflight(output, preflight, value, view, false, false)).toBe(true);
     expect(JSON.stringify(view.plan)).toBe(before);
+  });
+
+  it('updates draft furniture and preflight text while preserving the measured SVG nodes', async () => {
+    const value = project(); const output = host(); const preflight = host();
+    const view = await renderPageView(output, value, 'score');
+    const sheet = output.querySelector('.score-page');
+    const vectors = [...output.querySelectorAll('svg')];
+    expect(updatePagePreflight(output, preflight, value, view, true, false)).toBe(true);
+    const summary = preflight.querySelector('p');
+    expect(output.querySelector('.score-page')).toBe(sheet);
+    vectors.forEach((vector, index) => expect(output.querySelectorAll('svg')[index]).toBe(vector));
+    expect(output.querySelector('.draft-stamp')?.textContent).toBe('DRAFT - not ready for performance');
+    setPagePreflightMessage(preflight, 'Waiting for composition details.');
+    expect(preflight.querySelector('p')).toBe(summary);
+    expect(preflight.dataset.ready).toBe('false');
+    expect(document.body.dataset.authorPrintReady).toBe('false');
+    expect(updatePagePreflight(output, preflight, value, view, false, false)).toBe(true);
+    expect(preflight.querySelector('p')).toBe(summary);
+    expect(output.querySelector('.draft-stamp')?.textContent).toBe('');
+    vectors.forEach((vector, index) => expect(output.querySelectorAll('svg')[index]).toBe(vector));
+    expect(mocks.render).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps metadata and status prose as text instead of interpreting authored markup', async () => {
+    const value = project(); const output = host(); const preflight = host();
+    const prose = '<img src="missing" onerror="alert(1)"><script>danger()</script>';
+    value.metadata = { title: prose, composer: prose, subtitle: prose };
+    const acceptedSource = value.sourceHtml;
+    await renderPageView(output, value, 'score');
+    expect(output.querySelector('.page-title h1')?.textContent).toBe(prose);
+    expect(output.querySelector('.page-composer')?.textContent).toBe(prose);
+    expect(output.querySelector('.page-subtitle')?.textContent).toBe(prose);
+    expect(output.querySelector('img,script')).toBeNull();
+    expect(value.sourceHtml).toBe(acceptedSource);
+    setPagePreflightMessage(preflight, prose);
+    expect(preflight.querySelector('p')?.textContent).toBe(prose);
+    expect(preflight.querySelector('img,script')).toBeNull();
+  });
+
+  it('fails closed after removed page content and recovers when the pages are rebuilt', async () => {
+    const value = project(); const output = host(); const preflight = host();
+    const view = await renderPageView(output, value, 'score');
+    output.querySelector('.page-system')!.remove();
+    expect(updatePagePreflight(output, preflight, value, view, true, false)).toBe(false);
+    expect(preflight.textContent).toContain('missing or duplicated systems');
+    const rebuilt = await renderPageView(output, value, 'score');
+    expect(rebuilt.containmentIssues).toEqual([]);
+    expect(output.querySelectorAll('.page-system')).toHaveLength(2);
+    expect(updatePagePreflight(output, preflight, value, view, false, false)).toBe(false);
+    expect(preflight.textContent).toContain('preview is incomplete');
+    expect(updatePagePreflight(output, preflight, value, rebuilt, false, false)).toBe(true);
+  });
+
+  it('recovers Lit boundaries when public output hosts have been externally replaced', async () => {
+    const value = project(); const output = host(); const preflight = host();
+    const view = await renderPageView(output, value, 'score');
+    expect(updatePagePreflight(output, preflight, value, view, false, false)).toBe(true);
+    output.replaceChildren(); preflight.textContent = 'A pending message';
+    expect(updatePagePreflight(output, preflight, value, view, true, false)).toBe(false);
+    expect(preflight.textContent).toContain('preview is incomplete');
+    expect(preflight.textContent).not.toContain('A pending message');
+    const rebuilt = await renderPageView(output, value, 'score');
+    expect(updatePagePreflight(output, preflight, value, rebuilt, false, false)).toBe(true);
+    expect(output.querySelectorAll('.score-page')).toHaveLength(rebuilt.plan.pages.length);
+    expect(preflight.querySelectorAll('p')).toHaveLength(1);
   });
 
   it('applies staff scale once to SVG dimensions while leaving furniture and paper physical', async () => {

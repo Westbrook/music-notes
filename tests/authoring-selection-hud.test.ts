@@ -49,7 +49,7 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
   let controlWidth = config.controlWidth ?? 220; let controlHeight = config.controlHeight ?? 44;
   let fixedWidth: number | undefined; let fixedShift = 0; let collapseDock = false;
   let fixedHook: (() => void) | undefined;
-  let layout: LayoutGeometry | undefined; let revision = 0; let busy = false;
+  let layout: LayoutGeometry | undefined; let revision = 0; let busy = false; let projectionAvailable = true;
   let obstacles: InkBox[] = [];
   let context: SelectionHudContext = { documentEpoch: 1, selectionVersion: 1, revision: 1, partId: 'score', mode: 'write', allowFloating: true,
     target: { kind: 'event', sourceId: 'note', eventKind: 'note', staffId: 'staff', measureId: 'bar', voiceId: 'voice' } };
@@ -57,7 +57,7 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
   const viewport = document.createElement('div'); viewport.style.overflow = 'auto'; viewport.id = 'score-scroll';
   const surface = document.createElement('music-system') as unknown as MusicSurface;
   surface.innerHTML = '<music-staff id="staff"><music-measure id="bar"><music-note id="note" pitch="C4"></music-note></music-measure></music-staff>';
-  const shadow = surface.attachShadow({ mode: 'open' }); const screen = document.createElement('div'); screen.className = 'screen'; shadow.append(screen);
+  const shadow = surface.attachShadow({ mode: 'open' }); const projectionRoot = document.createElement('div'); shadow.append(projectionRoot);
   const dock = document.createElement('div'); dock.id = 'selection-controls-dock';
   const controls = document.createElement('div'); controls.id = 'selection-controls'; controls.style.position = 'relative';
   controls.style.left = '2px'; controls.style.top = '3px'; controls.style.color = 'green';
@@ -70,7 +70,13 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
     clientWidth: { get: () => width }, clientHeight: { get: () => viewportHeight() },
     getBoundingClientRect: { value: () => new DOMRect(40, 80, width, viewportHeight()) },
   });
-  Object.defineProperties(surface, { getLayoutGeometry: { value: () => layout }, renderRevision: { get: () => revision } });
+  Object.defineProperties(surface, {
+    getLayoutGeometry: { value: () => layout }, renderRevision: { get: () => revision },
+    getRenderedProjection: { value: (): ReturnType<MusicSurface['getRenderedProjection']> => layout && projectionAvailable ? {
+      surface, renderRevision: revision, layout, frames: rows.map((row, index) => ({ system: row.system, svg: svgs[index], row: rowElements[index] })),
+    } : undefined },
+    getNativeControlBounds: { value: () => [] },
+  });
   Object.defineProperty(controls, 'getBoundingClientRect', { value: () => {
     if (controls.style.position === 'fixed') {
       const hook = fixedHook; fixedHook = undefined; hook?.();
@@ -80,11 +86,11 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
   } });
   const svgs: SVGSVGElement[] = []; const rowElements: HTMLElement[] = [];
   const update = (next: Row[]) => {
-    rows = next; revision++; screen.replaceChildren(); svgs.length = 0; rowElements.length = 0;
+    rows = next; revision++; projectionAvailable = true; projectionRoot.replaceChildren(); svgs.length = 0; rowElements.length = 0;
     for (const row of rows) {
-      const element = document.createElement('div'); element.className = 'system-row'; element.style.overflow = 'auto';
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.classList.add('notation-svg');
-      element.append(svg); screen.append(element);
+      const element = document.createElement('div'); element.style.overflow = 'auto';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      element.append(svg); projectionRoot.append(element);
       Object.defineProperties(element, {
         offsetWidth: { get: () => width }, offsetHeight: { get: () => row.system.height },
         clientWidth: { get: () => width }, clientHeight: { get: () => row.system.height }, scrollTo: { value: vi.fn() },
@@ -119,6 +125,7 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
     setControlSize: (w: number, h: number) => { controlWidth = w; controlHeight = h; },
     setFixedWidth: (w: number) => { fixedWidth = w; }, setFixedShift: (value: number) => { fixedShift = value; },
     setCollapseDock: () => { collapseDock = true; }, onFixedMeasure: (action: () => void) => { fixedHook = action; },
+    setProjectionAvailable: (value: boolean) => { projectionAvailable = value; },
     invalidate: () => { layout = undefined; }, stale: () => { revision++; },
     print: () => { layout = { ...layout!, projection: 'print' }; },
   };
@@ -199,7 +206,7 @@ describe('selection HUD musical anchors and conservative gutters', () => {
 
   it('protects full ink of every visible system, including beams, ties, labels and adjacent staves', () => {
     const first = system();
-    const other = system({ index: 1, events: [], ink: { x: 0, y: 25, width: 900, height: 90 } });
+    const other = system({ index: 7, events: [], ink: { x: 0, y: 25, width: 900, height: 90 } });
     const f = fixture([{ system: first, top: 0 }, { system: other, top: 0 }]);
     const placed = floating(f.controller);
     expect(placed.box.y).toBe(328);
@@ -258,6 +265,22 @@ describe('selection HUD musical anchors and conservative gutters', () => {
     expect(placed.box.y + placed.box.height).toBeLessThanOrEqual(392);
   });
 
+  it('keeps slotted notation and its gutter inside a shadow viewport clipping ancestor', () => {
+    const f = fixture(); const host = document.createElement('section'); const shadow = host.attachShadow({ mode: 'open' });
+    const clipper = document.createElement('div'); const slot = document.createElement('slot');
+    f.viewport.replaceChildren(slot); clipper.append(f.viewport); shadow.append(clipper); host.append(f.surface); f.editor.prepend(host);
+    // happy-dom does not expose the browser's assignedSlot relation.
+    Object.defineProperty(f.surface, 'assignedSlot', { value: slot });
+    clip(clipper, { x: 80, y: 180, width: 700, height: 220 });
+    f.button.focus(); const layout = f.surface.getLayoutGeometry();
+    const placed = floating(f.controller);
+    expect(placed.box.x).toBeGreaterThanOrEqual(88); expect(placed.box.y).toBeGreaterThanOrEqual(188);
+    expect(placed.box.x + placed.box.width).toBeLessThanOrEqual(772);
+    expect(placed.box.y + placed.box.height).toBeLessThanOrEqual(392);
+    expect(f.surface.getLayoutGeometry()).toBe(layout); expect(document.activeElement).toBe(f.button);
+    expect(f.controls.parentElement).toBe(f.dock); expect(f.scrollTo).not.toHaveBeenCalled();
+  });
+
   it('preserves complete clearance across dense, narrow and fractional transform boundaries', () => {
     let floated = 0; let docked = 0;
     for (let index = 0; index < 32; index++) {
@@ -309,6 +332,26 @@ describe('selection HUD docking and stale geometry', () => {
     expect(f.controller.refresh()).toEqual({ kind: 'dock', reason: 'missing-target' });
     f.update([{ system: system(), top: 0 }]); f.surface.remove();
     expect(f.controller.refresh()).toEqual({ kind: 'dock', reason: 'stale-geometry' });
+  });
+
+  it('docks while the public projection is unavailable even when cached layout geometry is current', () => {
+    const f = fixture(); const layout = f.surface.getLayoutGeometry(); floating(f.controller);
+    f.setProjectionAvailable(false);
+    expect(f.surface.getRenderedProjection()).toBeUndefined(); expect(f.surface.getLayoutGeometry()).toBe(layout);
+    expect(layout?.revision).toBe(f.surface.renderRevision);
+    expect(f.controller.refresh()).toEqual({ kind: 'dock', reason: 'stale-geometry' });
+    expect(f.controls.style.position).toBe('relative');
+    f.setProjectionAvailable(true);
+    expect(f.surface.getRenderedProjection()?.layout).toBe(layout);
+    expect(floating(f.controller).projectionId).toBe(layout?.projectionId);
+  });
+
+  it('rejects a public projection withdrawn during fixed-box measurement without losing cached layout identity', () => {
+    const f = fixture(); const layout = f.surface.getLayoutGeometry();
+    f.onFixedMeasure(() => f.setProjectionAvailable(false));
+    expect(f.controller.refresh()).toEqual({ kind: 'dock', reason: 'unsafe-placement' });
+    expect(f.surface.getLayoutGeometry()).toBe(layout); expect(layout?.revision).toBe(f.surface.renderRevision);
+    expect(f.controls.style.position).toBe('relative');
   });
 
   it('docks for missing or singular transforms and invalid HTML measurements', () => {

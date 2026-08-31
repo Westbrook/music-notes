@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
+import { findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as ts from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { MUSIC_ATTRIBUTES } from '../src/dom/attributes.js';
 import { ARTICULATION_TYPES, ORNAMENT_TYPES, parseDuration, validateAlteration, validateClef } from '../src/model/index.js';
 import { EditorSession } from '../src/authoring/editor.js';
@@ -23,12 +23,11 @@ import type { AuthoringRoute, ElementCapability } from '../src/authoring/notatio
 const cleanups: (() => void)[] = [];
 
 function shell(): void {
-  const markup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
-  document.body.innerHTML = new DOMParser().parseFromString(markup, 'text/html').body.innerHTML;
+  mountAuthorFixture();
 }
 
 function select(id: string): HTMLSelectElement {
-  const element = document.getElementById(id);
+  const element = findAuthorControl(document, id);
   if (!(element instanceof HTMLSelectElement)) throw new Error(`Missing actual native Author choice: ${id}`);
   return element;
 }
@@ -64,7 +63,7 @@ describe('COVERAGE-VOCABULARY model choices and actual Author controls', () => {
     for (const route of Object.values(AUTHORING_ROUTES)) {
       expect(route.path.trim()).not.toBe('');
       expect(route.controls.length).toBeGreaterThan(0);
-      for (const id of route.controls) expect(document.getElementById(id), `${route.path}: #${id}`).not.toBeNull();
+      for (const id of route.controls) expect(findAuthorControl(document, id), `${route.path}: #${id}`).not.toBeNull();
     }
   });
 
@@ -197,7 +196,7 @@ describe('COVERAGE-VOCABULARY model choices and actual Author controls', () => {
     expect(values(select('note-microtone')).filter(Boolean)).toEqual(fractional);
     const ordinary: Record<string, number> = { 'note-double-flat': -2, 'note-flat': -1, 'note-natural': 0, 'note-sharp': 1, 'note-double-sharp': 2 };
     expect(sorted(Object.values(ordinary).map(String))).toEqual(sorted(PITCH_ALTERATIONS.filter(choice => Number.isInteger(choice.value)).map(choice => String(choice.value))));
-    for (const id of Object.keys(ordinary)) expect(document.getElementById(id)?.tagName).toBe('BUTTON');
+    for (const id of Object.keys(ordinary)) expect(findAuthorControl(document, id)?.tagName).toBe('BUTTON');
   });
 
   it('keeps the actual Next entry alteration picker aligned with every supported labelled value', () => {
@@ -283,7 +282,7 @@ describe('COVERAGE-VOCABULARY other current notation choices', () => {
       expect(capability.routes).toEqual(['source']);
       expect(capability.limitation).toMatch(/Source/);
     }
-    for (const id of ['tie-events', 'clear-ties']) expect(document.getElementById(id)?.tagName).toBe('BUTTON');
+    for (const id of ['tie-events', 'clear-ties']) expect(findAuthorControl(document, id)?.tagName).toBe('BUTTON');
     expect(NOTATION_ELEMENT_CAPABILITIES['music-system'].attributes.bracket.route).toBe('source');
   });
 

@@ -1,12 +1,15 @@
 import './components/index.js';
-import { initializeWorkbookControls } from './demo/workbook-controls.js';
+import './demo/workbook-toolbar.js';
+import { createWorkbookState } from './demo/workbook-controls.js';
 
-const dispose = initializeWorkbookControls({
+const toolbar = document.querySelector('music-workbook-toolbar')!;
+const state = createWorkbookState({
   root: document,
-  preview: document.querySelector<HTMLInputElement>('#print-preview')!,
-  printButton: document.querySelector<HTMLButtonElement>('#print-scores')!,
-  status: document.querySelector<HTMLElement>('#workbook-status')!,
   requestPrint: () => window.print(),
 });
+toolbar.model = state;
 
-if (import.meta.hot) import.meta.hot.dispose(dispose);
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  toolbar.model = undefined;
+  state.dispose();
+});

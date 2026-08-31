@@ -77,11 +77,12 @@ function fixture(html = fullMeasure) {
   const status = editor.querySelector<HTMLElement>('#status')!;
   const shadow = host.attachShadow({ mode: 'open' });
   const mount = document.createElement('div'); shadow.append(mount);
+  const overlayMount = document.createElement('div'); shadow.append(overlayMount);
   const surface = document.createElement('music-system') as MusicSurface;
   mount.append(surface);
   const surfaceShadow = surface.attachShadow({ mode: 'open' });
-  const screen = document.createElement('div'); screen.className = 'screen'; surfaceShadow.append(screen);
-  const svg = document.createElementNS(NS, 'svg'); svg.classList.add('notation-svg'); screen.append(svg);
+  const rendered = document.createElement('div'); surfaceShadow.append(rendered);
+  const svg = document.createElementNS(NS, 'svg'); rendered.append(svg);
   const bounds = { host: new DOMRect(20, 100, 700, 400), viewport: new DOMRect(20, 100, 700, 300), scale: 1 };
   vi.spyOn(host, 'getBoundingClientRect').mockImplementation(() => bounds.host);
   vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => bounds.viewport);
@@ -94,7 +95,21 @@ function fixture(html = fullMeasure) {
   Object.defineProperty(svg, 'getScreenCTM', { configurable: true, value: () => matrix });
   let layout: LayoutGeometry = { projection: 'screen', projectionId: 'pointer-fixture', revision: 1,
     scoreId: session.score.id, systems: [geometry(session)] };
-  Object.defineProperty(surface, 'getLayoutGeometry', { value: () => layout });
+  let projectionAvailable = true;
+  let nativeControlBounds: readonly DOMRectReadOnly[] = [];
+  Object.defineProperties(surface, {
+    getLayoutGeometry: { value: () => layout },
+    getRenderedProjection: { value: (): ReturnType<MusicSurface['getRenderedProjection']> => projectionAvailable ? {
+      surface, renderRevision: layout.revision, layout, frames: layout.systems.map(system => ({ system, svg, row: rendered })),
+    } : undefined },
+    getNativeControlBounds: { value: () => nativeControlBounds },
+    renderRevision: { get: () => layout.revision },
+  });
+  surfaceShadow.addEventListener('scroll', event => {
+    surface.dispatchEvent(new CustomEvent('notation-viewport-change', {
+      bubbles: true, composed: true, detail: { scroller: event.target, layout },
+    }));
+  }, { capture: true });
   const state: ReturnType<Options['state']> = { mode: 'write', ready: true, entryMode: true,
     voiceIndex: 0, partId: 'score', position: 'after', surface };
   const entry: EventInput = { kind: 'note', pitch: 'D#4', pitches: '', duration: 'quarter', dots: 1,
@@ -106,12 +121,15 @@ function fixture(html = fullMeasure) {
   const error = vi.fn<Options['error']>();
   const feedback = vi.fn<(value: ExpectedFeedback) => void>();
   const options: Options & { feedback?: (value: ExpectedFeedback) => void } = {
-    session, host, editor, entryHandle, pitchHandle, status, state: () => state,
+    session, host, overlayMount, getViewport: () => scroller, getChromeBounds: () => [toolbar.getBoundingClientRect()],
+    entryHandle, pitchHandle, status, state: () => state,
     readEntry, commit, completed, rejected, error, feedback };
   const interaction = new StaffInteraction(options); interactions.push(interaction);
-  return { session, editor, host, mount, scroller, toolbar, entryHandle, pitchHandle, status, surface, svg, bounds,
+  return { session, editor, host, mount, overlayMount, rendered, scroller, toolbar, entryHandle, pitchHandle, status, surface, svg, bounds,
     state, entry, readEntry, commit, completed, rejected, error, feedback, interaction, options,
     layout: () => layout, setLayout: (next: LayoutGeometry) => { layout = next; },
+    setProjectionAvailable: (value: boolean) => { projectionAvailable = value; },
+    setNativeControlBounds: (value: readonly DOMRectReadOnly[]) => { nativeControlBounds = value; },
     changeMatrix: () => { matrix = new TestMatrix(0, -20); },
     changeLayout: () => { layout = { ...layout, revision: layout.revision + 1 }; } };
 }
@@ -438,6 +456,26 @@ describe('recovery rejects unsafe or unattempted targets', () => {
       expect(f.commit).not.toHaveBeenCalled();
     });
 
+  it('does not prepare entry when cached geometry has no available rendered projection', () => {
+    const f = fixture(shortMeasure); const layout = f.surface.getLayoutGeometry();
+    f.setProjectionAvailable(false);
+    tap(f, { clientX: 268 });
+    expect(f.surface.getLayoutGeometry()).toBe(layout);
+    expect(f.readEntry).not.toHaveBeenCalled(); expect(f.commit).not.toHaveBeenCalled();
+    expect(f.rejected).not.toHaveBeenCalled(); expect(f.overlayMount.querySelector('.pointer-ghost')).toBeNull();
+  });
+
+  it('cancels a captured gesture when its public projection becomes unavailable', () => {
+    const f = fixture(shortMeasure); const before = f.session.project;
+    pointer('pointerdown', f.host, { clientX: 268 });
+    expect(f.overlayMount.querySelector('.pointer-ghost')).not.toBeNull();
+    f.setProjectionAvailable(false);
+    pointer('pointerup', window, { clientX: 268 });
+    expect(f.commit).not.toHaveBeenCalled(); expect(f.rejected).not.toHaveBeenCalled();
+    expect(f.session.project).toEqual(before); expect(f.overlayMount.querySelector('.pointer-ghost')).toBeNull();
+    expect(document.body.dataset.pointerGesture).toBeUndefined();
+  });
+
   it.each(['chord', 'slash', 'rhythm'] as const)('does not offer continuation for unsupported %s pointer entry', kind => {
     const f = fixture(); f.entry.kind = kind;
     tap(f);
@@ -489,7 +527,7 @@ describe('score viewport movement and clipping', () => {
   it.each(['score-scroll', 'inner-shadow-scroll', 'document-scroll'] as const)('cancels on %s without preventing native scrolling or offering recovery', target => {
     const f = fixture(); pointer('pointerdown', f.host);
     const event = new Event('scroll', { bubbles: false, composed: false, cancelable: true });
-    (target === 'score-scroll' ? f.scroller : target === 'inner-shadow-scroll' ? f.mount : document).dispatchEvent(event);
+    (target === 'score-scroll' ? f.scroller : target === 'inner-shadow-scroll' ? f.rendered : document).dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
     expect(f.host.shadowRoot!.querySelector('.pointer-ghost')).toBeNull();
     pointer('pointerup', window);
@@ -572,6 +610,7 @@ describe('relocated workspace dock exclusion', () => {
     f.toolbar.append(f.status); element.append(f.toolbar); f.editor.after(element);
     vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(bounds);
     vi.mocked(f.toolbar.getBoundingClientRect).mockReturnValue(new DOMRect(bounds.left, bounds.bottom - 48, bounds.width, 48));
+    f.options.getChromeBounds = () => element.hidden || element.style.display === 'none' ? [] : [element.getBoundingClientRect()];
     expect(f.editor.contains(element)).toBe(false); return element;
   }
   function measuredLabel(): void {
@@ -605,7 +644,7 @@ describe('relocated workspace dock exclusion', () => {
     expect(f.commit.mock.calls[0][0]).toMatchObject({ type: 'insert-event', cursor: { staffId: 'staff', measureId: 'bar', voiceIndex: 0 } });
   });
 
-  it.each(['hidden', 'display-none'] as const)('does not exclude notation using an invisible %s dock rectangle', kind => {
+  it.each(['hidden', 'display-none'] as const)('permits notation when the chrome provider excludes a %s dock', kind => {
     const f = fixture(shortMeasure); const chrome = dock(f);
     if (kind === 'hidden') chrome.hidden = true; else chrome.style.display = 'none';
     tap(f, { clientX: 268 });
@@ -634,6 +673,17 @@ describe('relocated workspace dock exclusion', () => {
       JSON.stringify({ label: box.toJSON(), chrome: cover.toJSON(), styles: label!.style.cssText })).toBe(true);
     expect(box.top).toBeGreaterThanOrEqual(f.scroller.getBoundingClientRect().top);
     expect(box.bottom).toBeLessThanOrEqual(f.scroller.getBoundingClientRect().bottom);
+    expect(f.session.project).toEqual(before); expect(f.commit).not.toHaveBeenCalled();
+  });
+
+  it('keeps the preview label clear of public native-control bounds', () => {
+    const f = fixture(shortMeasure); measuredLabel(); const before = f.session.project;
+    pointer('pointermove', f.host, { clientX: 268, clientY: 160, buttons: 0 });
+    expect(f.overlayMount.querySelector('.pointer-target-label')).not.toBeNull();
+    f.setNativeControlBounds([f.bounds.viewport]);
+    pointer('pointermove', f.host, { clientX: 268, clientY: 150, buttons: 0 });
+    expect(f.overlayMount.querySelector('.pointer-target-label')).toBeNull();
+    expect(f.overlayMount.querySelector('.pointer-ghost')).not.toBeNull();
     expect(f.session.project).toEqual(before); expect(f.commit).not.toHaveBeenCalled();
   });
 });

@@ -5,14 +5,13 @@
  * synthetic event routing do not qualify CSS position, glyph geometry, native
  * popovers/pickers, pointer capture or touch.
  */
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import { pitchText } from '../src/model/index.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const source = `<music-staff id="lead" label="Lead">
   <music-measure id="bar-12" number="12"><music-voice id="voice-12">
     <music-note id="a" pitch="F4" duration="quarter"><music-articulation id="a-accent" type="accent"></music-articulation></music-note>
@@ -123,7 +122,7 @@ function requireDock(id: string): void {
 beforeEach(() => {
   widthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth'); Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   // A wide writing frame plus a usable pane must fit without shrinking the paper.
   // Compact policy cases below explicitly return from the task sheet to select.
   Object.defineProperty(el('author-workbench'), 'clientWidth', { configurable: true, get: () => window.innerWidth - 32 });

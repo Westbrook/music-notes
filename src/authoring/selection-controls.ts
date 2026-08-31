@@ -1,6 +1,9 @@
 import { formatRational, harmonyIntervalText, pitchDescription, pitchText, validateAlteration } from '../model/index.js';
 import type { ArticulationType, Duration, EventMarking, MusicEvent, PitchDirection, Score, Step } from '../model/types.js';
+import { composedAncestors } from '../ui/composed-dom.js';
 import { analyzeEventPropertyChange } from './batch-properties.js';
+import { asControlScope } from './control-scope.js';
+import type { ControlRoot, ControlScope } from './control-scope.js';
 import { NativeSurfaces } from './native-surfaces.js';
 import { PITCH_ALTERATIONS } from './notation-capabilities.js';
 import type { NoteEditorState } from './note-editor.js';
@@ -137,6 +140,7 @@ function roadReason(event: MusicEvent | undefined, value: PitchDirection): strin
  */
 export class SelectionControls {
   private readonly options: SelectionControlsOptions;
+  private readonly scope: ControlScope;
   private readonly document: Document;
   private readonly abort = new AbortController();
   private readonly toolbar: HTMLElement;
@@ -152,9 +156,10 @@ export class SelectionControls {
   private errorMessage = '';
   private errorSurface?: SurfaceName;
 
-  constructor(options: SelectionControlsOptions, root: Document = document) {
+  constructor(options: SelectionControlsOptions, root: ControlRoot = document) {
     this.options = options;
-    this.document = root;
+    this.scope = asControlScope(root);
+    this.document = this.scope.document;
     this.toolbar = this.el('selection-controls');
     this.rendered = binding(options.state());
     for (const name of surfaceNames) enhanceSelects(this.panel(name));
@@ -164,7 +169,7 @@ export class SelectionControls {
     this.surfaces = new NativeSurfaces({
       ids: surfaceNames.map(name => this.panel(name).id),
       positionedIds: surfaceNames.map(name => this.panel(name).id),
-      fallbackFocus: () => this.document.getElementById('score-editor'),
+      fallbackFocus: () => this.scope.getElementById('score-editor'),
       beforeOpen: id => this.beforeOpen(this.surfaceName(id)),
       afterClose: id => {
         const name = this.surfaceName(id); this.opened.delete(name);
@@ -173,7 +178,7 @@ export class SelectionControls {
         this.renderError();
         this.options.afterSurfaceClose?.();
       },
-    }, root);
+    }, this.scope);
     for (const id of ['selection-pitch', 'properties-pitch']) this.listen(id, 'click', () => {
       // The fallback opens synchronously in the native-surface invoker handler.
       // Retain its invoker/scroll behavior, then choose the same initial control.
@@ -221,7 +226,7 @@ export class SelectionControls {
   /** Returns whether closing an owned chooser required focus recovery; callers may recheck it after docking. */
   cancel(reason?: string): boolean {
     if (this.disposed) return false;
-    const active = this.document.activeElement;
+    const active = this.scope.activeElement;
     const focused = surfaceNames.find(name => this.surfaces.isOpen(this.panel(name).id) && this.panel(name).contains(active));
     this.invalidateActivation(reason);
     // Only restore focus that belonged to a surface we are hiding. A new field
@@ -230,9 +235,9 @@ export class SelectionControls {
     this.close();
     const recovered = !!focused && !this.surfaces.isOpen(this.panel(focused).id);
     if (recovered) {
-      const current = this.document.activeElement as HTMLElement | null;
+      const current = this.scope.activeElement as HTMLElement | null;
       if (!current || current === this.document.body || this.panel(focused!).contains(current) || !this.usable(current)) {
-        const next = this.toolbarButtons()[0] ?? this.document.getElementById('score-editor');
+        const next = this.toolbarButtons()[0] ?? this.scope.getElementById('score-editor');
         if (next && this.usable(next)) next.focus({ preventScroll: true });
       }
     }
@@ -260,7 +265,7 @@ export class SelectionControls {
   }
 
   private el(id: string): HTMLElement {
-    const element = this.document.getElementById(id);
+    const element = this.scope.getElementById(id);
     if (!element) throw new Error(`Missing selection control: ${id}`);
     return element;
   }
@@ -350,7 +355,7 @@ export class SelectionControls {
         if (event.target !== this.panel(name) || (event as ToggleEvent).newState !== 'open'
           || !this.surfaces.isOpen(this.panel(name).id) || !this.opened.has(name)) return;
         // Opening is deliberate. A later selection refresh never enters this path.
-        if (!this.panel(name).contains(this.document.activeElement)) this.focusFirst(name);
+        if (!this.panel(name).contains(this.scope.activeElement)) this.focusFirst(name);
       }, { signal });
       this.panel(name).addEventListener('keydown', event => {
         if (event.key !== 'Escape' || this.nativeField(event)) return;
@@ -418,16 +423,27 @@ export class SelectionControls {
   }
 
   private eventButton(event: Event): HTMLElement | null {
-    const target = event.target as Element | null;
-    return target?.closest<HTMLElement>('button, [role="radio"]') ?? null;
+    return this.eventControl(event, 'button, [role="radio"]');
   }
 
   private nativeField(event: Event): boolean {
-    return !!(event.target as Element | null)?.closest?.('select, input, textarea, [contenteditable]:not([contenteditable="false"])');
+    return !!this.eventControl(event, 'select, input, textarea, [contenteditable]:not([contenteditable="false"])');
+  }
+
+  /** Delegated events identify their owned control before crossing a shadow host. */
+  private eventControl(event: Event, selector: string): HTMLElement | null {
+    for (const node of event.composedPath()) {
+      if ((node as Node).nodeType === 1) {
+        const element = node as HTMLElement;
+        if (this.scope.contains(element) && element.matches(selector)) return element;
+      }
+      if (node === event.currentTarget) break;
+    }
+    return null;
   }
 
   private nativePopoverOpen(): boolean {
-    return [...this.document.querySelectorAll<HTMLElement>('[popover]')].some(panel => {
+    return this.scope.querySelectorAll<HTMLElement>('[popover]').some(panel => {
       try { if (panel.matches(':popover-open')) return true; } catch { /* Engines without native selectors keep the explicit surface state. */ }
       return panel.dataset.surfaceState === 'open';
     });
@@ -576,7 +592,7 @@ export class SelectionControls {
 
   private perform(command: AuthorCommand, name?: SurfaceName): void {
     const before = binding(this.options.state());
-    const active = this.document.activeElement as HTMLElement | null;
+    const active = this.scope.activeElement as HTMLElement | null;
     this.ownAction = true;
     let error: unknown;
     let succeeded = false;
@@ -594,7 +610,7 @@ export class SelectionControls {
     if (active && next.target === before.target) {
       const openSurface = surfaceNames.find(surface => this.surfaces.isOpen(this.panel(surface).id) && this.panel(surface).contains(active));
       if (this.usable(active) && (this.toolbar.contains(active) || openSurface)) {
-        if (this.document.activeElement !== active) active.focus({ preventScroll: true });
+        if (this.scope.activeElement !== active) active.focus({ preventScroll: true });
       } else if (openSurface) {
         const counterpart = active.id === 'selection-add-articulation' ? this.button('selection-remove-articulation')
           : active.id === 'selection-remove-articulation' ? this.button('selection-add-articulation') : undefined;
@@ -682,7 +698,7 @@ export class SelectionControls {
   }
 
   private render(state: SelectionControlsState): void {
-    const active = this.document.activeElement as HTMLElement | null;
+    const active = this.scope.activeElement as HTMLElement | null;
     const hadFocus = !!active && this.toolbar.contains(active);
     const valid = !selectionReason(state);
     const event = valid && state.eventIds.length === 1 ? state.event : undefined;
@@ -869,8 +885,9 @@ export class SelectionControls {
   }
 
   private usable(element: HTMLElement): boolean {
-    if (!element.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]') || element.matches(':disabled')) return false;
-    for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+    if (!element.isConnected || element.matches(':disabled')) return false;
+    for (const ancestor of [element, ...composedAncestors(element)]) {
+      if (ancestor.matches('[hidden], [inert], [aria-hidden="true"]')) return false;
       const style = this.document.defaultView?.getComputedStyle(ancestor);
       if (style?.display === 'none' || style?.visibility === 'hidden') return false;
     }
@@ -883,7 +900,8 @@ export class SelectionControls {
 
   private tabStops(): void {
     const buttons = this.toolbarButtons();
-    const current = buttons.find(button => button === this.document.activeElement) ?? buttons.find(button => button.tabIndex === 0) ?? buttons[0];
+    const focused = this.scope.activeElement;
+    const current = buttons.find(button => button === focused) ?? buttons.find(button => button.tabIndex === 0) ?? buttons[0];
     for (const button of this.toolbar.querySelectorAll<HTMLButtonElement>('button')) button.tabIndex = button === current ? 0 : -1;
   }
 

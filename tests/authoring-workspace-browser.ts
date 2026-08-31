@@ -4,6 +4,7 @@ import type { AuthorProject } from '../src/authoring/types.js';
 import type { SystemGeometry } from '../src/engraving/render.js';
 import { readScore } from '../src/dom/index.js';
 import { pitchText } from '../src/model/index.js';
+import { authorActiveElement, authorControlParent, queryAuthorControl } from './author-fixture.js';
 
 // These routes use actual Author controls. Static checks do not qualify geometry
 // or trusted input; use results from a fresh browser run.
@@ -65,7 +66,7 @@ async function waitFor(fixture: Fixture, check: () => boolean, label: string): P
   } finally { observer?.disconnect(); fixture.view.cancelAnimationFrame(animation); }
 }
 function field<T extends HTMLElement = HTMLElement>(fixture: Fixture, selector: string): T {
-  const value = fixture.doc.querySelector<T>(selector); assert(value, `The actual workspace is missing ${selector}.`); return value;
+  const value = queryAuthorControl<T>(fixture.doc, selector); assert(value, `The actual workspace is missing ${selector}.`); return value;
 }
 function value(fixture: Fixture, selector: string): string { return field<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(fixture, selector).value; }
 function visible(fixture: Fixture, element: Element): boolean {
@@ -95,8 +96,12 @@ function check(fixture: Fixture, selector: string, checked: boolean): void {
   const input = field<HTMLInputElement>(fixture, selector); if (input.checked !== checked) click(fixture, selector);
   equal(input.checked, checked, `${selector} must retain the chosen checkbox state`);
 }
+function closestControl(element: HTMLElement, selector: string): HTMLElement | null {
+  for (let current: HTMLElement | null = element; current; current = authorControlParent(current)) if (current.matches(selector)) return current;
+  return null;
+}
 function key(fixture: Fixture, target: HTMLElement, name: string, modifiers: KeyboardEventInit = {}): void {
-  assert(visible(fixture, target) && !target.closest('[inert]'), `Keyboard target #${target.id} must be visible and interactive.`);
+  assert(visible(fixture, target) && !closestControl(target, '[inert]'), `Keyboard target #${target.id} must be visible and interactive.`);
   fixture.actions.push({ kind: 'key', target: `#${target.id}`, value: `${modifiers.ctrlKey ? 'Control+' : ''}${modifiers.shiftKey ? 'Shift+' : ''}${name}` });
   target.focus({ preventScroll: true }); target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, composed: true, cancelable: true, ...modifiers }));
 }
@@ -128,7 +133,7 @@ function canonicalSource(fixture: Fixture, html: string): string {
 }
 function cursor(fixture: Fixture): object {
   return { staff: value(fixture, '#staff-select'), measure: value(fixture, '#measure-select'), voice: value(fixture, '#event-voice'),
-    event: fixture.doc.querySelector<HTMLElement>('#event-navigator [data-source-id][aria-pressed="true"]')?.dataset.sourceId ?? null };
+    event: queryAuthorControl<HTMLElement>(fixture.doc, '#event-navigator [data-source-id][aria-pressed="true"]')?.dataset.sourceId ?? null };
 }
 function palette(fixture: Fixture): object {
   return { ...Object.fromEntries(['event-kind', 'event-pitch', 'event-pitches', 'event-duration', 'event-dots', 'insert-position', 'event-accidental-display', 'event-stem', 'event-beam']
@@ -458,12 +463,12 @@ function equalScale(actual: InkMetrics, baseline: InkMetrics, context: string): 
 }
 async function addChord(fixture: Fixture): Promise<void> {
   await popup(fixture, '#location-trigger', '#location-panel', true); click(fixture, '#add-chord-symbol');
-  await waitFor(fixture, () => visible(fixture, field(fixture, '#annotation-inspector')) && fixture.doc.activeElement?.id === 'annotation-text', 'Open chord entry directly with text focus');
+  await waitFor(fixture, () => visible(fixture, field(fixture, '#annotation-inspector')) && authorActiveElement(fixture.doc)?.id === 'annotation-text', 'Open chord entry directly with text focus');
   await frames(fixture); await settle(fixture);
 }
 async function showNested(fixture: Fixture, selector: string): Promise<void> {
   const element = field(fixture, selector); const disclosures: HTMLDetailsElement[] = [];
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent.localName === 'details') disclosures.unshift(parent as HTMLDetailsElement);
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) if (parent.localName === 'details') disclosures.unshift(parent as HTMLDetailsElement);
   for (const details of disclosures) if (!details.open) { const summary = details.querySelector<HTMLElement>(':scope > summary'); assert(summary, 'An inline disclosure needs its native summary.'); summary.click(); }
   await frames(fixture);
 }
@@ -478,9 +483,9 @@ function draftStatus(fixture: Fixture, form: 'measure' | 'annotation'): string {
 }
 async function exposeControl(fixture: Fixture, selector: string): Promise<void> {
   const element = field(fixture, selector);
-  const panel = element.closest<HTMLElement>('[role="tabpanel"]');
+  const panel = closestControl(element, '[role="tabpanel"]');
   if (panel) { const name = tabNames.find(name => panels[name] === panel.id); if (name) await tab(fixture, name); }
-  const popover = element.closest<HTMLElement>('[popover]');
+  const popover = closestControl(element, '[popover]');
   if (popover && !popover.matches(':popover-open')) {
     const trigger = fixture.doc.querySelector<HTMLButtonElement>(`button[popovertarget="${popover.id}"]:not([popovertargetaction="hide"])`);
     assert(trigger?.id, `The ${popover.id} panel needs an actual native invoker.`); await popup(fixture, `#${trigger.id}`, `#${popover.id}`, true);
@@ -553,8 +558,8 @@ tests.push(
       write(fixture, '#part-label', pendingPartLabel); await frames(fixture);
       equal(field(fixture, '#part-draft-status').dataset.draftState, 'dirty', 'REVIEW-PART-DRAFT: changing only Part name must leave a named, unsaved part draft');
       await closeOpenPopovers(fixture); await popup(fixture, '#workspace-review-trigger', '#workspace-review', true); click(fixture, '#review-drafts');
-      await waitFor(fixture, () => field(fixture, '#score-setup').matches(':popover-open') && fixture.doc.activeElement?.id === 'part-label', 'Review the dirty part in its actual Score setup surface');
-      await frames(fixture); equal(fixture.doc.activeElement?.id, 'part-label', 'Review must retain focus on the dirty Part name after native surface layout');
+      await waitFor(fixture, () => field(fixture, '#score-setup').matches(':popover-open') && authorActiveElement(fixture.doc)?.id === 'part-label', 'Review the dirty part in its actual Score setup surface');
+      await frames(fixture); equal(authorActiveElement(fixture.doc)?.id, 'part-label', 'Review must retain focus on the dirty Part name after native surface layout');
       assert(field(fixture, '#score-setup').contains(field(fixture, '#part-label')) && visible(fixture, field(fixture, '#part-label')), 'Review must expose the actual Part name control, not a nonexistent part inspector.');
       assert(inside(box(field(fixture, '#part-label')), box(field(fixture, '#score-setup .popover-body'))), 'Review must scroll the dirty Part name into its actual setup viewport, not merely focus a clipped control.');
       equal(value(fixture, '#part-label'), pendingPartLabel, 'Review must retain the unsaved part name'); unchanged(fixture, beforePartDraft, 'Route Review to the part-only draft');
@@ -618,7 +623,7 @@ tests.push(
         equal([button.getAttribute('aria-controls'), panel.getAttribute('aria-labelledby')], [panel.id, button.id], 'The tab and its working form must name each other');
         if (index > 0) {
           const previous = field<HTMLButtonElement>(fixture, `#tool-tab-${tabNames[index - 1]}`); key(fixture, previous, 'ArrowRight');
-          equal(fixture.doc.activeElement?.id, button.id, 'Arrow navigation moves focus within the tablist');
+          equal(authorActiveElement(fixture.doc)?.id, button.id, 'Arrow navigation moves focus within the tablist');
           equal(previous.getAttribute('aria-selected'), 'true', 'Arrow navigation alone must not activate another working form');
           key(fixture, button, index % 2 ? 'Enter' : ' '); await frames(fixture);
         }
@@ -629,7 +634,7 @@ tests.push(
         unchanged(fixture, before, `Activate ${name} tools`);
       }
       await tab(fixture, 'edit'); assert(visible(fixture, properties) && field(fixture, '#tools-tablist').hidden, 'Back to Properties restores the separate task without a musical edit.');
-      click(fixture, '#tools-hide'); await frames(fixture); await settle(fixture); equal(fixture.doc.activeElement?.id, 'edit-selected-event', 'Hide tools returns focus to the actual Select-mode More invoker');
+      click(fixture, '#tools-hide'); await frames(fixture); await settle(fixture); equal(authorActiveElement(fixture.doc)?.id, 'edit-selected-event', 'Hide tools returns focus to the actual Select-mode More invoker');
       assert(visible(fixture, field(fixture, '#score-editor')) && !field(fixture, '#score-editor').inert, 'Returning from a task must expose the interactive score again.');
       assert(Math.abs(box(field(fixture, '#score-scroll')).width - width) <= 0.5, 'Closing More restores the unchanged writing frame width.'); equal(ranges(fixture), systems, 'Returning from a task retains the same system groups');
       unchanged(fixture, before, 'Hide tools'); equal(JSON.stringify(await recoverableProject(fixture)), recovered, 'Task preferences must not change the recoverable musical project'); equal(field(fixture, '#save-status').textContent, saveText, 'Task preferences must not claim a new recovery write');
@@ -852,7 +857,7 @@ tests.push(
         for (let index = 0; index < 8; index++) {
           write(fixture, '#annotation-text', ['Dm9', 'G13', 'Cmaj9', 'A7alt'][index % 4]);
           await mutate(fixture, () => click(fixture, '#add-annotation-next'), () => annotations(fixture).length === index + 1, 'Complete the constrained harmony pass');
-          equal(fixture.doc.activeElement?.id, 'annotation-text', 'Each constrained harmony advance keeps the writing field focused'); assert(visible(fixture, pane), 'The working pane must not dismiss between harmonies');
+          equal(authorActiveElement(fixture.doc)?.id, 'annotation-text', 'Each constrained harmony advance keeps the writing field focused'); assert(visible(fixture, pane), 'The working pane must not dismiss between harmonies');
         }
         equal(score(fixture).staves[0].measures.length, 8, 'A constrained harmony pass must not append a ninth bar'); await tools(fixture, false); await reveal(fixture, 'journey-n8a', 0.15);
         const accepted = music(fixture); const acceptedHtml = source(fixture);
@@ -1095,7 +1100,7 @@ tests.unshift(
         await mutate(fixture, () => click(fixture, '#add-annotation-next'), () => annotations(fixture).filter(item => item.kind === 'harmony').length === index + 1, 'Commit one chord symbol and advance to an existing measure');
         const accepted = score(fixture).staves[0].measures[index].annotations.find(item => item.kind === 'harmony'); assert(accepted, `Measure ${index + 1} must receive its own harmony.`);
         equal([accepted.text, accepted.placement, accepted.onset], [text, 'above', { numerator: 0, denominator: 1 }], 'Harmony must keep its intended text, placement, and exact onset'); ids.push(accepted.id);
-        equal(fixture.doc.activeElement?.id, 'annotation-text', 'Successful harmony advance must return focus to the text field');
+        equal(authorActiveElement(fixture.doc)?.id, 'annotation-text', 'Successful harmony advance must return focus to the text field');
       }
       equal(score(fixture).staves[0].measures.length, 8, 'Harmony advance must never append a ninth bar'); equal(revision(fixture) - firstRevision, 8, 'Eight new symbols require exactly eight musical transactions');
       const project = await recoverableProject(fixture); for (const id of ids) equal(project.instructionScopes[id], 'all', 'Each harmony retains its shared-recipient intent');
@@ -1509,9 +1514,9 @@ tests.push({
       equal(dialog.localName, 'dialog', 'The confirmation must be an application-owned native dialog'); assert(dialog.matches(':modal'), 'The supported browser must use the dialog top layer and native modal semantics.');
       assert(inside(box(dialog), { left: 0, top: 0, right: width, bottom: height, width, height }), 'The complete confirmation must fit the actual desktop or short-phone viewport.');
       assert(visible(fixture, field(fixture, '#author-confirmation-message')) && /measure|bar/i.test(field(fixture, '#author-confirmation-message').textContent ?? ''), 'The dialog must state the musical operation before either choice.');
-      assert(dialog.contains(fixture.doc.activeElement), 'Opening confirmation must put focus inside the native dialog.'); unchanged(fixture, before, 'Open a destructive-action confirmation');
+      assert(dialog.contains(authorActiveElement(fixture.doc)), 'Opening confirmation must put focus inside the native dialog.'); unchanged(fixture, before, 'Open a destructive-action confirmation');
       click(fixture, '#author-confirmation-cancel'); await waitFor(fixture, () => !dialog.open, 'Cancel the native confirmation through its visible button'); await frames(fixture); await settle(fixture);
-      unchanged(fixture, before, 'Cancel a destructive-action confirmation'); equal(fixture.doc.activeElement?.id, 'remove-measure', 'Cancel must restore focus to the available originating action'); viewports.push([width, height]);
+      unchanged(fixture, before, 'Cancel a destructive-action confirmation'); equal(authorActiveElement(fixture.doc)?.id, 'remove-measure', 'Cancel must restore focus to the available originating action'); viewports.push([width, height]);
     }
     await resize(fixture, 1180, 660); const beforeSource = snapshot(fixture); click(fixture, '#remove-measure');
     const dialog = field<HTMLDialogElement>(fixture, '#author-confirmation'); await waitFor(fixture, () => dialog.open, 'Hold the original removal decision');
@@ -1543,7 +1548,7 @@ tests.push({
     assert(!field(fixture, '#score-setup').matches(':popover-open'), 'The part-removal fixture must close the originating setup popover before its modal decision.');
     assert((field(fixture, '#author-confirmation-message').textContent ?? '').includes(part.label), 'The removal decision must identify the selected part before cancellation.');
     click(fixture, '#author-confirmation-cancel'); await waitFor(fixture, () => !dialog.open, 'Cancel removal of the named part'); await frames(fixture); await settle(fixture);
-    const returnTarget = field(fixture, '#document-menu-trigger'); assert(fixture.doc.activeElement === returnTarget, 'CONFIRM-RETURN-VISIBLE: Cancel must return focus to the visible Document invoker, not a control inside the closed setup popover.');
+    const returnTarget = field(fixture, '#document-menu-trigger'); assert(authorActiveElement(fixture.doc) === returnTarget, 'CONFIRM-RETURN-VISIBLE: Cancel must return focus to the visible Document invoker, not a control inside the closed setup popover.');
     assert(visible(fixture, returnTarget) && inside(box(returnTarget), { left: 0, top: 0, right: fixture.view.innerWidth, bottom: fixture.view.innerHeight, width: fixture.view.innerWidth, height: fixture.view.innerHeight }), 'The fallback focus destination must be exposed inside the actual viewport.');
     unchanged(fixture, beforePartRemoval, 'Cancel a part removal whose original invoker is hidden');
     equal(JSON.stringify(await recoverableProject(fixture)), savedBeforePartRemoval, 'Cancelling a part removal must preserve its definition, layout, and all recovery data');
@@ -1618,7 +1623,7 @@ tests.push({
 
 function diagnostic(fixture: Fixture): string {
   try { return JSON.stringify({ workspace: fixture.workspace, viewport: { width: fixture.view.innerWidth, height: fixture.view.innerHeight }, state: { ...fixture.doc.body.dataset },
-    authored: revision(fixture), cursor: cursor(fixture), palette: palette(fixture), active: fixture.doc.activeElement?.id,
+    authored: revision(fixture), cursor: cursor(fixture), palette: palette(fixture), active: authorActiveElement(fixture.doc)?.id,
     scoreViewport: box(field(fixture, '#score-scroll')), scoreScroll: { top: field(fixture, '#score-scroll').scrollTop, left: field(fixture, '#score-scroll').scrollLeft },
     status: field(fixture, '#author-status').textContent, error: field(fixture, '#author-errors').textContent, recovery: field(fixture, '#save-status').textContent,
     drafts: Object.fromEntries(['measure', 'annotation'].map(form => [form, { target: draftTarget(fixture, form as 'measure' | 'annotation'), status: draftStatus(fixture, form as 'measure' | 'annotation') }])),

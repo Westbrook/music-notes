@@ -4,16 +4,14 @@
  * dispatch alone is stubbed. Widths exercise application policy, not native
  * layout, popover geometry, trusted keyboard input, touch or publication.
  */
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import { add, rational } from '../src/model/index.js';
 import type { PitchDirection } from '../src/model/types.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const emptyRoadBar = `<music-staff id="roads" label="Roads" notation="three-roads" meter="4/4">
   <music-measure id="road-bar" incomplete><music-voice id="road-voice"></music-voice></music-measure>
 </music-staff>`;
@@ -118,7 +116,7 @@ function mount(): void {
 beforeEach(() => {
   widthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell; actions.length = 0;
+  mountAuthorFixture(); actions.length = 0;
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
 });

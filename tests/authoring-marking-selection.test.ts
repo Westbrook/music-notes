@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { queryAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import type { LayoutGeometry, MusicSurface } from '../src/components/music-surface.js';
 import { createProject } from '../src/authoring/project.js';
@@ -17,12 +17,10 @@ const source = `<music-staff id="staff" notation="three-roads"><music-measure id
 </music-measure></music-staff>`;
 
 let workspace: AuthorWorkspace | undefined;
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 
 beforeEach(() => {
   document.body.className = '';
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   // Test the real application listeners and controllers, without substituting
   // fake musical geometry for the separate browser engraving checks.
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
@@ -67,13 +65,18 @@ describe('Author selection of public attached-mark identities', () => {
         measures: [{ sourceId: 'bar', staffId: 'staff', system: 0, measureIndex: 0,
           x: 0, y: 0, width: 400, height: 120, topLine: 30, bottomLine: 70, noteStartX: 20, noteEndX: 380 }] }],
     };
-    Object.defineProperty(surface, 'getLayoutGeometry', { value: () => layout });
+    const projection = { surface: surface as unknown as MusicSurface, renderRevision: layout.revision, layout,
+      frames: [{ system: layout.systems[0], svg: surface.shadowRoot!.querySelector<SVGSVGElement>('svg')!, row: undefined }] };
+    Object.defineProperties(surface, {
+      getLayoutGeometry: { value: () => layout }, getRenderedProjection: { value: () => projection },
+      renderRevision: { value: layout.revision }, getNativeControlBounds: { value: () => [] },
+    });
     Object.assign(app, { surface: surface as unknown as MusicSurface });
     const click = () => new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 80, clientY: 50 });
     surface.dispatchEvent(click());
     expect(app.session.selectionId).toBe('bar');
 
-    document.querySelector<HTMLButtonElement>('#event-navigator [data-source-id="higher"]')!.click();
+    queryAuthorControl<HTMLButtonElement>(document, '#event-navigator [data-source-id="higher"]')!.click();
     const detail = { sourceId: 'fifth', sourceElement: app.session.source.querySelector('#fifth') };
     surface.addEventListener('click', event => {
       surface.dispatchEvent(new CustomEvent('notation-select', { bubbles: true, composed: true, detail }));
@@ -85,7 +88,7 @@ describe('Author selection of public attached-mark identities', () => {
     expect(handled.defaultPrevented).toBe(true);
     expect(detail.sourceId).toBe('fifth');
     expect(app.session.selectionId).toBe('main');
-    expect(document.querySelector('#event-navigator [data-source-id="main"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(queryAuthorControl(document, '#event-navigator [data-source-id="main"]')?.getAttribute('aria-pressed')).toBe('true');
     expect(document.getElementById('event-markings-editor')?.dataset.draftTarget).toBe('main');
     expect(document.getElementById('selection-inspector')?.dataset.draftTarget).toBe('main');
     expect(app.session.project.sourceHtml).toBe(sourceBefore);
@@ -96,9 +99,9 @@ describe('Author selection of public attached-mark identities', () => {
   it.each(['accent', 'trill', 'fifth', 'third'])('selects the owner in every selected-event control after notation-select for %s', markingId => {
     const app = workspace!;
     const sourceBefore = app.session.project.sourceHtml;
-    const higher = document.querySelector<HTMLButtonElement>('#event-navigator [data-source-id="higher"]')!;
+    const higher = queryAuthorControl<HTMLButtonElement>(document, '#event-navigator [data-source-id="higher"]')!;
     higher.click();
-    expect(document.querySelector('#event-navigator [data-source-id="higher"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(queryAuthorControl(document, '#event-navigator [data-source-id="higher"]')?.getAttribute('aria-pressed')).toBe('true');
     const detail = { sourceId: markingId, sourceElement: app.session.source.querySelector(`#${markingId}`) };
     const event = new CustomEvent('notation-select', { bubbles: true, composed: true, detail });
     document.getElementById('score-host')!.dispatchEvent(event);
@@ -108,8 +111,8 @@ describe('Author selection of public attached-mark identities', () => {
     expect(detail.sourceId).toBe(markingId);
     expect(detail.sourceElement?.id).toBe(markingId);
     expect(app.session.selectionId).toBe('main');
-    expect(document.querySelector('#event-navigator [data-source-id="main"]')?.getAttribute('aria-pressed')).toBe('true');
-    expect(document.querySelector('#event-navigator [data-source-id="higher"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect(queryAuthorControl(document, '#event-navigator [data-source-id="main"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(queryAuthorControl(document, '#event-navigator [data-source-id="higher"]')?.getAttribute('aria-pressed')).toBe('false');
     expect(document.getElementById('selection-inspector')?.dataset.draftTarget).toBe('main');
     expect((document.getElementById('selected-kind') as HTMLSelectElement).value).toBe('road');
     expect((document.getElementById('selected-direction') as HTMLSelectElement).value).toBe('same');

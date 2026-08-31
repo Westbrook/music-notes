@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Notes — shadow component checks</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #202b35; background: #eef2f5; }
+      * { box-sizing: border-box; }
+      body { max-width: 1100px; margin: 0 auto; padding: 24px; }
+      h1 { margin: 0 0 8px; font-size: 28px; }
+      h2 { font-size: 21px; }
+      h3 { margin: 0 0 8px; font-size: 17px; }
+      p { max-width: 90ch; }
+      a { color: #1b5578; }
+      button, input, select { font: inherit; }
+      button { min-height: 44px; padding: 8px 12px; border: 1px solid #6f8394; border-radius: 5px; background: #f7f9fb; color: #243f53; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #7037a0; outline-offset: 2px; }
+      input:not([type="checkbox"]), select { min-height: 40px; padding: 6px; max-width: 100%; }
+      label { display: block; margin: 8px 0; }
+      #summary { padding: 14px; border: 1px solid #b1c1cf; border-radius: 6px; background: white; }
+      #summary[data-state="passed"] { border-color: #528269; }
+      #summary[data-state="failed"] { border-color: #b33a48; }
+      #results > li { padding: 6px 0; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      #results pre { padding: 10px; background: #fff2f1; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, monospace; }
+      .fixture { margin: 20px 0; padding: 16px; border: 1px solid #c7d2db; background: white; }
+      .fixture-note, #environment, #interaction-log { color: #506473; font-size: 13px; }
+      .fixture-body { min-width: 0; }
+      .fixture-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+      .fixture-row > * { flex: 1 1 280px; min-width: 0; }
+      .panel-demo { max-width: 600px; height: 330px; border: 1px solid #b1c1cf; padding: 12px; }
+      .panel-demo [slot="body"] { padding: 4px; }
+      .panel-demo [slot="footer"] { display: flex; gap: 10px; padding-top: 10px; }
+      .probe { display: block; padding: 8px; border: 1px dashed #8ea2b2; }
+      .test-popover { width: min(650px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); border: 1px solid #7b8c9b; border-radius: 8px; padding: 0; background: #fff; color: #243442; }
+      .test-popover:popover-open { display: flex; flex-direction: column; }
+      .test-popover [slot="header"] { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px; }
+      .test-popover .popover-body { padding: 14px; min-height: 0; overflow: auto; }
+      .anchor-popover { width: 190px; padding: 10px; }
+      .anchor-popover:popover-open { display: block; }
+      @media (max-width: 600px) { body { padding: 14px; } }
+    </style>
+    <script type="module" src="/tests/shadow-dom-browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Shadow components and native boundaries</h1>
+      <p>These checks use the browser’s real slots, forms, focus, popovers, scroll events, and SVG rendering. They verify DOM names and descriptions, association boundaries, stable component mounts, and explicit interaction events.</p>
+      <p><button id="run" type="button">Run shadow component checks</button> <a href="/author.html">Open Author</a> · <a href="/tests/browser.html">Notation checks</a></p>
+    </header>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready to run shadow component checks.</p>
+    <p id="environment"></p>
+    <ol id="results" aria-label="Shadow component check results"></ol>
+    <section aria-labelledby="fixtures-heading">
+      <h2 id="fixtures-heading">Live inspection fixtures</h2>
+      <p class="fixture-note">Scripted activation and modifier events are identified as such. Focus and form checks use native APIs; scroll checks change real scroll offsets and observe browser-generated events. This is not screen-reader, trusted keyboard/touch, operating-system capture, or physical printing qualification.</p>
+      <p id="interaction-log" role="status">Optional manual check: activate any live control below. The last originating click and its isTrusted value will appear here.</p>
+      <div id="fixtures"></div>
+    </section>
+    <script id="shadow-dom-browser-results" type="application/json">{"state":"idle"}</script>
+  </body>
+</html>

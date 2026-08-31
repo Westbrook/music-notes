@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Signal } from 'signal-polyfill';
 import { DraftStore } from '../src/authoring/form-drafts.js';
 import type { DraftContext, DraftSyncContext, DraftTarget } from '../src/authoring/form-drafts.js';
 import { EditorSession } from '../src/authoring/editor.js';
@@ -98,6 +99,156 @@ describe('session-only form draft binding', () => {
     f.store.sync('measure', { ...f.context('m2'), read });
     expect(read).toHaveBeenCalledExactlyOnceWith('m1');
     expect(f.store.snapshot('measure').targetId).toBe('m1');
+  });
+});
+
+describe('reactive draft selectors', () => {
+  it('keeps selectors stable and updates derived dirty summaries through form transitions', () => {
+    const f = fixture();
+    const measure = f.store.select('measure');
+    expect(f.store.select('measure')).toBe(measure);
+    expect(measure).not.toHaveProperty('set');
+    expect(f.store.signals.dirtyCount).not.toHaveProperty('set');
+    expect(f.store.signals.dirtyDrafts).not.toHaveProperty('set');
+    const summary = new Signal.Computed(() => ({
+      count: f.store.signals.dirtyCount.get(),
+      drafts: f.store.signals.dirtyDrafts.get(),
+    }));
+    const cleanSummary = summary.get();
+    expect(cleanSummary).toEqual({ count: 0, drafts: [] });
+    f.store.sync('page', f.context('m2'));
+    expect(summary.get()).toBe(cleanSummary);
+
+    f.store.patch('measure', { meter: '7/', pickup: true });
+    expect(summary.get()).toMatchObject({ count: 1, drafts: [{ formId: 'measure', dirtyFields: ['meter', 'pickup'] }] });
+    const dirtySummary = summary.get();
+    f.store.patch('measure', { meter: '7/8' });
+    expect(summary.get()).toBe(dirtySummary);
+    f.store.fail('measure', 'Finish the meter denominator.');
+    expect(summary.get().drafts[0].message).toBe('Finish the meter denominator.');
+    f.store.discard('measure', f.targets.get('m1')!);
+    expect(summary.get()).toEqual({ count: 0, drafts: [] });
+    expect(measure.get().status).toBe('clean');
+  });
+
+  it('does not recompute or replace another form view when a form changes or is first bound', () => {
+    const f = fixture();
+    f.store.sync('marking', f.context('m2'));
+    const measureRead = vi.fn(() => f.store.select('measure').get());
+    const markingRead = vi.fn(() => f.store.select('marking').get());
+    const measure = new Signal.Computed(measureRead);
+    const marking = new Signal.Computed(markingRead);
+    const beforeMeasure = measure.get();
+    const beforeMarking = marking.get();
+
+    f.store.patch('measure', { text: 'New cue' });
+    f.store.sync('page', f.context());
+    expect(measure.get()).not.toBe(beforeMeasure);
+    expect(measure.get().values!.text).toBe('New cue');
+    expect(marking.get()).toBe(beforeMarking);
+    expect(measureRead).toHaveBeenCalledTimes(2);
+    expect(markingRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains cached views and derived work for transitions with no observable change', () => {
+    const f = fixture();
+    const read = vi.fn(() => f.store.select('measure').get());
+    const derived = new Signal.Computed(read);
+    const before = derived.get();
+    const unchanged = [
+      () => f.store.sync('measure', f.context()),
+      () => f.store.patch('measure', { text: 'Freely', recipients: ['s1'] }),
+      () => f.store.resolve('measure', f.context()),
+      () => f.store.review('measure', f.context()),
+      () => f.store.commit('measure', f.targets.get('m1')!),
+      () => f.store.discard('measure', f.targets.get('m1')!),
+    ];
+    for (const update of unchanged) {
+      update();
+      expect(derived.get()).toBe(before);
+    }
+    expect(read).toHaveBeenCalledTimes(1);
+
+    f.store.patch('measure', { text: 'Draft cue' });
+    const dirty = derived.get();
+    f.store.patch('measure', { text: 'Draft cue' });
+    expect(derived.get()).toBe(dirty);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('deeply freezes shared views and summaries while preserving independent mutable snapshots', () => {
+    const f = fixture();
+    f.store.patch('measure', { recipients: ['s2'] });
+    f.targets.get('m1')!.dependencies!.recipients = { available: ['s1'] };
+    f.store.sync('measure', f.context());
+    const view = f.store.select('measure').get();
+    const summary = f.store.signals.dirtyDrafts.get();
+    const dependency = view.conflicts[0].base as { available: readonly string[] };
+    for (const value of [view, view.values, view.values!.recipients, view.current, view.current!.recipients,
+      view.dirtyFields, view.conflicts, view.conflicts[0], dependency, dependency.available,
+      summary, summary[0], summary[0].dirtyFields]) {
+      expect(Object.isFrozen(value)).toBe(true);
+    }
+    expect(() => (view.values!.recipients as string[]).push('external mutation')).toThrow(TypeError);
+    expect(() => (dependency.available as string[]).push('external mutation')).toThrow(TypeError);
+
+    const copy = f.store.snapshot('measure');
+    copy.values!.recipients.push('local mutation');
+    (copy.conflicts[0].base as { available: string[] }).available.push('local mutation');
+    expect(f.store.select('measure').get()).toBe(view);
+    expect(view.values!.recipients).toEqual(['s2']);
+    expect(dependency.available).toEqual(['s1', 's2']);
+  });
+
+  it('publishes no partial state or notification when input or refresh validation fails', () => {
+    const f = fixture();
+    f.store.patch('measure', { text: 'Keep this cue' });
+    const read = vi.fn(() => ({
+      view: f.store.select('measure').get(),
+      count: f.store.signals.dirtyCount.get(),
+      drafts: f.store.signals.dirtyDrafts.get(),
+    }));
+    const derived = new Signal.Computed(read);
+    const notified = vi.fn();
+    const watcher = new Signal.subtle.Watcher(notified);
+    watcher.watch(derived);
+    try {
+      const before = derived.get();
+      const getter = vi.fn(() => '3/4');
+      const patch: Partial<Fields> = { text: 'A partial replacement' };
+      Object.defineProperty(patch, 'meter', { enumerable: true, get: getter });
+      expect(() => f.store.patch('measure', patch)).toThrow(/accessors/);
+      const invalid = target();
+      invalid.context = new Date();
+      expect(() => f.store.sync('measure', {
+        ...f.context('m2'), revision: 9, read: () => invalid,
+      })).toThrow(/plain objects/);
+      expect(getter).not.toHaveBeenCalled();
+      expect(notified).not.toHaveBeenCalled();
+      expect(derived.get()).toBe(before);
+      expect(read).toHaveBeenCalledTimes(1);
+    } finally {
+      watcher.unwatch(derived);
+    }
+  });
+
+  it('resets existing selector consumers on discardAll and reuses their handles on the next bind', () => {
+    const f = fixture();
+    const measure = f.store.select('measure');
+    const marking = f.store.select('marking');
+    f.store.sync('marking', f.context('m2'));
+    f.store.patch('measure', { text: 'One draft' });
+    f.store.patch('marking', { text: 'Another draft' });
+    const derived = new Signal.Computed(() => [measure.get().status, marking.get().status, f.store.signals.dirtyCount.get()]);
+    expect(derived.get()).toEqual(['dirty', 'dirty', 2]);
+
+    f.store.discardAll();
+    expect(derived.get()).toEqual(['unbound', 'unbound', 0]);
+    expect(f.store.signals.dirtyDrafts.get()).toEqual([]);
+    f.store.sync('measure', f.context('m2'));
+    expect(f.store.select('measure')).toBe(measure);
+    expect(derived.get()).toEqual(['clean', 'unbound', 0]);
+    expect(measure.get().targetId).toBe('m2');
   });
 });
 

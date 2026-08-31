@@ -1,5 +1,9 @@
 import { pitchDescription, pitchText } from '../model/index.js';
 import type { Measure, MusicEvent, Score, Staff, Tuplet, Voice } from '../model/types.js';
+import { renderNativeCheckboxes } from '../ui/native-checkboxes.js';
+import { renderNativeOptions } from '../ui/native-options.js';
+import { asControlScope } from './control-scope.js';
+import type { ControlRoot, ControlScope } from './control-scope.js';
 import type { EditorSession } from './editor.js';
 import { DraftStore } from './form-drafts.js';
 import type { DraftFields, DraftResolution, DraftSnapshot, DraftTarget } from './form-drafts.js';
@@ -44,10 +48,11 @@ export function inspectionDiscardKey(context: InspectionSelectionContext, docume
 }
 
 /** Share a caption only when both independently bound owners and documents agree. */
-export function syncInspectionCaptions(doc: Document = document): void {
-  const properties = doc.getElementById('event-form-context');
-  const markings = doc.getElementById('event-markings-target');
-  const panel = doc.getElementById('event-markings-editor');
+export function syncInspectionCaptions(root: ControlRoot = document): void {
+  const scope = asControlScope(root);
+  const properties = scope.getElementById('event-form-context');
+  const markings = scope.getElementById('event-markings-target');
+  const panel = scope.getElementById('event-markings-editor');
   if (!markings || !panel) return;
   const shared = !!properties && !properties.closest('[hidden], [inert]') && !!properties.dataset.documentId
     && properties.dataset.documentId === markings.dataset.documentId && properties.dataset.targetId === markings.dataset.targetId;
@@ -344,6 +349,7 @@ function displayValue(value: unknown): string {
 /** Long-lived inspector drafts are separate from entry settings and accepted musical history. */
 export class InspectorForms {
   private readonly options: InspectorFormsOptions;
+  private readonly scope: ControlScope;
   private readonly doc: Document;
   private readonly abort = new AbortController();
   private readonly store = new DraftStore<Forms>();
@@ -355,8 +361,10 @@ export class InspectorForms {
   private initialized = false;
   private disposed = false;
 
-  constructor(options: InspectorFormsOptions, doc: Document = document) {
-    this.options = options; this.doc = doc;
+  constructor(options: InspectorFormsOptions, root: ControlRoot = document) {
+    this.options = options;
+    this.scope = asControlScope(root);
+    this.doc = this.scope.document;
     for (const form of names) {
       this.ensureDraftControls(form);
       for (const field of fields[form]) {
@@ -437,7 +445,7 @@ export class InspectorForms {
   /** Re-read the exact named target, merge only dirty fields, and update the command's DOM inputs. */
   resolve(form: InspectorFormName): InspectorResolution {
     this.commitFocus.delete(form);
-    const focused = this.doc.activeElement as HTMLElement | null;
+    const focused = this.scope.activeElement as HTMLElement | null;
     const trigger = focused && applyIds[form].includes(focused.id) ? focused : null;
     this.refresh();
     const view = this.snapshot(form);
@@ -462,7 +470,7 @@ export class InspectorForms {
 
   /** Clear only this draft after its corresponding command has succeeded. */
   commit(form: InspectorFormName): void {
-    const focused = this.doc.activeElement as HTMLElement | null;
+    const focused = this.scope.activeElement as HTMLElement | null;
     const trigger = focused && applyIds[form].includes(focused.id) ? focused : this.commitFocus.get(form);
     this.commitFocus.delete(form);
     const snapshot = this.store.snapshot(form);
@@ -615,7 +623,7 @@ export class InspectorForms {
     const showNotice = snapshot.dirty || !!snapshot.error || !!changedContext || needsReturn;
     const details = snapshot.conflicts.map(conflict => {
       const field = fields[form].find(item => item.key === conflict.field);
-      const name = field ? this.doc.querySelector(`label[for="${field.id}"]`)?.firstChild?.textContent?.trim() || conflict.field : conflict.field;
+      const name = field ? this.scope.querySelector(`label[for="${field.id}"]`)?.firstChild?.textContent?.trim() || conflict.field : conflict.field;
       return conflict.reason === 'value' ? `${name}: accepted ${displayValue(conflict.current)}; draft ${displayValue(conflict.draft)}.`
         : `${name} uses musical context that changed.`;
     });
@@ -642,7 +650,7 @@ export class InspectorForms {
         beamCaption.dataset.targetId = snapshot.targetId ?? '';
       }
       this.selectedDiscardKey = inspectionDiscardKey(frame.context, frame.project.id, snapshot);
-      syncInspectionCaptions(this.doc);
+      syncInspectionCaptions(this.scope);
     }
     const region = this.el(regionIds[form]);
     if (region) {
@@ -711,26 +719,18 @@ export class InspectorForms {
     const pitched = kind === 'note' || kind === 'chord';
     const accidentalDisplay = this.el<HTMLSelectElement>('selected-accidental-display');
     if (accidentalDisplay) accidentalDisplay.disabled ||= !pitched;
-    const accidentalLabel = this.doc.querySelector<HTMLLabelElement>('label[for="selected-accidental-display"]');
+    const accidentalLabel = this.scope.querySelector<HTMLLabelElement>('label[for="selected-accidental-display"]');
     if (accidentalLabel) accidentalLabel.hidden = !pitched;
   }
 
-  private renderStaffChecks(frame: Frame, selected: string[]): void {
+  private renderStaffChecks(frame: Frame, selected: readonly string[]): void {
     const host = this.el('part-staves');
     if (!host) return;
-    const available = frame.score.staves.map((staff, index) => ({ id: staff.id, label: staff.label || `Staff ${index + 1}` }));
-    const options = [...available, ...selected.filter(id => !available.some(option => option.id === id)).map(id => ({ id, label: `${id} (removed staff)` }))];
-    const signature = JSON.stringify(options);
-    if (host.dataset.options === signature) return;
-    const focused = host.contains(this.doc.activeElement) ? (this.doc.activeElement as HTMLInputElement).value : null;
-    const fragment = this.doc.createDocumentFragment();
-    for (const option of options) {
-      const label = this.doc.createElement('label'); label.className = 'check-field';
-      const input = this.doc.createElement('input'); input.type = 'checkbox'; input.value = option.id;
-      input.checked = selected.includes(option.id); label.append(input, this.doc.createTextNode(option.label)); fragment.append(label);
-    }
-    host.replaceChildren(fragment); host.dataset.options = signature;
-    if (focused) [...host.querySelectorAll<HTMLInputElement>('input')].find(input => input.value === focused)?.focus({ preventScroll: true });
+    const available = frame.score.staves.map((staff, index) => ({ value: staff.id, label: staff.label || `Staff ${index + 1}` }));
+    const options = [...available, ...selected.filter(id => !available.some(option => option.value === id))
+      .map(id => ({ value: id, label: `${id} (removed staff)` }))];
+    // The form render below remains the owner of checked and disabled state.
+    renderNativeCheckboxes(host, options);
   }
 
   private renderTupletChoices(frame: Frame, snapshot: InspectorSnapshot): void {
@@ -740,13 +740,8 @@ export class InspectorForms {
     const options = [{ value: '', label: 'New tuplet around selection' }, ...(current?.voice.tuplets ?? []).map(tuplet => ({ value: tuplet.id, label: `${tuplet.actual}:${tuplet.normal} · ${tuplet.eventIds.length} events` }))];
     const chosen = snapshot.context?.creating ? '' : snapshot.targetId ?? '';
     if (chosen && !options.some(option => option.value === chosen)) options.push({ value: chosen, label: snapshot.label ?? 'Original tuplet draft' });
-    const signature = JSON.stringify(options);
-    if (select.dataset.options !== signature) {
-      for (const option of [...select.options]) option.remove();
-      for (const choice of options) { const option = this.doc.createElement('option'); option.value = choice.value; option.textContent = choice.label; select.append(option); }
-      select.dataset.options = signature; enhanceSelects(select);
-    }
-    select.value = chosen;
+    renderNativeOptions(select, options, chosen);
+    enhanceSelects(select);
   }
 
   private ensureDraftControls(form: InspectorFormName): void {
@@ -806,5 +801,5 @@ export class InspectorForms {
   }
 
   private listen(id: string, action: () => void): void { this.el(id)?.addEventListener('click', action, { signal: this.abort.signal }); }
-  private el<T extends HTMLElement = HTMLElement>(id: string): T | null { return this.doc.getElementById(id) as T | null; }
+  private el<T extends HTMLElement = HTMLElement>(id: string): T | null { return this.scope.getElementById(id) as T | null; }
 }

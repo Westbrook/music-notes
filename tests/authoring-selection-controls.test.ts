@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { createProject } from '../src/authoring/project.js';
 import { SelectionControls } from '../src/authoring/selection-controls.js';
@@ -28,11 +28,11 @@ const positionerMocks = vi.hoisted(() => {
 vi.mock('../src/authoring/popover-position.js', () => ({ createPopoverPositioner: positionerMocks.create }));
 
 // Real Author markup, without its app controller, stylesheet, or remote assets.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const cleanups: (() => void)[] = [];
 const surfaceNames = ['value', 'pitch', 'shared'] as const;
 const chooserAccidentalIds = ['selection-chooser-flat', 'selection-chooser-natural', 'selection-chooser-sharp'] as const;
 type SurfaceName = typeof surfaceNames[number];
+type FixtureControlRoot = Document | HTMLElement | ShadowRoot;
 const note = (id: string, attributes = 'pitch="F4" duration="quarter"', children = '') =>
   `<music-note id="${id}" ${attributes}>${children}</music-note>`;
 const scoreHtml = (events = note('n1', 'pitch="F4" duration="quarter" accidental-display="courtesy" stem="down" beam="none" data-user="keep"')
@@ -40,8 +40,8 @@ const scoreHtml = (events = note('n1', 'pitch="F4" duration="quarter" accidental
 measureAttributes = 'incomplete', staffAttributes = 'key="G"') =>
   `<music-staff id="staff" label="Flute" ${staffAttributes}><music-measure id="bar" number="12" ${measureAttributes}>${events}</music-measure></music-staff>`;
 
-function control<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+function control<T extends HTMLElement = HTMLElement>(id: string, root: FixtureControlRoot = document): T {
+  const element = root.querySelector<HTMLElement>(`#${id}`);
   if (!element) throw new Error(`Missing real selection control ${id}`);
   return element as T;
 }
@@ -77,11 +77,15 @@ function stubNative(panel: HTMLElement) {
   return { show, hide, isOpen: () => open };
 }
 
-function fixture(html = scoreHtml(), settings: { native?: boolean; ids?: string[]; observeSuccess?: boolean } = {}) {
-  document.body.innerHTML = shellMarkup;
+function fixture(html = scoreHtml(), settings: {
+  native?: boolean; ids?: string[]; observeSuccess?: boolean; mount?: HTMLElement; root?: FixtureControlRoot;
+} = {}) {
+  mountAuthorFixture(settings.mount);
+  const root = settings.root ?? settings.mount ?? document;
+  const localControl = <T extends HTMLElement = HTMLElement>(id: string) => control<T>(id, root);
   const nativeSurfaces = new Map<SurfaceName, ReturnType<typeof stubNative>>();
   for (const name of surfaceNames) {
-    const panel = control(`selection-${name}-chooser`);
+    const panel = localControl(`selection-${name}-chooser`);
     if (settings.native) nativeSurfaces.set(name, stubNative(panel));
     else Object.defineProperties(panel, {
       showPopover: { configurable: true, value: undefined }, hidePopover: { configurable: true, value: undefined },
@@ -137,7 +141,7 @@ function fixture(html = scoreHtml(), settings: { native?: boolean; ids?: string[
   const controls = new SelectionControls({
     state, execute, openProperties, openRelationships, openRange, selectMore, preparePitchDrag,
     cancelPitchDrag, resume, report, error: showError, afterSurfaceClose, ...(settings.observeSuccess ? { success } : {}),
-  });
+  }, root);
   const refresh = () => { if (view.autoRefresh) controls.refresh(); };
   session.addEventListener('change', refresh);
   cleanups.push(() => { session.removeEventListener('change', refresh); controls.dispose(); });
@@ -152,18 +156,18 @@ function fixture(html = scoreHtml(), settings: { native?: boolean; ids?: string[
     return found;
   };
   const open = (name: SurfaceName) => {
-    const trigger = control<HTMLButtonElement>(`selection-${name}`);
+    const trigger = localControl<HTMLButtonElement>(`selection-${name}`);
     trigger.focus(); trigger.click();
     // Happy DOM does not execute the browser's declarative popover default.
     nativeSurfaces.get(name)?.show(trigger);
   };
-  const isOpen = (name: SurfaceName): boolean => nativeSurfaces.get(name)?.isOpen() ?? !control(`selection-${name}-chooser`).hidden;
+  const isOpen = (name: SurfaceName): boolean => nativeSurfaces.get(name)?.isOpen() ?? !localControl(`selection-${name}-chooser`).hidden;
   return {
     controls, session, view, state, select, event, open, isOpen, nativeSurfaces,
     execute, openProperties, openRelationships, openRange, selectMore, preparePitchDrag, cancelPitchDrag, resume, report, showError, success, afterSurfaceClose,
-    toolbar: control('selection-controls'), panel: (name: SurfaceName) => control(`selection-${name}-chooser`),
-    button: (id: string) => control<HTMLButtonElement>(id), field: (id: string) => control<HTMLSelectElement>(id),
-    error: (name: SurfaceName) => control(`selection-${name}-error`),
+    toolbar: localControl('selection-controls'), panel: (name: SurfaceName) => localControl(`selection-${name}-chooser`),
+    button: (id: string) => localControl<HTMLButtonElement>(id), field: (id: string) => localControl<HTMLSelectElement>(id),
+    error: (name: SurfaceName) => localControl(`selection-${name}-error`),
   };
 }
 
@@ -207,6 +211,97 @@ afterEach(() => {
   cleanups.splice(0).forEach(cleanup => cleanup());
   positionerMocks.records.splice(0); positionerMocks.create.mockClear();
   document.body.replaceChildren();
+});
+
+describe('isolated SelectionControls roots', () => {
+  it.each(['element', 'shadow'] as const)('applies only its %s-root selection, restores chooser focus, and disposes its handlers', kind => {
+    const global = fixture();
+    const globalProject = global.session.project;
+    const globalDuration = global.field('selection-duration');
+    const globalDurationValue = globalDuration.value;
+    const globalValue = global.button('selection-value');
+    const host = document.createElement('section');
+    document.body.append(host);
+    const root = kind === 'shadow' ? host.attachShadow({ mode: 'open' }) : host;
+    const mount = document.createElement('section');
+    root.append(mount);
+    const scoped = fixture(scoreHtml(note('n1', 'pitch="B4" duration="eighth"')), { mount, root });
+    const duration = scoped.field('selection-duration');
+    const invoker = scoped.button('selection-value');
+    const focused = () => root instanceof ShadowRoot ? root.activeElement : document.activeElement;
+
+    expect(control('selection-value')).toBe(globalValue);
+    expect(invoker).not.toBe(globalValue);
+    expect(duration).not.toBe(globalDuration);
+    scoped.open('value');
+    duration.focus();
+    expect(focused()).toBe(duration);
+    if (kind === 'shadow') expect(document.activeElement).toBe(host);
+    change(duration, 'half');
+    expect(scoped.execute).toHaveBeenCalledExactlyOnceWith({ type: 'set-events-property', eventIds: ['n1'],
+      change: { property: 'duration', value: 'half' } });
+    expect(scoped.event()).toMatchObject({ duration: 'half', pitches: [{ step: 'B', octave: 4, alter: 0 }] });
+    expect(scoped.session.revision).toBe(1);
+    expect(scoped.isOpen('value')).toBe(true);
+    expect(focused()).toBe(duration);
+    expect(global.session.project).toEqual(globalProject);
+    expect(global.session.revision).toBe(0);
+    expect(global.execute).not.toHaveBeenCalled();
+    expect(globalDuration.value).toBe(globalDurationValue);
+    expect(global.isOpen('value')).toBe(false);
+    expect(globalValue.getAttribute('aria-expanded')).toBe('false');
+
+    const restoreFocus = vi.spyOn(invoker, 'focus');
+    expect(scoped.controls.cancel('geometry')).toBe(true);
+    expect(scoped.isOpen('value')).toBe(false);
+    expect(focused()).toBe(invoker);
+    expect(restoreFocus).toHaveBeenLastCalledWith({ preventScroll: true });
+
+    scoped.open('value');
+    globalValue.focus();
+    expect(scoped.controls.cancel('geometry')).toBe(false);
+    expect(document.activeElement).toBe(globalValue);
+    expect(scoped.isOpen('value')).toBe(false);
+
+    scoped.open('value');
+    const accepted = scoped.session.project;
+    scoped.controls.dispose();
+    scoped.execute.mockClear();
+    scoped.openProperties.mockClear();
+    change(duration, 'quarter');
+    scoped.button('selection-sharp').click();
+    scoped.button('edit-selected-event').click();
+    invoker.click();
+    expect(scoped.execute).not.toHaveBeenCalled();
+    expect(scoped.openProperties).not.toHaveBeenCalled();
+    expect(scoped.session.project).toEqual(accepted);
+    expect(scoped.session.revision).toBe(1);
+    expect(scoped.controls.interacting).toBe(false);
+    expect(scoped.isOpen('value')).toBe(false);
+    expect(global.session.project).toEqual(globalProject);
+    expect(global.execute).not.toHaveBeenCalled();
+  });
+
+  it.each(['element', 'shadow'] as const)('preserves focus handed outside its %s root while a chooser closes', kind => {
+    const global = fixture();
+    const host = document.createElement('section');
+    document.body.append(host);
+    const root = kind === 'shadow' ? host.attachShadow({ mode: 'open' }) : host;
+    const mount = document.createElement('section');
+    root.append(mount);
+    const scoped = fixture(scoreHtml(), { mount, root });
+    scoped.open('value');
+    scoped.field('selection-duration').focus();
+    const outside = global.button('selection-value');
+    scoped.afterSurfaceClose.mockImplementation(() => { outside.focus(); });
+
+    expect(scoped.controls.cancel('geometry')).toBe(true);
+    expect(scoped.isOpen('value')).toBe(false);
+    expect(scoped.afterSurfaceClose).toHaveBeenCalledOnce();
+    expect(document.activeElement === outside, 'The closing callback keeps its new focus owner.').toBe(true);
+    expect(scoped.execute).not.toHaveBeenCalled();
+    expect(global.execute).not.toHaveBeenCalled();
+  });
 });
 
 describe('SelectionControls accepted values and musical transactions', () => {

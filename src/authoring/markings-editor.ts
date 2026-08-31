@@ -1,5 +1,9 @@
 import { compare, formatRational, rational } from '../model/index.js';
 import type { Annotation, Duration, Measure, MusicEvent, Staff } from '../model/types.js';
+import { renderNativeCheckboxes } from '../ui/native-checkboxes.js';
+import { renderNativeOptions } from '../ui/native-options.js';
+import { asControlScope } from './control-scope.js';
+import type { ControlRoot, ControlScope } from './control-scope.js';
 import type { EditorSession } from './editor.js';
 import { DraftStore } from './form-drafts.js';
 import type { DraftConflict, DraftTarget } from './form-drafts.js';
@@ -116,7 +120,7 @@ function recipientLabel(scope: InstructionScope | undefined, project: AuthorProj
  */
 export class MarkingsEditor {
   private readonly options: MarkingsEditorOptions;
-  private readonly document: Document;
+  private readonly scope: ControlScope;
   private readonly abort = new AbortController();
   private store = new DraftStore<{ markings: MarkingFields }>();
   private readonly newSeeds = new Map<string, NewSeed>();
@@ -136,9 +140,9 @@ export class MarkingsEditor {
   private ownAction = false;
   private disposed = false;
 
-  constructor(options: MarkingsEditorOptions, root: Document = document) {
+  constructor(options: MarkingsEditorOptions, root: ControlRoot = document) {
     this.options = options;
-    this.document = root;
+    this.scope = asControlScope(root);
     this.recipe = {
       kind: this.value('annotation-kind') as MarkingFields['kind'], text: '', at: '0',
       placement: this.value('annotation-placement') as MarkingFields['placement'],
@@ -220,7 +224,7 @@ export class MarkingsEditor {
   dispose(): void { this.disposed = true; this.abort.abort(); }
 
   private el<T extends HTMLElement = HTMLElement>(id: string): T {
-    const element = this.document.getElementById(id);
+    const element = this.scope.getElementById(id);
     if (!element) throw new Error(`Missing Markings control: ${id}`);
     return element as T;
   }
@@ -231,7 +235,7 @@ export class MarkingsEditor {
     if (field.value !== value) field.value = value;
   }
   private on(id: string, type: string, callback: () => void): void {
-    this.document.getElementById(id)?.addEventListener(type, () => {
+    this.scope.getElementById(id)?.addEventListener(type, () => {
       if (this.disposed) return;
       try { callback(); } catch (error) { this.feedback(error instanceof Error ? error.message : String(error), true); }
     }, { signal: this.abort.signal });
@@ -588,7 +592,7 @@ export class MarkingsEditor {
     const unchanged = !!location.annotation && (!resolution.changed
       || sameWrittenValue(values, annotationValues(location.annotation, this.options.session.project)));
     const session = this.options.session;
-    const focused = this.document.activeElement as HTMLElement | null;
+    const focused = this.scope.activeElement as HTMLElement | null;
     const origin = { staffId: location.staff.id, measureId: location.measure.id };
     let acceptedId = location.annotation?.id;
     this.ownAction = true;
@@ -772,18 +776,8 @@ export class MarkingsEditor {
     if (selected && selected !== placeholder && !options.some(option => option.value === selected)) {
       options.push({ value: selected, label: 'Original instruction unavailable', disabled: true });
     }
-    const signature = JSON.stringify(options);
-    if (select.dataset.markingOptions !== signature) {
-      for (const option of [...select.querySelectorAll('option')]) option.remove();
-      for (const item of options) {
-        const option = this.document.createElement('option');
-        option.value = item.value; option.textContent = item.label; option.disabled = item.disabled;
-        select.append(option);
-      }
-      select.dataset.markingOptions = signature;
-      enhanceSelects(select);
-    }
-    select.value = selected;
+    renderNativeOptions(select, options, selected);
+    enhanceSelects(select);
   }
 
   private renderRecipients(values: MarkingFields): void {
@@ -793,25 +787,17 @@ export class MarkingsEditor {
     const project = this.options.session.project;
     const parts = project.parts.map(part => ({ id: part.id, label: partLabel(part, project.parts), missing: false }));
     for (const id of selected) if (!parts.some(part => part.id === id)) parts.push({ id, label: `Missing part (${id})`, missing: true });
-    const signature = JSON.stringify(parts);
-    if (checks.dataset.markingParts !== signature) {
-      const fragment = this.document.createDocumentFragment();
-      for (const part of parts) {
-        const label = this.document.createElement('label'); label.className = 'check-field';
-        const input = this.document.createElement('input'); input.type = 'checkbox'; input.value = part.id;
-        input.dataset.missingPart = String(part.missing);
-        label.append(input, this.document.createTextNode(part.label)); fragment.append(label);
-      }
-      checks.replaceChildren(fragment);
-      checks.dataset.markingParts = signature;
+    const inputs = renderNativeCheckboxes(checks, parts.map(part => ({ value: part.id, label: part.label })));
+    for (const [index, input] of inputs.entries()) {
+      input.dataset.missingPart = String(parts[index].missing);
+      input.checked = selected.includes(input.value);
     }
-    for (const input of checks.querySelectorAll<HTMLInputElement>('input')) input.checked = selected.includes(input.value);
     checks.hidden = !Array.isArray(values.recipients);
   }
 
   private render(): void {
     if (this.disposed) return;
-    const focused = this.document.activeElement as HTMLElement | null;
+    const focused = this.scope.activeElement as HTMLElement | null;
     const snapshot = this.store.snapshot('markings');
     const values = snapshot.values;
     const location = this.boundLocation();
@@ -829,11 +815,11 @@ export class MarkingsEditor {
       for (const [name, id] of Object.entries(fieldIds) as [keyof typeof fieldIds, string][]) this.setValue(id, values[name]);
       this.renderRecipients(values);
     }
-    const targetLabel = this.document.getElementById('annotation-draft-target');
+    const targetLabel = this.scope.getElementById('annotation-draft-target');
     const heading = values ? `${editing ? 'Edit' : 'New'} ${kinds[values.kind]} · ${snapshot.label} · at ${values.at || '0'}` : 'Select a staff and bar.';
     if (targetLabel) targetLabel.textContent = heading;
     const tempo = values?.kind === 'tempo';
-    const tempoFields = this.document.getElementById('annotation-tempo-fields');
+    const tempoFields = this.scope.getElementById('annotation-tempo-fields');
     if (tempoFields) tempoFields.hidden = !tempo;
     for (const id of ['annotation-bpm', 'annotation-beat', 'annotation-dots']) {
       const label = this.el(id).closest('label');
@@ -849,30 +835,30 @@ export class MarkingsEditor {
       ['add-annotation', !editing], ['add-annotation-next', !editing],
       ['update-annotation', editing], ['update-annotation-next', editing], ['remove-annotation', editing],
     ] as const) {
-      const button = this.document.getElementById(id) as HTMLButtonElement | null;
+      const button = this.scope.getElementById(id) as HTMLButtonElement | null;
       if (!button) continue;
       button.hidden = !visible;
       button.disabled = !ready || (id === 'remove-annotation' && snapshot.dirty);
     }
-    const atSelection = this.document.getElementById('annotation-at-selection') as HTMLButtonElement | null;
+    const atSelection = this.scope.getElementById('annotation-at-selection') as HTMLButtonElement | null;
     if (atSelection) atSelection.disabled = unavailable || !!this.collision || !context.event
       || !location || location.measure.id !== context.measure.id || location.staff.id !== context.staff.id;
-    const atStart = this.document.getElementById('annotation-at-start') as HTMLButtonElement | null;
+    const atStart = this.scope.getElementById('annotation-at-start') as HTMLButtonElement | null;
     if (atStart) atStart.disabled = unavailable || !!this.collision;
-    const returnButton = this.document.getElementById('return-annotation-draft') as HTMLButtonElement | null;
+    const returnButton = this.scope.getElementById('return-annotation-draft') as HTMLButtonElement | null;
     if (returnButton) {
       returnButton.hidden = !snapshot.dirty || snapshot.matchesSelection;
       returnButton.disabled = unavailable;
     }
-    const discardButton = this.document.getElementById('discard-annotation-draft') as HTMLButtonElement | null;
+    const discardButton = this.scope.getElementById('discard-annotation-draft') as HTMLButtonElement | null;
     if (discardButton) discardButton.hidden = !snapshot.dirty && !unavailable && !this.pendingStart;
-    const reviewButton = this.document.getElementById('review-annotation-draft') as HTMLButtonElement | null;
+    const reviewButton = this.scope.getElementById('review-annotation-draft') as HTMLButtonElement | null;
     if (reviewButton) {
       reviewButton.hidden = !(recipientConflict && !recipientConflict.missing)
         && (!formConflict || (!!this.collision && !this.hasOtherConflict(snapshot.conflicts)));
       reviewButton.disabled = unavailable || !!recipientConflict?.missing;
     }
-    const newButton = this.document.getElementById('new-annotation');
+    const newButton = this.scope.getElementById('new-annotation');
     if (newButton) {
       newButton.textContent = this.collision && snapshot.dirty ? 'Keep draft as New' : 'New instruction';
       newButton.hidden = !editing && !this.collision;
@@ -904,7 +890,7 @@ export class MarkingsEditor {
     for (const id of this.newSeeds.keys()) if (id !== snapshot.targetId && id !== this.explicitTarget?.id) this.newSeeds.delete(id);
     if (focused && panel.contains(focused) && !panel.closest('[hidden], [inert]')
       && (focused.hidden || focused.matches(':disabled') || focused.closest('label[hidden]'))) {
-      const apply = this.document.getElementById(editing ? 'update-annotation' : 'add-annotation') as HTMLButtonElement | null;
+      const apply = this.scope.getElementById(editing ? 'update-annotation' : 'add-annotation') as HTMLButtonElement | null;
       const text = this.el<HTMLTextAreaElement>('annotation-text');
       const chooser = this.el<HTMLSelectElement>('annotation-select');
       if (focused.id === 'review-annotation-draft' && apply && !apply.hidden && !apply.disabled) focusInTools(apply);

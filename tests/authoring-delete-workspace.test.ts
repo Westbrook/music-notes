@@ -4,14 +4,13 @@
  * Only engraving dispatch is stubbed. Public notation-select events verify the
  * app's focus handoff; these are not trusted browser or glyph hit-test claims.
  */
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import { pitchText } from '../src/model/index.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const source = `<music-staff id="lead" label="Lead">
   <music-measure id="bar-12" number="12"><music-voice id="voice-12">
     <music-note id="a" pitch="F4" duration="quarter"><music-articulation id="a-accent" type="accent"></music-articulation><music-ornament id="a-turn" type="turn"></music-ornament></music-note>
@@ -25,19 +24,22 @@ let app: AuthorWorkspace | undefined;
 let sequence = 0;
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id); if (!element) throw new Error(`Missing actual Author control #${id}.`); return element as T;
+  const element = findAuthorControl<T>(document, id); if (!element) throw new Error(`Missing actual Author control #${id}.`); return element;
 }
 function available(element: HTMLElement): boolean {
-  if (element.closest('[hidden],[inert],[aria-hidden="true"]') || element.matches(':disabled')) return false;
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-    if (parent instanceof HTMLDetailsElement && !parent.open && !parent.querySelector(':scope > summary')?.contains(element)) return false;
+  if (element.matches(':disabled')) return false;
+  let child = element;
+  for (let parent: HTMLElement | null = element; parent; parent = authorControlParent(parent)) {
+    if (parent.matches('[hidden],[inert],[aria-hidden="true"]')) return false;
+    if (parent instanceof HTMLDetailsElement && !parent.open && !parent.querySelector(':scope > summary')?.contains(child)) return false;
+    child = parent;
   }
   return true;
 }
 async function flush(): Promise<void> { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
 async function disclose(element: HTMLElement): Promise<void> {
   const parents: HTMLDetailsElement[] = [];
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parents.unshift(parent);
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) if (parent instanceof HTMLDetailsElement) parents.unshift(parent);
   for (const details of parents) if (!details.open) { const summary = details.querySelector<HTMLElement>(':scope > summary'); expect(summary).not.toBeNull(); expect(available(summary!)).toBe(true); summary!.click(); await flush(); expect(details.open).toBe(true); }
 }
 async function click(id: string): Promise<void> { const target = el(id); await disclose(target); expect(available(target), `#${id} is available`).toBe(true); target.click(); await flush(); }
@@ -61,7 +63,7 @@ async function select(id: string, modifiers: { ctrlKey?: boolean; shiftKey?: boo
   } })); await flush();
 }
 /** Do not focus the score here: successful selection must have done that itself. */
-async function press(value: string, options: KeyboardEventInit = {}, target = document.activeElement): Promise<KeyboardEvent> {
+async function press(value: string, options: KeyboardEventInit = {}, target = authorActiveElement(document)): Promise<KeyboardEvent> {
   expect(target).toBeInstanceOf(HTMLElement);
   const event = new KeyboardEvent('keydown', { key: value, bubbles: true, composed: true, cancelable: true, ...options }); target!.dispatchEvent(event); await flush(); return event;
 }
@@ -92,7 +94,7 @@ async function undoDeletion(before: ReturnType<typeof accepted>): Promise<void> 
 }
 
 beforeEach(() => {
-  for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name); document.body.innerHTML = shell;
+  for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name); mountAuthorFixture();
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64'); window.getSelection()?.removeAllRanges();
 });
@@ -100,8 +102,8 @@ afterEach(async () => { app?.dispose(); app = undefined; await flush(); vi.resto
 
 describe('selected-note deletion follows the actual score focus handoff', () => {
   it.each(keys)('%s removes only the clicked note, leaves other voices unchanged, and restores source plus selection with one Undo', async key => {
-    mount(); await futureRecipe(); el('document-menu-trigger').focus(); expect(document.activeElement).toBe(el('document-menu-trigger'));
-    await select('b'); expect(document.activeElement).toBe(el('score-editor')); const before = accepted(), lower = structuredClone(voice(0, 1));
+    mount(); await futureRecipe(); el('document-menu-trigger').focus(); expect(authorActiveElement(document)).toBe(el('document-menu-trigger'));
+    await select('b'); expect(authorActiveElement(document)).toBe(el('score-editor')); const before = accepted(), lower = structuredClone(voice(0, 1));
     const deleted = await press(key); expect(event('b')).toBeUndefined(); expect(deleted.defaultPrevented).toBe(true);
     expect(voice().events.map(item => item.id)).toEqual(['a', 'c', 'd']); expect(voice(0, 1)).toEqual(lower);
     expect(voice().events.map(item => item.onset)).toEqual([{ numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 2 }]);
@@ -112,7 +114,7 @@ describe('selected-note deletion follows the actual score focus handoff', () => 
   });
   it.each(keys)('%s deletes selected B despite a held dirty Properties draft for A, without applying or discarding that draft', async key => {
     mount(); await futureRecipe(); await select('a'); await click('edit-selected-event'); await field('selected-pitch', 'Gqf4'); await select('b');
-    expect(document.activeElement).toBe(el('score-editor')); expect(el('selection-inspector').dataset.draftTarget).toBe('a'); expect(el<HTMLButtonElement>('remove-event').disabled).toBe(true);
+    expect(authorActiveElement(document)).toBe(el('score-editor')); expect(el('selection-inspector').dataset.draftTarget).toBe('a'); expect(el<HTMLButtonElement>('remove-event').disabled).toBe(true);
     const before = accepted(); await press(key); expect(event('b')).toBeUndefined(); expect(event('a')?.pitches.map(pitchText)).toEqual(['F4']);
     expect(el('selection-inspector').dataset.draftTarget).toBe('a'); expect(el<HTMLInputElement>('selected-pitch').value).toBe('Gqf4'); expect(el('selection-inspector').dataset.draftState).toBe('dirty');
     expect(app!.session.revision).toBe(before.revision + 1); expect(app!.session.cursor).toEqual(before.cursor); expect(recipe()).toEqual(before.recipe);
@@ -123,7 +125,7 @@ describe('selected-note deletion follows the actual score focus handoff', () => 
 describe('deletion preserves musical structure and exact selected membership', () => {
   it.each(keys)('%s removes a disjoint exact set in one Undo without deleting its holes or another voice', async key => {
     mount(); await futureRecipe(); await select('a'); await select('c', { ctrlKey: true });
-    expect(app!.session.selection.ids).toEqual(['a', 'c']); expect(document.activeElement).toBe(el('score-editor'));
+    expect(app!.session.selection.ids).toEqual(['a', 'c']); expect(authorActiveElement(document)).toBe(el('score-editor'));
     const before = accepted(), lower = structuredClone(voice(0, 1)); const deleted = await press(key);
     expect(deleted.defaultPrevented).toBe(true); expect(voice().events.map(item => item.id)).toEqual(['b', 'd']);
     expect(voice().events.map(item => item.pitches.map(pitchText))).toEqual([['G4'], ['Bb4']]); expect(voice(0, 1)).toEqual(lower);
@@ -133,7 +135,7 @@ describe('deletion preserves musical structure and exact selected membership', (
   });
   it.each(keys)('%s leaves a blank incomplete voice when removing its sole note, without inventing replacement music', async key => {
     mount(); await futureRecipe(); await select('solo'); const before = accepted(), firstVoice = structuredClone(voice());
-    expect(document.activeElement).toBe(el('score-editor')); await press(key); expect(event('solo')).toBeUndefined();
+    expect(authorActiveElement(document)).toBe(el('score-editor')); await press(key); expect(event('solo')).toBeUndefined();
     const measure = app!.session.score.staves[0].measures[1]; expect(measure.id).toBe('bar-13'); expect(measure.number).toBe('13');
     expect(measure.voices).toHaveLength(1); expect(voice(1).id).toBe('voice-13'); expect(voice(1).events).toEqual([]); expect(measure.incomplete).toBe(true);
     expect(app!.session.source.querySelector('#voice-13')).not.toBeNull(); expect(app!.session.source.querySelector('#voice-13 music-rest')).toBeNull(); expect(voice()).toEqual(firstVoice);
@@ -163,7 +165,7 @@ describe('deletion preserves musical structure and exact selected membership', (
   });
   it.each(keys)('%s on an exact attached mark removes only that child and restores it with one Undo', async key => {
     mount(); await futureRecipe(); await select('a-turn'); expect(el('score-editor').dataset.activeMarkingId).toBe('a-turn');
-    expect(document.activeElement).toBe(el('score-editor')); const before = accepted(), owner = structuredClone(event('a')!), sibling = structuredClone(event('b'));
+    expect(authorActiveElement(document)).toBe(el('score-editor')); const before = accepted(), owner = structuredClone(event('a')!), sibling = structuredClone(event('b'));
     await press(key); expect(event('a')).toBeDefined(); expect(event('a')?.markings).toEqual(owner.markings?.filter(mark => mark.id !== 'a-turn'));
     const { markings: _oldMarks, ...oldMusic } = owner, { markings: _newMarks, ...newMusic } = event('a')!; expect(newMusic).toEqual(oldMusic);
     expect(event('b')).toEqual(sibling); expect(app!.session.source.querySelector('#a-turn')).toBeNull(); expect(app!.session.source.querySelector('#a-accent')).not.toBeNull();
@@ -175,7 +177,7 @@ describe('deletion preserves musical structure and exact selected membership', (
 describe('written rests, blank voices and deliberate recovery', () => {
   it.each(keys)('%s removes a written rest and its fermata without replacing it or changing other voices', async key => {
     mount(source.replace('<music-note id="b" pitch="G4" duration="quarter"></music-note>', '<music-rest id="b" duration="quarter"><music-articulation id="rest-fermata" type="fermata"></music-articulation></music-rest>'));
-    await futureRecipe(); await select('b'); expect(document.activeElement).toBe(el('score-editor'));
+    await futureRecipe(); await select('b'); expect(authorActiveElement(document)).toBe(el('score-editor'));
     const before = accepted(), lower = structuredClone(voice(0, 1)), rest = structuredClone(event('b'));
     const deleted = await press(key); expect(deleted.defaultPrevented).toBe(true); expect(event('b')).toBeUndefined(); expect(app!.session.source.querySelector('#rest-fermata')).toBeNull();
     expect(voice().events.map(item => item.id)).toEqual(['a', 'c', 'd']); expect(voice().events.some(item => item.kind === 'rest')).toBe(false); expect(voice(0, 1)).toEqual(lower);
@@ -270,7 +272,7 @@ describe('native controls and prose own their deletion keys', () => {
     { name: 'Shift', shiftKey: true }, { name: 'Control', ctrlKey: true }, { name: 'Command', metaKey: true }, { name: 'Alt', altKey: true },
     { name: 'composition', isComposing: true },
   ])('ignores $name modified deletion without consuming or changing the current musical selection', async ({ name: _name, ...options }) => {
-    mount(); await select('b'); expect(document.activeElement).toBe(el('score-editor')); const before = accepted();
+    mount(); await select('b'); expect(authorActiveElement(document)).toBe(el('score-editor')); const before = accepted();
     for (const key of keys) { const untouched = await press(key, options); expect(untouched.defaultPrevented).toBe(false); unchanged(before); }
   });
   it('consumes held deletion repeats without cascading into the newly selected surviving neighbor', async () => {
@@ -301,7 +303,7 @@ describe('deletion admission respects mode, gestures and current source identity
     mount(); await futureRecipe(); const writing = app!.session.cursor;
     await select('b'); await click('toggle-entry'); expect(app!.session.cursor).toEqual(writing);
     await click('insert-event'); expect(el('toggle-entry').getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(el('score-editor')); expect(event(app!.session.cursor!.eventId!)?.kind).toBe('note'); const before = accepted();
+    expect(authorActiveElement(document)).toBe(el('score-editor')); expect(event(app!.session.cursor!.eventId!)?.kind).toBe('note'); const before = accepted();
     for (const key of keys) { const entry = await press(key); expect(entry.defaultPrevented).toBe(false); unchanged(before); }
   });
   it('does not delete while the actual Prepare pitch drag action remains armed', async () => {
@@ -337,20 +339,20 @@ describe('deletion admission respects mode, gestures and current source identity
     expect(app!.session.selection.ids).toEqual([]); expect(event('b')).toBeUndefined(); const before = accepted();
     // Return keyboard focus to the now-unselected score without choosing a note.
     el('score-editor').focus(); for (const key of keys) { await press(key); unchanged(before); }
-    expect(voice().events.map(item => item.id)).toEqual(['a', 'c', 'd']); await select('c'); expect(document.activeElement).toBe(el('score-editor'));
+    expect(voice().events.map(item => item.id)).toEqual(['a', 'c', 'd']); await select('c'); expect(authorActiveElement(document)).toBe(el('score-editor'));
     const explicit = accepted(); await press('Delete'); expect(event('c')).toBeUndefined(); expect(app!.session.revision).toBe(explicit.revision + 1); await undoDeletion(explicit);
   });
 });
 
 describe('fresh text gestures relinquish score shortcuts without clearing browser selection', () => {
   it.each(keys)('a fresh prose selectstart keeps %s native; a later deliberate note selection can delete despite the retained Range', async key => {
-    mount(); await select('b'); expect(document.activeElement).toBe(el('score-editor')); const beforeText = accepted();
+    mount(); await select('b'); expect(authorActiveElement(document)).toBe(el('score-editor')); const beforeText = accepted();
     const prose = el('keyboard-help'); const textStart = new Event('selectstart', { bubbles: true, composed: true, cancelable: true }); prose.dispatchEvent(textStart); await flush();
-    expect(textStart.defaultPrevented).toBe(false); expect(document.activeElement).not.toBe(el('score-editor')); expect(document.activeElement).not.toBe(el('score-scroll')); unchanged(beforeText);
+    expect(textStart.defaultPrevented).toBe(false); expect(authorActiveElement(document)).not.toBe(el('score-editor')); expect(authorActiveElement(document)).not.toBe(el('score-scroll')); unchanged(beforeText);
     const browserSelection = window.getSelection()!, range = document.createRange(); range.selectNodeContents(prose); browserSelection.addRange(range);
     const text = browserSelection.toString(); expect(text.length).toBeGreaterThan(0); expect(browserSelection.isCollapsed).toBe(false);
     const native = await press(key); expect(native.defaultPrevented).toBe(false); unchanged(beforeText); expect(browserSelection.toString()).toBe(text);
-    await select('b'); expect(document.activeElement).toBe(el('score-editor')); expect(browserSelection.toString()).toBe(text); const beforeDeletion = accepted();
+    await select('b'); expect(authorActiveElement(document)).toBe(el('score-editor')); expect(browserSelection.toString()).toBe(text); const beforeDeletion = accepted();
     const musical = await press(key); expect(musical.defaultPrevented).toBe(true); expect(event('b')).toBeUndefined();
     expect(app!.session.revision).toBe(beforeDeletion.revision + 1); expect(browserSelection.toString()).toBe(text); await undoDeletion(beforeDeletion);
   });
@@ -358,15 +360,15 @@ describe('fresh text gestures relinquish score shortcuts without clearing browse
     mount(); await select('b'); const prose = el('keyboard-help');
     const selectText = async () => { const gesture = new Event('selectstart', { bubbles: true, composed: true, cancelable: true }); prose.dispatchEvent(gesture); await flush(); expect(gesture.defaultPrevented).toBe(false); };
     await selectText(); const selection = window.getSelection()!, range = document.createRange(); range.selectNodeContents(prose); selection.addRange(range);
-    const text = selection.toString(); await select('b'); expect(document.activeElement).toBe(el('score-editor')); const before = accepted();
-    await selectText(); expect(document.activeElement).not.toBe(el('score-editor')); expect(selection.toString()).toBe(text);
+    const text = selection.toString(); await select('b'); expect(authorActiveElement(document)).toBe(el('score-editor')); const before = accepted();
+    await selectText(); expect(authorActiveElement(document)).not.toBe(el('score-editor')); expect(selection.toString()).toBe(text);
     for (const key of keys) { const native = await press(key); expect(native.defaultPrevented).toBe(false); unchanged(before); } expect(selection.toString()).toBe(text);
   });
   it('a native field selectstart preserves its focus and selection offsets instead of blurring it', async () => {
     mount(); await select('b'); await click('edit-selected-event'); await field('selected-pitch', 'Gqf5');
     const input = el<HTMLInputElement>('selected-pitch'); input.focus(); input.setSelectionRange(1, 3); const before = accepted();
     const gesture = new Event('selectstart', { bubbles: true, composed: true, cancelable: true }); input.dispatchEvent(gesture); await flush();
-    expect(gesture.defaultPrevented).toBe(false); expect(document.activeElement).toBe(input); expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
+    expect(gesture.defaultPrevented).toBe(false); expect(authorActiveElement(document)).toBe(input); expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
     for (const key of keys) { const native = await press(key); expect(native.defaultPrevented).toBe(false); unchanged(before); } expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
   });
 });

@@ -1,19 +1,25 @@
 // @vitest-environment happy-dom
+import { createAuthorFixtureDocument, findAuthorControl } from './author-fixture.js';
+import { AuthorWorkspaceFrame } from '../src/authoring/ui/workspace-frame.js';
+import { AuthorViewSwitch } from '../src/authoring/ui/view-switch.js';
+import { MusicSourceEditor } from '../src/authoring/ui/source-editor.js';
+import { composedAncestors } from '../src/ui/composed-dom.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import authorHtml from '../author.html?raw';
 
 const authorCss = readFileSync('src/authoring/author.css', 'utf8');
+const workspaceCss = AuthorWorkspaceFrame.styles.cssText;
+const viewSwitchCss = AuthorViewSwitch.styles.cssText;
+const sourceEditorCss = MusicSourceEditor.styles.cssText;
 // Test authored structure without loading fonts, application code, or score assets.
 // Real layout, scrolling, native picker behavior, and focus transitions belong
 // to the browser suites; happy-dom does not establish those guarantees.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 let shell: Document;
 
-beforeEach(() => { shell = new DOMParser().parseFromString(shellMarkup, 'text/html'); });
+beforeEach(() => { shell = createAuthorFixtureDocument(); });
 
 function element(id: string): HTMLElement {
-  const result = shell.getElementById(id);
+  const result = findAuthorControl(shell, id);
   expect(result, `Missing shell element #${id}`).not.toBeNull();
   return result!;
 }
@@ -890,12 +896,14 @@ describe('score-first authoring shell markup', () => {
     const input = element('source-input');
     const error = element('source-error');
     const status = element('source-status');
-    const body = input.closest('.popover-body');
+    const body = [...composedAncestors(input)].find(element => element.matches('.popover-body'));
     expect(input.tagName).toBe('TEXTAREA');
-    expect(body).not.toBeNull();
-    expect(panel.contains(body)).toBe(true);
-    expect(error.closest('.popover-body')).toBe(body);
-    expect(error.closest('[popover]')).toBe(panel);
+    expect(body).toBeDefined();
+    expect(panel.contains(body!)).toBe(true);
+    expect([...composedAncestors(error)].find(element => element.matches('.popover-body'))).toBe(body);
+    expect([...composedAncestors(error)].find(element => element.hasAttribute('popover'))).toBe(panel);
+    expect(input.getRootNode()).toBe(element('source-editor').shadowRoot);
+    expect(error.getRootNode()).toBe(input.getRootNode());
     expect(input.nextElementSibling).toBe(error);
     expect(error.nextElementSibling).toBe(status);
     expect(error.getAttribute('role')).toBe('alert');
@@ -1320,9 +1328,9 @@ describe('stable writing palette CSS contract', () => {
     expect(root).toMatch(/color:\s*var\(--author-ink\);/);
     expect(root).toMatch(/background:\s*var\(--author-chrome\);/);
     expect(root).toMatch(/--focus:\s*var\(--author-focus\);/);
-    const frame = declarationsFor('#author-workbench > .score-editor');
-    expect(frame).toMatch(/background:\s*var\(--author-paper\);/);
-    expect(frame).toMatch(/color:\s*var\(--author-ink\);/);
+    const frame = declarationsFor('::slotted([slot="score"])', workspaceCss);
+    expect(frame).toMatch(/background:\s*var\(--author-paper,\s*#fff\);/);
+    expect(frame).toMatch(/color:\s*var\(--author-ink,\s*#20252b\);/);
     expect(declarationsFor('#workspace-dock')).toMatch(/background:\s*var\(--paper\);/);
     expect(declarationsFor('.palette-slot > button')).toMatch(/color:\s*var\(--author-control-ink\);/);
     for (const kind of ['warning', 'error']) {
@@ -1355,12 +1363,12 @@ describe('stable writing palette CSS contract', () => {
   });
 
   it('binds the chosen writing-frame width independently from side or sheet presentation', () => {
-    const frame = declarationsFor('#author-workbench > .score-editor');
+    const frame = declarationsFor('::slotted([slot="score"])', workspaceCss);
     expect(frame).toMatch(/(?:width|inline-size):\s*var\(--writing-frame-width(?:,[^;]+)?\);/);
-    expect(authorCss).toMatch(/--tools-pane-width:\s*320px;/);
-    expect(authorCss).toMatch(/--writing-frame-gap:\s*16px;/);
+    expect(workspaceCss).toMatch(/--tools-pane-width:\s*320px;/);
+    expect(workspaceCss).toMatch(/--writing-frame-gap:\s*16px;/);
     for (const presentation of ['closed', 'side', 'sheet']) {
-      expect(authorCss).toContain(`[data-tools-presentation="${presentation}"]`);
+      expect(workspaceCss).toContain(`[tools-presentation="${presentation}"]`);
     }
     for (const rule of leafRules()) {
       if (!/data-tools-(?:open|expanded|presentation)/.test(rule.selector)) continue;
@@ -1372,9 +1380,19 @@ describe('stable writing palette CSS contract', () => {
 });
 
 describe('score-first authoring CSS contract', () => {
+  it('keeps score-region padding owned by the frame at every width and view', () => {
+    expect(declarationsFor('::slotted([slot="score"])', workspaceCss)).toMatch(/padding:\s*0;/);
+    // Normal document rules win over ::slotted declarations, regardless of
+    // specificity. An old phone/read padding rule stole 26px from the score.
+    for (const rule of leafRules()) {
+      if (!/(?:#|\.)score-editor\b/.test(rule.selector)) continue;
+      expect(rule.declarations, rule.selector).not.toMatch(/(?:^|;)\s*padding(?:-[\w-]+)?\s*:/);
+    }
+  });
+
   it('shares header spacing and full-size controls while allowing the palette to grow with text', () => {
     const dock = declarationsFor('#workspace-dock');
-    expect(dock).toMatch(/grid-area:\s*dock;/);
+    expect(declarationsFor('::slotted([slot="palette"])', workspaceCss)).toMatch(/grid-area:\s*dock;/);
     expect(dock).toMatch(/display:\s*grid;/);
     expect(declarationsFor('body:has(#author-workbench)')).toMatch(/--author-control-size:\s*max\(44px,\s*2\.75rem\);/);
     expect(dock).toMatch(/--palette-control-size:\s*var\(--author-control-size\);/);
@@ -1386,9 +1404,8 @@ describe('score-first authoring CSS contract', () => {
       expect(bar, selector).toMatch(/padding:\s*6px\s+12px;/);
       expect(bar, selector).toMatch(/gap:\s*14px;/);
     }
-    for (const selector of ['body:has(#author-workbench) .view-switch button', '#workspace-mode-slot > button']) {
-      expect(declarationsFor(selector), selector).toMatch(/padding:\s*6px\s+11px;/);
-    }
+    expect(declarationsFor('button', viewSwitchCss)).toMatch(/padding:\s*6px\s+11px;/);
+    expect(declarationsFor('#workspace-mode-slot > button')).toMatch(/padding:\s*6px\s+11px;/);
     for (const selector of ['body:has(#author-workbench) .header-actions button', '.palette-slot > button', '#palette-more-slot > button']) {
       expect(declarationsFor(selector), selector).toMatch(/padding:\s*7px\s+9px;/);
     }
@@ -1398,14 +1415,14 @@ describe('score-first authoring CSS contract', () => {
   });
 
   it('places a side task after the independently chosen frame without adding a wrapping breakpoint', () => {
-    const workbench = declarationsFor('.author-workbench');
+    const workbench = declarationsFor(':host', workspaceCss);
     expect(workbench).toMatch(/--tools-pane-width:\s*320px;/);
     expect(workbench).toMatch(/--writing-frame-gap:\s*16px;/);
-    const side = declarationsFor('body[data-tools-presentation="side"] .workspace-tools');
+    const side = declarationsFor(':host([tools-presentation="side"]) ::slotted([slot="tools"])', workspaceCss);
     expect(side).toMatch(/width:\s*var\(--tools-pane-width\);/);
     expect(side).toMatch(/margin-inline-start:\s*calc\(var\(--writing-frame-width\)\s*\+\s*var\(--writing-frame-gap\)\);/);
-    expect(declarationsFor('.workspace-tools')).toMatch(/grid-area:\s*score;/);
-    expect(declarationsFor('#author-workbench > .score-editor')).toMatch(/justify-self:\s*start;/);
+    expect(declarationsFor('::slotted([slot="tools"])', workspaceCss)).toMatch(/grid-area:\s*score;/);
+    expect(declarationsFor('::slotted([slot="score"])', workspaceCss)).toMatch(/justify-self:\s*start;/);
     for (const { selector, declarations } of leafRules()) {
       if (!/data-tools-(?:open|expanded|presentation)/.test(selector)) continue;
       expect(declarations, selector).not.toMatch(/--writing-frame-width\s*:/);
@@ -1446,16 +1463,16 @@ describe('score-first authoring CSS contract', () => {
       expect(normal, selector).toMatch(new RegExp(`grid-column:\\s*${column};`));
       expect(normal, selector).toMatch(/grid-row:\s*1;/);
     }
-    expect(declarationsFor('#author-workbench > .score-editor')).toMatch(/grid-area:\s*score;/);
-    expect(declarationsFor('#workspace-dock')).toMatch(/grid-area:\s*dock;/);
-    const sheet = declarationsFor('body[data-tools-presentation="sheet"] #score-editor');
+    expect(declarationsFor('::slotted([slot="score"])', workspaceCss)).toMatch(/grid-area:\s*score;/);
+    expect(declarationsFor('::slotted([slot="palette"])', workspaceCss)).toMatch(/grid-area:\s*dock;/);
+    const sheet = declarationsFor(':host([tools-presentation="sheet"]) ::slotted([slot="score"])', workspaceCss);
     expect(sheet).toMatch(/visibility:\s*hidden;/);
     expect(sheet).toMatch(/pointer-events:\s*none;/);
     expect(sheet).not.toMatch(/display:\s*none|(?:width|inline-size)\s*:/);
-    const task = declarationsFor('body[data-tools-presentation="sheet"] .workspace-tools');
+    const task = declarationsFor(':host([tools-presentation="sheet"]) ::slotted([slot="tools"])', workspaceCss);
     expect(task).toMatch(/width:\s*100%;/);
     expect(task).toMatch(/margin-inline-start:\s*0;/);
-    expect(declarationsFor('body[data-tools-presentation="closed"] .workspace-tools')).toMatch(/display:\s*none;/);
+    expect(declarationsFor(':host([tools-presentation="closed"]) ::slotted([slot="tools"])', workspaceCss)).toMatch(/display:\s*none\s*!important;/);
     for (const id of ['entry-toolbar', 'workspace-dock', 'workspace-mode-slot', 'pointer-tools', 'palette-more-slot']) {
       for (const rule of rulesFor(`body[data-tools-presentation="sheet"] #${id}`)) {
         expect(rule).not.toMatch(/(?:display:\s*none|visibility:\s*hidden)/);
@@ -1468,17 +1485,20 @@ describe('score-first authoring CSS contract', () => {
     expect(body).toMatch(/height:\s*100vh;/);
     expect(body).toMatch(/height:\s*100dvh;/);
     expect(body).toMatch(/overflow:\s*hidden;/);
-    for (const selector of ['body:has(#author-workbench) .author-workspace', '.author-workbench', '#author-workbench > .score-editor']) {
-      const rule = rulesFor(selector)[0] ?? '';
+    for (const [selector, stylesheet] of [
+      ['body:has(#author-workbench) .author-workspace', authorCss],
+      [':host', workspaceCss], ['::slotted([slot="score"])', workspaceCss],
+    ]) {
+      const rule = rulesFor(selector, stylesheet)[0] ?? '';
       expect(rule, selector).toMatch(/min-height:\s*0;/);
       expect(rule, selector).toMatch(/overflow:\s*hidden;/);
     }
-    expect(declarationsFor('#author-workbench > .score-editor')).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\);/);
-    expect(declarationsFor('.author-workbench')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\);/);
-    expect(declarationsFor('.author-workbench')).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/);
-    expect(declarationsFor('.author-workbench')).toMatch(/grid-template-areas:\s*"score"\s+"dock";/);
-    expect(declarationsFor('.author-workbench')).toMatch(/gap:\s*0;/);
-    expect(declarationsFor('.author-workbench')).toMatch(/container:\s*author-workbench\s*\/\s*inline-size;/);
+    expect(declarationsFor('::slotted([slot="score"])', workspaceCss)).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\);/);
+    expect(declarationsFor(':host', workspaceCss)).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+    expect(declarationsFor(':host', workspaceCss)).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/);
+    expect(declarationsFor(':host', workspaceCss)).toMatch(/grid-template-areas:\s*"score"\s+"dock";/);
+    expect(declarationsFor(':host', workspaceCss)).toMatch(/gap:\s*0;/);
+    expect(declarationsFor(':host', workspaceCss)).toMatch(/container:\s*author-workbench\s*\/\s*inline-size;/);
     expect(declarationsFor('*')).toMatch(/box-sizing:\s*border-box;/);
     expect(rulesFor('body:has(#author-workbench) .author-workspace')[0]).toMatch(/padding:\s*8px\s+0\s+0;/);
   });
@@ -1518,20 +1538,22 @@ describe('score-first authoring CSS contract', () => {
     for (const selector of [
       'body:not([data-entry-mode="true"]) #entry-toolbar',
       'body[data-entry-mode="true"] #pointer-tools',
-      'body:not([data-view="write"]) #workspace-dock',
       'body:not([data-entry-mode="true"]) #palette-more-slot #tools-toggle',
       'body[data-entry-mode="true"] #palette-more-slot #edit-selected-event',
-      'body[data-view="read"] #workspace-tools',
-      'body[data-view="pages"] #author-workbench',
     ]) expect(declarationsFor(selector)).toMatch(/display:\s*none;/);
+    for (const selector of [
+      ':host(:not([mode="write"])) ::slotted([slot="palette"])',
+      ':host(:not([mode="write"])) ::slotted([slot="tools"])',
+      ':host([mode="pages"])',
+    ]) expect(declarationsFor(selector, workspaceCss)).toMatch(/display:\s*none(?:\s*!important)?;/);
     for (const id of ['selection-context', 'selection-controls-context']) {
       expect(button('location-trigger').contains(element(id))).toBe(true);
       expect(element(id).classList.contains('visually-hidden')).toBe(true);
       expect(element(id).closest('[aria-hidden="true"]')).toBeNull();
     }
     expect(button('location-trigger').contains(element('palette-owner-label'))).toBe(true);
-    expect(declarationsFor('body[data-view="read"] #score-editor')).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\);/);
-    expect(declarationsFor('body[data-view="read"] #author-workbench')).toMatch(/grid-template-areas:\s*"score";/);
+    expect(declarationsFor('::slotted([slot="score"])', workspaceCss)).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\);/);
+    expect(declarationsFor(':host([mode="read"])', workspaceCss)).toMatch(/grid-template-areas:\s*"score";/);
   });
 
   it('uses the same musical columns with a container fallback that responds to width and larger root text', () => {
@@ -1844,15 +1866,15 @@ describe('score-first authoring CSS contract', () => {
   });
 
   it('lets complete Source error messages wrap within the existing Source scroll region', () => {
-    const error = declarationsFor('#source-panel #source-error');
+    const error = declarationsFor('#source-error', sourceEditorCss);
     expect(error).toMatch(/flex:\s*none;/);
     expect(error).toMatch(/max-height:\s*none;/);
     expect(error).toMatch(/overflow:\s*visible;/);
     expect(error).toMatch(/white-space:\s*pre-wrap;/);
     expect(error).toMatch(/overflow-wrap:\s*anywhere;/);
     expect(error).not.toMatch(/(?:text-overflow:\s*ellipsis|line-clamp\s*:)/);
-    const body = element('source-error').closest('.popover-body');
-    expect(body).not.toBeNull();
+    const body = [...composedAncestors(element('source-error'))].find(element => element.matches('.popover-body'));
+    expect(body).toBeDefined();
     expect(declarationsFor('.popover-body')).toMatch(/min-height:\s*0;/);
     expect(declarationsFor('.popover-body')).toMatch(/overflow:\s*auto;/);
   });

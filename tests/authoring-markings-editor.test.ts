@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { MarkingsEditor } from '../src/authoring/markings-editor.js';
 import type { MarkingsContext } from '../src/authoring/markings-editor.js';
@@ -10,7 +10,6 @@ import type { AuthorProject, ViewMode } from '../src/authoring/types.js';
 import { formatRational } from '../src/model/index.js';
 
 const cleanup: (() => void)[] = [];
-const authorShell = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const option = (value: string) => `<option value="${value}">${value || 'New'}</option>`;
 const selectMarkup = (id: string, values: string[]) => `<label for="${id}">${id}<select id="${id}">${values.map(option).join('')}</select></label>`;
 const shell = `<button id="add-chord-symbol" type="button">Add chord symbol</button><section id="annotation-inspector">
@@ -66,9 +65,11 @@ function project(html = score()): AuthorProject {
   ]);
 }
 
-function fixture(input = project(), initial = 'n1a', markup = shell) {
-  document.body.innerHTML = markup;
-  enhanceSelects(document);
+function fixture(input = project(), initial = 'n1a', markup: string | (() => void) = shell,
+  root: Document | HTMLElement | ShadowRoot = document) {
+  if (typeof markup === 'function') markup();
+  else document.body.innerHTML = markup;
+  enhanceSelects(root);
   const session = new EditorSession(input);
   session.select(initial);
   const state = { mode: 'write' as ViewMode, autoRefresh: true };
@@ -86,18 +87,60 @@ function fixture(input = project(), initial = 'n1a', markup = shell) {
   const openTools = vi.fn();
   const report = vi.fn();
   const onDraftChange = vi.fn();
-  const editor = new MarkingsEditor({ session, context, select, openTools, report, onDraftChange });
+  const editor = new MarkingsEditor({ session, context, select, openTools, report, onDraftChange }, root);
   const refresh = () => { if (state.autoRefresh) editor.refresh(); };
   session.addEventListener('change', refresh);
   cleanup.push(() => { session.removeEventListener('change', refresh); editor.dispose(); });
   const selectId = (id: string) => { select(id); editor.refresh(); };
   return { session, state, editor, context, select, selectId, openTools, report, onDraftChange,
     annotations: (number: number) => session.score.staves[0].measures[number - 1].annotations,
-    text: () => field('annotation-draft-status').textContent,
-    disabled: (id: string) => field<HTMLButtonElement>(id).disabled };
+    text: () => root.querySelector('#annotation-draft-status')!.textContent,
+    disabled: (id: string) => root.querySelector<HTMLButtonElement>(`#${id}`)!.disabled };
 }
 
 afterEach(() => { cleanup.splice(0).forEach(dispose => dispose()); document.body.replaceChildren(); });
+
+describe('isolated instruction control roots', () => {
+  it.each(['element', 'shadow'] as const)('edits the existing instruction in its %s root without changing duplicate global controls', kind => {
+    const global = fixture(project(score(1, { 1: harmony('global-harmony', 'G7') })), 'global-harmony', mountAuthorFixture);
+    const globalField = field<HTMLTextAreaElement>('annotation-text');
+    const globalSource = global.session.project.sourceHtml;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = kind === 'shadow' ? host.attachShadow({ mode: 'open' }) : host;
+    const container = document.createElement('div');
+    root.append(container);
+    const scoped = fixture(project(score(1, { 1: harmony('scoped-harmony', 'Dm9') })), 'scoped-harmony',
+      () => { mountAuthorFixture(container); }, root);
+    const input = root.querySelector<HTMLTextAreaElement>('#annotation-text')!;
+    const apply = root.querySelector<HTMLButtonElement>('#update-annotation')!;
+    expect(input.value).toBe('Dm9');
+    expect(globalField.value).toBe('G7');
+
+    input.value = 'Dm11';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(scoped.editor.hasDirty).toBe(true);
+    expect(global.editor.hasDirty).toBe(false);
+    expect(scoped.annotations(1)[0].text).toBe('Dm9');
+    expect(globalField.value).toBe('G7');
+    apply.click();
+    expect(scoped.annotations(1)[0].text).toBe('Dm11');
+    expect(scoped.session.revision).toBe(1);
+    expect(scoped.editor.hasDirty).toBe(false);
+    expect(global.session.project.sourceHtml).toBe(globalSource);
+    expect(global.session.revision).toBe(0);
+    expect(globalField.value).toBe('G7');
+
+    scoped.editor.dispose();
+    input.value = 'Cmaj7';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    apply.disabled = false;
+    apply.click();
+    expect(scoped.annotations(1)[0].text).toBe('Dm11');
+    expect(scoped.editor.hasDirty).toBe(false);
+    expect(scoped.session.revision).toBe(1);
+  });
+});
 
 describe('instruction Properties reopening does not navigate the score', () => {
   const annotated = () => project(score(3, { 1: harmony('h1', 'Dm9'), 2: harmony('h2', 'G13') }));
@@ -182,7 +225,7 @@ describe('instruction Properties reopening does not navigate the score', () => {
 
 describe('dedicated Markings draft and direct entry', () => {
   it('makes initially hidden real-shell New and collision recovery actions available when applicable', () => {
-    const h = fixture(project(score(3, { 1: harmony('h1', 'Cmaj9') })), 'h1', authorShell);
+    const h = fixture(project(score(3, { 1: harmony('h1', 'Cmaj9') })), 'h1', mountAuthorFixture);
     expect(field('new-annotation').hidden).toBe(false);
     expect(field('add-annotation').hidden).toBe(true);
     expect(field('update-annotation-next').hidden).toBe(false);

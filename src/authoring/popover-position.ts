@@ -1,3 +1,5 @@
+import { composedAncestors, composedContains, isRenderedInParent } from '../ui/composed-dom.js';
+
 export interface PopoverPositionOptions {
   readonly panel: HTMLElement;
   readonly preferredSide?: 'above' | 'below';
@@ -22,6 +24,8 @@ interface Tracking {
   readonly invoker: HTMLElement;
   readonly cleanups: (() => void)[];
   readonly saved: Map<HTMLElement, Map<string, SavedStyle>>;
+  chain: readonly Element[];
+  roots: readonly Node[];
   frame?: number;
   retried: boolean;
 }
@@ -35,15 +39,6 @@ const bodyProperties = ['box-sizing', 'min-height', 'max-height', 'overflow', 'o
 function finiteBox(rect: DOMRect): boolean {
   return [rect.left, rect.top, rect.right, rect.bottom, rect.width, rect.height].every(Number.isFinite)
     && rect.width > 0 && rect.height > 0;
-}
-function ancestors(element: HTMLElement): HTMLElement[] {
-  const result: HTMLElement[] = [];
-  for (let next: HTMLElement | null = element; next;) {
-    result.push(next);
-    const root = next.getRootNode();
-    next = next.parentElement ?? (root instanceof ShadowRoot ? root.host as HTMLElement : null);
-  }
-  return result;
 }
 function clamp(value: number, min: number, max: number): number { return Math.max(min, Math.min(max, value)); }
 function px(value: number): string { return `${Math.round(value * 1000) / 1000}px`; }
@@ -107,16 +102,60 @@ export function createPopoverPositioner(options: PopoverPositionOptions): Popove
     if (!window || active !== state || state.frame !== undefined) return;
     state.frame = window.requestAnimationFrame(() => { state.frame = undefined; if (active === state) refresh(); });
   };
+  const track = (state: Tracking, chain: readonly Element[]): void => {
+    if (!window) return;
+    const roots = [...new Set<Node>([document, ...chain.map(element => element.getRootNode())])];
+    if (chain.length === state.chain.length && chain.every((element, index) => element === state.chain[index])
+      && roots.length === state.roots.length && roots.every((root, index) => root === state.roots[index])) return;
+    for (const cleanup of state.cleanups.splice(0)) cleanup();
+    state.chain = chain; state.roots = roots;
+    // Reassignment can replace the slot wrappers without changing the invoker.
+    // Old observers must not schedule work after this binding has been replaced.
+    let listening = true;
+    state.cleanups.push(() => { listening = false; });
+    const listen = (target: EventTarget, name: string, callback: EventListener, capture = false): void => {
+      target.addEventListener(name, callback, { passive: true, capture });
+      state.cleanups.push(() => target.removeEventListener(name, callback, capture));
+    };
+    const changed = (): void => { if (listening) schedule(state); };
+    const scrolled: EventListener = event => {
+      const target = event.composedPath()[0] ?? event.target;
+      if (!(target instanceof Node && composedContains(panel, target))) changed();
+    };
+    for (const root of roots) listen(root, 'scroll', scrolled, true);
+    for (const element of chain) if (element.localName === 'slot') listen(element, 'slotchange', changed);
+    listen(window, 'scroll', scrolled); listen(window, 'resize', changed);
+    if (window.visualViewport) { listen(window.visualViewport, 'scroll', changed); listen(window.visualViewport, 'resize', changed); }
+    listen(panel, 'toggle', event => { if (listening && event.target === panel && !isNativeOpen()) close(); });
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(changed);
+      for (const element of new Set([panel, ...chain, ...panel.querySelectorAll<HTMLElement>('.popover-body')])) observer.observe(element);
+      state.cleanups.push(() => observer.disconnect());
+    }
+    if (typeof MutationObserver !== 'undefined') {
+      const observer = new MutationObserver(changed);
+      // Follow only this composed chain and its direct shadow-root children.
+      // No score subtree or document-wide mutation stream is needed.
+      for (const element of chain) observer.observe(element, { attributes: true, childList: true });
+      for (const root of roots) if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) observer.observe(root, { childList: true });
+      state.cleanups.push(() => observer.disconnect());
+    }
+  };
   const refresh = (): void => {
     const state = active;
     if (!state || !window || disposed) return;
     if (state.frame !== undefined) { window.cancelAnimationFrame(state.frame); state.frame = undefined; }
     if (!isNativeOpen()) { close(); return; }
     const invoker = state.invoker;
-    if (!invoker.isConnected || invoker.ownerDocument !== document || panel.contains(invoker)
+    const chain = [invoker, ...composedAncestors(invoker)];
+    if (!invoker.isConnected || invoker.ownerDocument !== document || composedContains(panel, invoker)
       || invoker.matches(':disabled') || invoker.getAttribute('aria-disabled') === 'true'
-      || ancestors(invoker).some(element => element.hidden || element.hasAttribute('inert') || element.getAttribute('aria-hidden') === 'true'
-        || window.getComputedStyle(element).display === 'none' || window.getComputedStyle(element).visibility === 'hidden')) { unavailable(); return; }
+      || chain.some(element => {
+        if (!isRenderedInParent(element) || element.matches('[hidden], [inert], [aria-hidden="true"]')) return true;
+        const style = window.getComputedStyle(element);
+        return style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || style.contentVisibility === 'hidden';
+      })) { unavailable(); return; }
+    track(state, chain);
     const anchor = invoker.getBoundingClientRect();
     const visible = viewport();
     if (!finiteBox(anchor) || !visible) { unavailable(); return; }
@@ -176,31 +215,8 @@ export function createPopoverPositioner(options: PopoverPositionOptions): Popove
     close();
     if (!isNativeOpen()) return;
     if (!invoker) { options.onAnchorUnavailable?.(); return; }
-    const state: Tracking = { invoker, cleanups: [], saved: new Map(), retried: false };
+    const state: Tracking = { invoker, cleanups: [], saved: new Map(), chain: [], roots: [], retried: false };
     active = state;
-    const listen = (target: EventTarget, name: string, callback: EventListener, capture = false): void => {
-      target.addEventListener(name, callback, { passive: true, capture });
-      state.cleanups.push(() => target.removeEventListener(name, callback, capture));
-    };
-    const changed = (): void => schedule(state);
-    const scrolled: EventListener = event => { if (!(event.target instanceof Node && panel.contains(event.target))) changed(); };
-    const chain = ancestors(invoker);
-    for (const root of new Set<Node>([document, ...chain.map(element => element.getRootNode())])) listen(root, 'scroll', scrolled, true);
-    listen(window, 'scroll', scrolled); listen(window, 'resize', changed);
-    if (window.visualViewport) { listen(window.visualViewport, 'scroll', changed); listen(window.visualViewport, 'resize', changed); }
-    listen(panel, 'toggle', event => { if (event.target === panel && !isNativeOpen()) close(); });
-    if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(changed);
-      for (const element of new Set([panel, ...chain, ...panel.querySelectorAll<HTMLElement>('.popover-body')])) observer.observe(element);
-      state.cleanups.push(() => observer.disconnect());
-    }
-    if (typeof MutationObserver !== 'undefined') {
-      const observer = new MutationObserver(changed);
-      // Only the invoker's ancestor chain, never the score subtree or document-wide
-      // mutation stream. This catches class/style and sibling replacement reflows.
-      for (const element of chain) observer.observe(element, { attributes: true, childList: true });
-      state.cleanups.push(() => observer.disconnect());
-    }
     refresh();
   };
   return { open, refresh, close, dispose: () => { close(); disposed = true; } };

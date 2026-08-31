@@ -1,3 +1,5 @@
+import { Signal } from 'signal-polyfill';
+import { batch } from 'signal-utils/subtle/batched-effect';
 import { readScore } from '../dom/read-score.js';
 import type { Diagnostic, Score } from '../model/types.js';
 import { applyCommand } from './commands.js';
@@ -7,6 +9,8 @@ import {
 import type { AuthorCommand, AuthorProject, Cursor, EditResult } from './types.js';
 import { createSelection, pruneSelection, reduceSelection, selectionFingerprint } from './selection.js';
 import type { SelectionContext, SelectionState } from './selection.js';
+import { createEditorSignals, freezeEditorValue } from './state/editor-signals.js';
+import type { EditorSignals } from './state/editor-signals.js';
 
 export interface EditorChangeDetail {
   label: string;
@@ -23,6 +27,29 @@ interface Snapshot {
   independentSelection: boolean;
 }
 interface Prepared { project: AuthorProject; source: Element }
+
+/** One published value makes source, selection, revision, and history atomic. */
+interface EditorState {
+  readonly project: AuthorProject;
+  readonly source: Element;
+  /** Source snapshot represented by the cached score, independent of recovery drafts. */
+  readonly parsedSourceHtml: string;
+  readonly score: Score;
+  readonly diagnostics: readonly Diagnostic[];
+  readonly selectionId: string | undefined;
+  readonly cursor: Cursor | undefined;
+  readonly documentEpoch: number;
+  readonly selection: SelectionState;
+  readonly independentSelection: boolean;
+  readonly revision: number;
+  readonly past: readonly Snapshot[];
+  readonly future: readonly Snapshot[];
+}
+
+interface HistoryState {
+  readonly past: readonly Snapshot[];
+  readonly future: readonly Snapshot[];
+}
 
 const HISTORY_LIMIT = 100;
 const ROOT_LAYOUT_ATTRIBUTES = ['max-measures', 'justify-last', 'measure-numbers', 'print-width', 'print-preview'];
@@ -294,72 +321,78 @@ function reconcileSource(current: Element, staged: Element): Element {
  * projections, and serialized HTML exists only in project/recovery/history snapshots.
  */
 export class EditorSession extends EventTarget {
-  private currentProject: AuthorProject;
-  private currentSource: Element;
-  private currentSelection: string | undefined;
-  private currentCursor: Cursor | undefined;
-  private currentDocumentEpoch = ++documentSequence;
-  private currentSelectionState: SelectionState;
-  private independentSelection = false;
-  private currentRevision = 0;
-  private readonly past: Snapshot[] = [];
-  private readonly future: Snapshot[] = [];
+  private readonly state: Signal.State<EditorState>;
+  readonly signals: EditorSignals;
+
+  private get current(): EditorState { return this.state.get(); }
 
   constructor(project: AuthorProject) {
     super();
     const prepared = this.prepare(project);
-    this.currentProject = prepared.project;
-    this.currentSource = prepared.source;
-    this.currentSelectionState = createSelection(this.selectionContext(this.currentProject, this.currentSource, 'score'));
+    const documentEpoch = ++documentSequence;
+    const parsed = readScore(prepared.source);
+    this.state = new Signal.State(Object.freeze({
+      project: freezeEditorValue(prepared.project), source: prepared.source, parsedSourceHtml: prepared.project.sourceHtml,
+      score: freezeEditorValue(parsed.score), diagnostics: freezeEditorValue(parsed.diagnostics),
+      selection: freezeEditorValue(createSelection(this.selectionContext(prepared.project, prepared.source, 'score', documentEpoch))),
+      selectionId: undefined, cursor: undefined, documentEpoch, revision: 0,
+      independentSelection: false, past: [], future: [],
+    }));
+    this.signals = createEditorSignals(() => this.state.get());
   }
 
   /** A detached, mutable snapshot; changing it cannot mutate this session. */
   get project(): AuthorProject {
-    const project = copyProject(this.currentProject);
-    project.sourceHtml = getSourceHtml(this.currentSource);
+    const project = copyProject(this.current.project);
+    project.sourceHtml = getSourceHtml(this.current.source);
     return project;
   }
 
   /** Read access to accepted light DOM. Make changes through session transactions. */
-  get source(): Element { return this.currentSource; }
-  get score(): Score { return readScore(this.currentSource).score; }
-  get diagnostics(): readonly Diagnostic[] { return readScore(this.currentSource).diagnostics; }
-  get revision(): number { return this.currentRevision; }
-  get selectionId(): string | undefined { return this.currentSelection; }
-  get documentEpoch(): number { return this.currentDocumentEpoch; }
-  get selectionVersion(): number { return this.currentSelectionState.version; }
+  get source(): Element { return this.current.source; }
+  // These compatibility reads intentionally inspect live DOM, including external
+  // changes that stale-action guards must catch synchronously. Renderers use the
+  // cached accepted projections in signals.score and signals.diagnostics.
+  get score(): Score { return readScore(this.current.source).score; }
+  get diagnostics(): readonly Diagnostic[] { return readScore(this.current.source).diagnostics; }
+  get revision(): number { return this.current.revision; }
+  get selectionId(): string | undefined { return this.current.selectionId; }
+  get documentEpoch(): number { return this.current.documentEpoch; }
+  get selectionVersion(): number { return this.current.selection.version; }
   /** The caller may inspect or copy membership, but cannot mutate the session through this object. */
-  get selection(): SelectionState { return { ...this.currentSelectionState, ids: [...this.currentSelectionState.ids] }; }
+  get selection(): SelectionState { return { ...this.current.selection, ids: [...this.current.selection.ids] }; }
   /** A detached location; changing the returned object cannot move this session. */
-  get cursor(): Cursor | undefined { return this.currentCursor ? { ...this.currentCursor } : undefined; }
-  get canUndo(): boolean { return this.past.length > 0; }
-  get canRedo(): boolean { return this.future.length > 0; }
+  get cursor(): Cursor | undefined { return this.current.cursor ? { ...this.current.cursor } : undefined; }
+  get canUndo(): boolean { return this.current.past.length > 0; }
+  get canRedo(): boolean { return this.current.future.length > 0; }
 
   /** Navigation only. Do not alter the selection, revision, history, or redo branch. */
   setCursor(cursor: Cursor): void {
-    this.currentCursor = resolveCursor(this.currentSource, cursor);
+    const resolved = resolveCursor(this.current.source, cursor);
+    if (stableJson(resolved) === stableJson(this.current.cursor)) return;
+    this.publish({ ...this.current, cursor: resolved });
   }
 
   /** Explicit inspection navigation. It never moves writing or emits a musical/save change. */
   setSelection(next: SelectionState): void {
-    if (next.documentId !== this.currentProject.id || next.documentEpoch !== this.currentDocumentEpoch) {
+    if (next.documentId !== this.current.project.id || next.documentEpoch !== this.current.documentEpoch) {
       throw new Error('This selection belongs to another document. Select the music again.');
     }
     if (!Number.isSafeInteger(next.version) || next.version < 0) throw new Error('This selection has an invalid version.');
     if (next.sourceId !== undefined && (typeof next.sourceId !== 'string' || !next.sourceId || /[\s\0]/.test(next.sourceId))) {
       throw new Error('The selected instruction or structure must have a complete, nonempty source ID.');
     }
-    if (next.sourceId !== undefined && readScore(this.currentSource).sources.get(next.sourceId)?.id !== next.sourceId) {
+    if (next.sourceId !== undefined && readScore(this.current.source).sources.get(next.sourceId)?.id !== next.sourceId) {
       throw new Error('Choose an authored source ID. An implicit voice uses its measure and voice index, not a generated model ID.');
     }
-    if (next.partId !== 'score' && !this.currentProject.parts.some(part => part.id === next.partId)) {
+    if (next.partId !== 'score' && !this.current.project.parts.some(part => part.id === next.partId)) {
       throw new Error('This selection belongs to a part that is no longer available.');
     }
     if (!Array.isArray(next.ids) || next.sourceId !== undefined
       && (next.ids.length || next.primaryId !== undefined || next.anchorId !== undefined || next.focusId !== undefined)) {
       throw new Error('Select either complete events or one instruction or structure.');
     }
-    const context = this.selectionContext(this.currentProject, this.currentSource, next.partId);
+    const context = this.selectionContext(this.current.project, this.current.source, next.partId);
     const resolved = reduceSelection(createSelection(context), next.sourceId ? { type: 'source', id: next.sourceId }
       : { type: 'set', ids: next.ids, primaryId: next.primaryId, anchorId: next.anchorId, focusId: next.focusId }, context);
     if (resolved.reason) throw new Error(resolved.reason);
@@ -367,46 +400,45 @@ export class EditorSession extends EventTarget {
       || next.voiceIndex !== undefined && next.voiceIndex !== resolved.state.voiceIndex) {
       throw new Error('This selection no longer belongs to its stated staff and voice.');
     }
-    const changed = !sameSelection(this.currentSelectionState, resolved.state);
-    if (changed && next.version <= this.currentSelectionState.version) {
+    const changed = !sameSelection(this.current.selection, resolved.state);
+    if (changed && next.version <= this.current.selection.version) {
       throw new Error('The selection changed. Select the music again before using this earlier selection.');
     }
-    this.assignSelection(resolved.state);
-    this.currentSelection = this.currentSelectionState.primaryId ?? this.currentSelectionState.sourceId;
-    this.independentSelection = true;
+    const selection = this.nextSelection(resolved.state);
+    if (selection === this.current.selection && this.current.independentSelection) return;
+    this.publish({ ...this.current, selection, selectionId: selection.primaryId ?? selection.sourceId, independentSelection: true });
   }
 
   /** Re-selecting the same source is still a no-op; report any new location with setCursor. */
   select(id?: string): void {
     const next = this.resolveSelection(id);
-    if (next === this.currentSelection) return;
-    this.currentSelection = next;
-    this.currentCursor = cursorForSelection(this.currentSource, next, this.currentCursor);
-    this.independentSelection = false;
-    this.assignSelection(this.seedSelection(this.currentProject, this.currentSource, next, 'score'));
-    this.notify('Select', 'draft');
+    if (next === this.current.selectionId) return;
+    this.publish({ ...this.current, selectionId: next,
+      cursor: cursorForSelection(this.current.source, next, this.current.cursor), independentSelection: false,
+      selection: this.nextSelection(this.seedSelection(this.current.project, this.current.source, next, 'score')),
+    }, 'Select', 'draft');
   }
 
   execute(command: AuthorCommand, amendProject?: (draft: AuthorProject, result: EditResult) => void): EditResult {
     const draft = this.project;
-    let source = this.currentSource.cloneNode(true) as Element;
-    copySourceContext(this.currentSource, source);
+    let source = this.current.source.cloneNode(true) as Element;
+    copySourceContext(this.current.source, source);
     if (command.type === 'add-staff' && source.localName === 'music-staff') source = promoteStaff(source);
     const result = applyCommand(source, command);
-    cleanRemovedReferences(draft, this.currentSource, source);
+    cleanRemovedReferences(draft, this.current.source, source);
     copyInstructionScopes(draft, result);
     draft.sourceHtml = getSourceHtml(source);
     amendProject?.(draft, result);
     const prepared = this.prepare(draft, draft.sourceHtml === getSourceHtml(source) ? source : undefined);
     const advancesWriting = ['insert-event', 'append-and-insert', 'continue-piece', 'append-measure'].includes(command.type);
-    const cursor = prepared.project.id !== this.currentProject.id ? undefined
+    const cursor = prepared.project.id !== this.current.project.id ? undefined
       : result.cursor !== undefined ? resolveCursor(prepared.source, result.cursor)
-        : this.independentSelection && !advancesWriting ? preserveCursor(this.currentSource, prepared.source, this.currentCursor)
-        : result.selectionId !== undefined ? cursorForSelection(prepared.source, result.selectionId, this.currentCursor)
-          : preserveCursor(this.currentSource, prepared.source, this.currentCursor);
+        : this.current.independentSelection && !advancesWriting ? preserveCursor(this.current.source, prepared.source, this.current.cursor)
+        : result.selectionId !== undefined ? cursorForSelection(prepared.source, result.selectionId, this.current.cursor)
+          : preserveCursor(this.current.source, prepared.source, this.current.cursor);
     let selection: SelectionState | undefined;
-    if (this.independentSelection) {
-      const previous = this.currentSelectionState;
+    if (this.current.independentSelection) {
+      const previous = this.current.selection;
       const preserved = this.preserveSelection(prepared, true);
       // Creating a named structure deliberately inspects it without relocating writing.
       // Property/group commands, including wrap-tuplet, retain their exact event set.
@@ -419,7 +451,7 @@ export class EditorSession extends EventTarget {
         ? this.seedSelection(prepared.project, prepared.source, result.selectionId, previous.partId)
         : preserved;
     }
-    this.accept(result.message, prepared, result.selectionId ?? this.currentSelection, cursor, selection);
+    this.accept(result.message, prepared, result.selectionId ?? this.current.selectionId, cursor, selection);
     return result;
   }
 
@@ -427,9 +459,9 @@ export class EditorSession extends EventTarget {
     const draft = this.project;
     mutate(draft);
     const prepared = this.prepare(draft);
-    const cursor = prepared.project.id === this.currentProject.id
-      ? preserveCursor(this.currentSource, prepared.source, this.currentCursor) : undefined;
-    this.accept(label, prepared, this.currentSelection, cursor, this.independentSelection ? this.preserveSelection(prepared) : undefined);
+    const cursor = prepared.project.id === this.current.project.id
+      ? preserveCursor(this.current.source, prepared.source, this.current.cursor) : undefined;
+    this.accept(label, prepared, this.current.selectionId, cursor, this.current.independentSelection ? this.preserveSelection(prepared) : undefined);
   }
 
   applySource(html: string): void {
@@ -437,13 +469,13 @@ export class EditorSession extends EventTarget {
     draft.sourceHtml = html;
     draft.pendingSource = null;
     const prepared = this.prepare(draft);
-    this.accept('Apply source', prepared, this.currentSelection,
-      preserveCursor(this.currentSource, prepared.source, this.currentCursor), this.independentSelection ? this.preserveSelection(prepared) : undefined);
+    this.accept('Apply source', prepared, this.current.selectionId,
+      preserveCursor(this.current.source, prepared.source, this.current.cursor), this.current.independentSelection ? this.preserveSelection(prepared) : undefined);
   }
 
   /** Preserve unapplied text without adding an undo step for every keystroke. */
   setPendingSource(html: string | null): void {
-    if (html === this.currentProject.pendingSource) return;
+    if (html === this.current.project.pendingSource) return;
     if (html !== null && typeof html !== 'string') throw new Error('The source draft must be text or null.');
     if (html !== null && html.length > MAX_SOURCE_LENGTH) {
       throw new Error(`The source draft cannot exceed ${MAX_SOURCE_LENGTH.toLocaleString()} characters.`);
@@ -452,35 +484,28 @@ export class EditorSession extends EventTarget {
     const draft = this.project;
     draft.pendingSource = html;
     draft.updatedAt = Date.now();
-    this.currentProject = draft;
-    this.future.length = 0;
-    this.currentRevision++;
-    this.notify('Edit source draft', 'draft');
+    this.publish({ ...this.current, project: draft, future: [], revision: this.current.revision + 1 }, 'Edit source draft', 'draft');
   }
 
   undo(): void {
-    const snapshot = this.past.at(-1);
+    const snapshot = this.current.past.at(-1);
     if (!snapshot) return;
     const prepared = this.prepare(copyProject(snapshot.project));
-    this.push(this.future, this.snapshot());
-    this.past.pop();
-    this.restore('Undo', prepared, snapshot.selectionId, snapshot.cursor, 'history', snapshot.selection, snapshot.independentSelection);
+    this.restore('Undo', prepared, snapshot.selectionId, snapshot.cursor, 'history', snapshot.selection, snapshot.independentSelection,
+      { past: this.current.past.slice(0, -1), future: this.push(this.current.future, this.snapshot()) });
   }
 
   redo(): void {
-    const snapshot = this.future.at(-1);
+    const snapshot = this.current.future.at(-1);
     if (!snapshot) return;
     const prepared = this.prepare(copyProject(snapshot.project));
-    this.push(this.past, this.snapshot());
-    this.future.pop();
-    this.restore('Redo', prepared, snapshot.selectionId, snapshot.cursor, 'history', snapshot.selection, snapshot.independentSelection);
+    this.restore('Redo', prepared, snapshot.selectionId, snapshot.cursor, 'history', snapshot.selection, snapshot.independentSelection,
+      { past: this.push(this.current.past, this.snapshot()), future: this.current.future.slice(0, -1) });
   }
 
   replaceProject(project: AuthorProject): void {
     const prepared = this.prepare(project);
-    this.past.length = 0;
-    this.future.length = 0;
-    this.restore('Open project', prepared, undefined, undefined, 'replace', undefined, false);
+    this.restore('Open project', prepared, undefined, undefined, 'replace', undefined, false, { past: [], future: [] });
   }
 
   private prepare(project: AuthorProject, source?: Element): Prepared {
@@ -498,50 +523,58 @@ export class EditorSession extends EventTarget {
 
   private accept(label: string, prepared: Prepared, selectionId: string | undefined, cursor: Cursor | undefined, selection?: SelectionState): void {
     const previous = this.project;
-    const sourceChanged = getSourceHtml(prepared.source) !== getSourceHtml(this.currentSource);
+    const sourceChanged = getSourceHtml(prepared.source) !== getSourceHtml(this.current.source);
     if (sourceChanged) prepared.project.reviewedShortMeasures = [];
     if (sourceChanged || pageFingerprint(previous) !== pageFingerprint(prepared.project)) {
       for (const layout of Object.values(prepared.project.layouts)) layout.reviewedTurns = {};
     }
 
     if (comparableProject(previous) === comparableProject(prepared.project)) {
-      const next = this.independentSelection && selection ? selection.primaryId ?? selection.sourceId : this.resolveSelection(selectionId);
-      const selectionChanged = next !== this.currentSelection;
-      this.currentSelection = next;
-      this.currentCursor = resolveCursor(this.currentSource, cursor);
-      this.assignSelection(selection ?? this.seedSelection(this.currentProject, this.currentSource, next, 'score'));
-      if (selectionChanged && !this.independentSelection) this.notify('Select', 'draft');
+      const next = this.current.independentSelection && selection ? selection.primaryId ?? selection.sourceId : this.resolveSelection(selectionId);
+      const selectionChanged = next !== this.current.selectionId;
+      const notify = selectionChanged && !this.current.independentSelection;
+      this.publish({ ...this.current, selectionId: next, cursor: resolveCursor(this.current.source, cursor),
+        selection: this.nextSelection(selection ?? this.seedSelection(this.current.project, this.current.source, next, 'score')),
+      }, notify ? 'Select' : undefined, notify ? 'draft' : undefined);
       return;
     }
-    this.push(this.past, { ...this.snapshot(), project: previous });
-    this.future.length = 0;
-    this.restore(label, prepared, selectionId, cursor, 'edit', selection);
+    this.restore(label, prepared, selectionId, cursor, 'edit', selection, this.current.independentSelection,
+      { past: this.push(this.current.past, { ...this.snapshot(), project: previous }), future: [] });
   }
 
   private restore(label: string, prepared: Prepared, selectionId: string | undefined,
-    cursor: Cursor | undefined, kind: EditorChangeDetail['kind'], selection?: SelectionState, independentSelection = this.independentSelection): void {
-    if (kind === 'replace' || prepared.project.id !== this.currentProject.id) this.currentDocumentEpoch = ++documentSequence;
-    this.currentSource = reconcileSource(this.currentSource, prepared.source);
-    copySourceContext(prepared.source, this.currentSource);
-    this.currentProject = prepared.project;
-    this.currentProject.sourceHtml = getSourceHtml(this.currentSource);
-    this.currentProject.updatedAt = Date.now();
-    this.currentSelection = this.resolveSelection(selectionId);
-    this.currentCursor = resolveCursor(this.currentSource, cursor);
-    this.independentSelection = independentSelection;
+    cursor: Cursor | undefined, kind: EditorChangeDetail['kind'], selection: SelectionState | undefined,
+    independentSelection: boolean, history: HistoryState): void {
+    const previous = this.current;
+    const documentEpoch = kind === 'replace' || prepared.project.id !== previous.project.id
+      ? ++documentSequence : previous.documentEpoch;
+    const sourceUnchanged = prepared.project.sourceHtml === previous.parsedSourceHtml;
+    const source = reconcileSource(previous.source, prepared.source);
+    copySourceContext(prepared.source, source);
+    const project = prepared.project;
+    project.sourceHtml = getSourceHtml(source);
+    project.updatedAt = Date.now();
+    const resolvedId = this.resolveSelection(selectionId, source);
+    const fresh = kind === 'history' || kind === 'replace';
+    let resolvedSelection: SelectionState;
     if (selection) {
-      const context = this.selectionContext(this.currentProject, this.currentSource, selection.partId);
+      const context = this.selectionContext(project, source, selection.partId, documentEpoch);
       const rebound = { ...selection, documentId: context.documentId, documentEpoch: context.documentEpoch };
-      this.assignSelection(pruneSelection(rebound, context).state, kind === 'history' || kind === 'replace');
-    } else this.assignSelection(this.seedSelection(this.currentProject, this.currentSource, this.currentSelection, 'score'), kind === 'history' || kind === 'replace');
-    if (this.independentSelection) this.currentSelection = this.currentSelectionState.primaryId ?? this.currentSelectionState.sourceId;
-    this.currentRevision++;
-    this.notify(label, kind);
+      resolvedSelection = this.nextSelection(pruneSelection(rebound, context).state, fresh);
+    } else resolvedSelection = this.nextSelection(this.seedSelection(project, source, resolvedId, 'score', documentEpoch), fresh);
+    // Parse the reconciled DOM so implicit voice IDs belong to accepted source
+    // nodes. Metadata, draft, and navigation changes reuse the same projection.
+    const parsed = sourceUnchanged ? previous : readScore(source);
+    this.publish({ project, source, parsedSourceHtml: project.sourceHtml, documentEpoch, revision: previous.revision + 1,
+      score: parsed.score, diagnostics: parsed.diagnostics, selection: resolvedSelection,
+      selectionId: independentSelection ? resolvedSelection.primaryId ?? resolvedSelection.sourceId : resolvedId,
+      cursor: resolveCursor(source, cursor), independentSelection, ...history,
+    }, label, kind);
   }
 
-  private resolveSelection(id: string | undefined): string | undefined {
+  private resolveSelection(id: string | undefined, source = this.current.source): string | undefined {
     if (!id) return undefined;
-    const parsed = readScore(this.currentSource);
+    const parsed = readScore(source);
     if (!parsed.sources.has(id)) return undefined;
     // Attached markings select their complete musical event. They are not a
     // separate rhythmic cursor or a measure-level annotation target.
@@ -555,28 +588,28 @@ export class EditorSession extends EventTarget {
   }
 
   private snapshot(): Snapshot {
-    return { project: this.project, selectionId: this.currentSelection, cursor: this.cursor,
-      selection: this.selection, independentSelection: this.independentSelection };
+    return { project: this.project, selectionId: this.current.selectionId, cursor: this.cursor,
+      selection: this.selection, independentSelection: this.current.independentSelection };
   }
 
-  private selectionContext(project: AuthorProject, source: Element, partId: string): SelectionContext {
+  private selectionContext(project: AuthorProject, source: Element, partId: string, documentEpoch = this.current.documentEpoch): SelectionContext {
     const score = readScore(source).score, part = project.parts.find(part => part.id === partId);
-    return { score, documentId: project.id, documentEpoch: this.currentDocumentEpoch,
+    return { score, documentId: project.id, documentEpoch,
       partId: partId === 'score' || part ? partId : 'score', visibleStaffIds: part?.staffIds ?? score.staves.map(staff => staff.id) };
   }
 
-  private seedSelection(project: AuthorProject, source: Element, id: string | undefined, partId: string): SelectionState {
-    const context = this.selectionContext(project, source, partId), empty = createSelection(context);
+  private seedSelection(project: AuthorProject, source: Element, id: string | undefined, partId: string, documentEpoch = this.current.documentEpoch): SelectionState {
+    const context = this.selectionContext(project, source, partId, documentEpoch), empty = createSelection(context);
     if (!id) return empty;
     const selected = reduceSelection(empty, { type: 'source', id }, context);
     return selected.reason ? empty : selected.state;
   }
 
   private preserveSelection(prepared: Prepared, allowEventKindChange = false): SelectionState {
-    const state = this.currentSelectionState;
+    const state = this.current.selection;
     const context = this.selectionContext(prepared.project, prepared.source, state.partId);
     if (state.partId !== context.partId) return createSelection(context);
-    const before = readScore(this.currentSource), after = readScore(prepared.source);
+    const before = readScore(this.current.source), after = readScore(prepared.source);
     const allowedIds = new Set<string>();
     for (const id of [...state.ids, state.primaryId, state.anchorId, state.focusId, state.sourceId]) {
       if (!id) continue;
@@ -586,20 +619,30 @@ export class EditorSession extends EventTarget {
     return pruneSelection(state, context, { previousScore: before.score, allowedIds }).state;
   }
 
-  private assignSelection(selection: SelectionState, fresh = false): void {
-    const previous = this.currentSelectionState;
+  private nextSelection(selection: SelectionState, fresh = false): SelectionState {
+    const previous = this.current.selection;
     const changed = !sameSelection(previous, selection);
-    this.currentSelectionState = { ...selection, ids: [...selection.ids], version: previous.version + Number(changed || fresh) };
+    return changed || fresh ? { ...selection, ids: [...selection.ids], version: previous.version + 1 } : previous;
   }
 
-  private push(history: Snapshot[], snapshot: Snapshot): void {
-    history.push(snapshot);
-    if (history.length > HISTORY_LIMIT) history.shift();
+  private push(history: readonly Snapshot[], snapshot: Snapshot): readonly Snapshot[] {
+    return [...history.slice(-(HISTORY_LIMIT - 1)), freezeEditorValue(snapshot)];
   }
 
-  private notify(label: string, kind: EditorChangeDetail['kind']): void {
-    this.dispatchEvent(new CustomEvent<EditorChangeDetail>('change', {
-      detail: { label, revision: this.currentRevision, selectionId: this.currentSelection, kind },
-    }));
+  private publish(next: EditorState, label?: string, kind?: EditorChangeDetail['kind']): void {
+    const previous = this.current;
+    const cursor = stableJson(next.cursor) === stableJson(previous.cursor) ? previous.cursor : freezeEditorValue(next.cursor);
+    const state = Object.freeze({ ...next, cursor,
+      project: freezeEditorValue(next.project), score: freezeEditorValue(next.score),
+      diagnostics: freezeEditorValue(next.diagnostics), selection: freezeEditorValue(next.selection),
+      past: Object.freeze(next.past), future: Object.freeze(next.future),
+    });
+    if ((Object.keys(state) as (keyof EditorState)[]).every(key => state[key] === previous[key])) return;
+    batch(() => {
+      this.state.set(state);
+      if (label && kind) this.dispatchEvent(new CustomEvent<EditorChangeDetail>('change', {
+        detail: { label, revision: state.revision, selectionId: state.selectionId, kind },
+      }));
+    });
   }
 }

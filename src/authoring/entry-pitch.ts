@@ -1,4 +1,5 @@
 import { parsePitch, pitchText, validateAlteration } from '../model/pitch.js';
+import { asControlScope, type ControlRoot } from './control-scope.js';
 import { PITCH_ALTERATIONS } from './notation-capabilities.js';
 import { enhanceSelects } from './select.js';
 
@@ -21,10 +22,11 @@ export class EntryPitch {
   private failure: { raw: string; message: string } | null = null;
   private disposed = false;
 
-  constructor(options: EntryPitchOptions, root: Document = document) {
-    const input = root.getElementById('event-pitch');
-    const alteration = root.getElementById('event-alteration');
-    const status = root.getElementById('event-alteration-status');
+  constructor(options: EntryPitchOptions, root: ControlRoot = document) {
+    const scope = asControlScope(root);
+    const input = scope.getElementById('event-pitch');
+    const alteration = scope.getElementById('event-alteration');
+    const status = scope.getElementById('event-alteration-status');
     if (input?.localName !== 'input' || (input as HTMLInputElement).type !== 'text') {
       throw new Error('EntryPitch requires the #event-pitch text input.');
     }

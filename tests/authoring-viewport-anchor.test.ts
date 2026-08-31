@@ -62,6 +62,7 @@ function model(rows: readonly Row[]): Score {
 /** A real shadow tree with deterministic DOM measurements and synchronous scrolling. */
 function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
   width?: number; height?: number; scale?: number; svgA?: number; svgB?: number; svgC?: number; svgD?: number; border?: number;
+  slotted?: boolean;
 } = {}) {
   let width = config.width ?? 400; let height = config.height ?? 220;
   const scale = config.scale ?? 1; const border = config.border ?? 0;
@@ -69,7 +70,7 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
   let layout: LayoutGeometry | undefined; let revision = 0; let score: Score;
   let context = 'project:score:write'; let insets: ViewportInsets = {};
   let selection: MusicalViewportTarget | undefined = { sourceId: 'note', staffId: 'staff' };
-  let available = true;
+  let available = true; let projectionAvailable = true;
   const editor = document.createElement('section'); editor.tabIndex = 0;
   const viewport = document.createElement('div'); viewport.id = 'score-scroll'; viewport.style.overflow = 'auto';
   const host = document.createElement('div'); host.id = 'score-host';
@@ -77,12 +78,34 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
   const surfaceElement = document.createElement('music-system'); surfaceElement.id = 'score';
   surfaceElement.innerHTML = '<music-note id="source-note" pitch="C4"></music-note>';
   const shadow = surfaceElement.attachShadow({ mode: 'open' });
-  const screen = document.createElement('div'); screen.className = 'screen'; shadow.append(screen);
-  mount.append(surfaceElement); viewport.append(host); editor.append(viewport); document.body.append(editor);
+  const screen = document.createElement('div'); shadow.append(screen);
+  if (config.slotted) {
+    const slot = document.createElement('slot'); viewport.append(slot);
+    mount.append(viewport); host.append(surfaceElement); editor.append(host);
+    // Happy DOM supplies slot assignment but does not expose Element.assignedSlot.
+    Object.defineProperty(surfaceElement, 'assignedSlot', {
+      get: () => slot.assignedElements().includes(surfaceElement) ? slot : null,
+    });
+  } else {
+    mount.append(surfaceElement); viewport.append(host); editor.append(viewport);
+  }
+  document.body.append(editor);
   const surface = surfaceElement as unknown as MusicSurface;
   Object.defineProperties(surface, {
     getLayoutGeometry: { value: () => layout }, renderRevision: { get: () => revision }, score: { get: () => score },
+    getRenderedProjection: { value: (): ReturnType<MusicSurface['getRenderedProjection']> => projectionAvailable && layout ? {
+      surface, renderRevision: revision, layout,
+      frames: rows.map((row, index) => ({ system: row.system, svg: svgs[index], row: rowElements[index] })),
+    } : undefined },
   });
+  // Inner native scroll does not cross a shadow boundary; the surface publishes
+  // the originating scroller so consumers can recognize their own scrolls.
+  shadow.addEventListener('scroll', event => {
+    if (!(event.target instanceof HTMLElement)) return;
+    surface.dispatchEvent(new CustomEvent('notation-viewport-change', {
+      bubbles: true, composed: true, detail: { scroller: event.target, layout },
+    }));
+  }, { capture: true, passive: true });
   const rect = (left: number, top: number, w: number, h: number) => new DOMRect(left, top, w, h);
   const position = (element: HTMLElement, widths: () => { width: number; height: number; contentWidth: number; contentHeight: number }, bounds: () => DOMRect) => {
     let left = 0; let top = 0;
@@ -113,8 +136,8 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
     rows = next; revision++; rowElements.length = 0; svgs.length = 0; screen.replaceChildren();
     contentHeight = Math.max(0, ...rows.map(row => row.top + row.system.height * (config.svgD ?? 1))) + 100;
     for (const row of rows) {
-      const element = document.createElement('div'); element.className = 'system-row'; element.style.overflowX = 'auto'; element.style.overflowY = 'hidden';
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.classList.add('notation-svg');
+      const element = document.createElement('div'); element.style.overflowX = 'auto'; element.style.overflowY = 'hidden';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       element.append(svg); screen.append(element);
       position(element, () => ({ width, height: row.system.height * (config.svgD ?? 1),
         contentWidth: row.system.width * (config.svgA ?? 1), contentHeight: row.system.height * (config.svgD ?? 1) }),
@@ -152,6 +175,7 @@ function fixture(initial: Row[] = [{ system: system(), top: 0 }], config: {
     setSelection(value: MusicalViewportTarget) { selection = value; }, setContext(value: string) { context = value; },
     setInsets(value: ViewportInsets) { insets = value; }, setHeight(value?: number) { customHeight = value; },
     invalidate() { layout = undefined; }, staleRevision() { revision++; }, setAvailable(value: boolean) { available = value; },
+    setProjectionAvailable(value: boolean) { projectionAvailable = value; },
     resize(w: number, h: number) { width = w; height = h; },
   };
 }
@@ -225,6 +249,21 @@ describe('musical viewport preservation', () => {
     expect(f.rowElements[0].scrollLeft).toBe(1000);
     expect(f.offsets('wide').x).toBeCloseTo(token.offsetX, 6);
     expect(f.viewport.scrollLeft).toBe(0);
+  });
+
+  it('preserves a slotted surface through its row scroller and enclosing shadow viewport', () => {
+    const f = fixture([{ system: system([event('note', 900, 600)]), top: 0 }], { height: 180, slotted: true });
+    expect(f.surface.assignedSlot).toBeInstanceOf(HTMLSlotElement);
+    expect(f.viewport.getRootNode()).toBeInstanceOf(ShadowRoot);
+    f.viewport.scrollTop = 550; f.rowElements[0].scrollLeft = 800;
+    const token = f.controller.capture()!;
+    expect(token).toMatchObject({ sourceId: 'note', pitchIndex: 0 });
+    f.update([{ system: system([event('note', 1100, 700)], [measure()], { width: 1600 }), top: 200 }]);
+    expect(f.controller.restore(token)).toBe(true);
+    expect(f.viewport.scrollTop).toBe(850); expect(f.rowElements[0].scrollLeft).toBe(1000);
+    const after = f.offsets('note');
+    expect(after.x).toBeCloseTo(token.offsetX, 6); expect(after.y).toBeCloseTo(token.offsetY, 6);
+    expect(f.controller.isVisible({ sourceId: 'note' })).toBe(true);
   });
 
   it('uses current SVG transforms and physical offsets without scaling music', () => {
@@ -455,6 +494,19 @@ describe('explicit musical reveal and visibility', () => {
     f.resize(400, 220); f.setAvailable(false);
     expect(f.controller.capture()).toBeUndefined();
     f.setAvailable(true); f.viewport.remove(); expect(f.controller.reveal()).toBe(false);
+  });
+
+  it('requires a published projection even while cached layout geometry remains current', () => {
+    const f = fixture();
+    const layout = f.surface.getLayoutGeometry(); const revision = f.surface.renderRevision;
+    expect(f.controller.isVisible({ sourceId: 'note' })).toBe(true);
+    f.setProjectionAvailable(false);
+    expect(f.surface.getLayoutGeometry()).toBe(layout); expect(f.surface.renderRevision).toBe(revision);
+    expect(f.controller.capture()).toBeUndefined(); expect(f.controller.isVisible({ sourceId: 'note' })).toBe(false);
+    expect(f.controller.reveal({ sourceId: 'note' })).toBe(false); expect(f.scrollTo).not.toHaveBeenCalled();
+    f.setProjectionAvailable(true);
+    expect(f.controller.capture()).toMatchObject({ sourceId: 'note', projectionId: layout!.projectionId, renderRevision: revision });
+    expect(f.surface.getLayoutGeometry()).toBe(layout); expect(f.surface.renderRevision).toBe(revision);
   });
 
   it('disposes pending work and listeners without changing scroll or musical data', () => {

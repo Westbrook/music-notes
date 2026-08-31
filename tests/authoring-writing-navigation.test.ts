@@ -4,15 +4,13 @@
  * Only engraving dispatch is stubbed. These synthetic controls and key events
  * cover navigation/transaction ownership, not native focus, geometry or input.
  */
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import { pitchText } from '../src/model/index.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const source = `<music-staff id="lead" label="Lead">
   <music-measure id="bar-a" number="1" meter="4/4"><music-voice id="voice-a"><music-note id="a" pitch="F4" duration="whole"></music-note></music-voice></music-measure>
   <music-measure id="bar-b" number="2"><music-voice id="voice-b"><music-note id="b" pitch="G4" duration="whole"></music-note></music-voice></music-measure>
@@ -157,7 +155,7 @@ beforeEach(() => {
   widthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
 });

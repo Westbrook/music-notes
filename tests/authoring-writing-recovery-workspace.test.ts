@@ -5,15 +5,13 @@
  * These are simulated-runtime state/route checks, not native pixels, Web Locks,
  * picker/popover behavior, physical input, or proof of a downloaded file.
  */
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject, importProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import type { RecoveryStorage } from '../src/authoring/storage.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const source = '<music-staff id="lead" label="Lead"><music-measure id="bar" meter="4/4" incomplete><music-voice id="voice"></music-voice></music-measure></music-staff>';
 type FailureKind = 'write-failure' | 'no-locks' | 'lock-rejection' | 'conflict' | 'invalid-recovered';
 let app: AuthorWorkspace | undefined;
@@ -156,7 +154,7 @@ async function inspectRecovery(cause: RegExp): Promise<void> {
 beforeEach(() => {
   vi.useFakeTimers(); downloads.length = 0;
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(URL, 'createObjectURL').mockImplementation(blob => { downloads.push(blob as Blob); return `blob:writing-recovery-${downloads.length}`; });
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});

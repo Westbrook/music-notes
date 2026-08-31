@@ -14,14 +14,8 @@
         <h1>Music Notes</h1>
         <p class="intro">Write the music in HTML. Keep its rhythm, spelling, and structure intact as it moves from a wide screen to a small one, or onto paper.</p>
         <p class="toolbar-help"><a href="./author.html">Open Author</a> to compose, read, and prepare pages in a separate workspace using this notation system.</p>
-        <div class="toolbar" role="group" aria-label="Score display controls">
-          <label><input id="print-preview" type="checkbox" aria-describedby="print-layout-help" /> Use print layout on screen (680px)</label>
-          <button id="print-scores" type="button" aria-describedby="print-dialog-help">Open print dialog…</button>
-          <a class="source-link" href="#source-example">Read the markup</a>
-        </div>
-        <p id="print-layout-help" class="toolbar-help">The checkbox fixes score wrapping at the print width; it does not show paper pages. Short scores may look unchanged. Try the <a href="#ensemble-auto-heading">automatic ensemble</a> in a narrow window to see the difference.</p>
-        <p id="print-dialog-help" class="toolbar-help">Printing includes all twelve scores and their explanations, without source snippets or text transcripts. It always uses the print layout, whether the checkbox is on or off. Choose paper and margins in your browser’s dialog, then Print or Save as PDF if offered. If no dialog opens here, use a browser with printing support.</p>
-        <p id="workbook-status" class="workbook-status" role="status" aria-live="polite" aria-atomic="true">Scores follow the window width.</p>
+        <music-workbook-toolbar id-prefix="" print-width="680" score-count="12"
+          source-href="#source-example" example-href="#ensemble-auto-heading"></music-workbook-toolbar>
       </header>
 
       <section class="study" aria-labelledby="pitch-heading">

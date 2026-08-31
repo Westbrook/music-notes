@@ -6,6 +6,7 @@
  * The real in-flow popover fallback is exercised; this is not native pointer,
  * top-layer, CSS layout, font, capture, touch or saved-PDF qualification.
  */
+import { authorActiveElement, authorControlRoot, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngravingOptions, EngravingResult, EventGeometry, InsertionAnchor, MeasureGeometry, SystemGeometry } from '../src/engraving/render.js';
 import type { Score } from '../src/model/types.js';
@@ -17,7 +18,6 @@ const engine = vi.hoisted(() => ({
 vi.mock('../src/engraving/render.js', () => ({ engravingReady: engine.ready, renderScore: engine.render }));
 vi.mock('../src/engraving/pointer-preview.js', () => ({ createPitchPreview: vi.fn(), createRestPreview: vi.fn() }));
 import '../src/engraving/render.js';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
@@ -25,7 +25,6 @@ import { MusicSurface } from '../src/components/music-surface.js';
 import { add, pitchDescription, pitchPosition, pitchText, rational, toNumber } from '../src/model/index.js';
 import { createPitchPreview, createRestPreview } from '../src/engraving/pointer-preview.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const NS = 'http://www.w3.org/2000/svg';
 const STAFF = 'pointer-lead';
 const BARS = Array.from({ length: 8 }, (_, index) => `pointer-bar-${index + 1}`);
@@ -61,7 +60,7 @@ class ResizeObserverDouble implements ResizeObserver {
   observe(): void {} unobserve(): void {} disconnect(): void {}
 }
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const value = document.getElementById(id); if (!value) throw new Error(`Missing actual Author control #${id}.`);
+  const value = findAuthorControl(document, id); if (!value) throw new Error(`Missing actual Author control #${id}.`);
   return value as T;
 }
 function surface(): MusicSurface {
@@ -222,7 +221,7 @@ async function mount() {
   expect(app!.session.score.staves[0].measures.every(measure => measure.incomplete && measure.voices[0].events.length === 0)).toBe(true);
   const before = accepted();
   await click('toggle-entry'); await settled(); writing();
-  expect(accepted()).toEqual(before); expect(document.activeElement).toBe(el('score-editor'));
+  expect(accepted()).toEqual(before); expect(authorActiveElement(document)).toBe(el('score-editor'));
   await click('entry-value-trigger'); await field('event-duration', 'quarter'); await field('event-dots', '0'); await click('close-entry-value');
   writing(); expect(accepted()).toEqual(before); expect(execute).not.toHaveBeenCalled();
   expect(el<HTMLSelectElement>('insert-position').value).toBe('after');
@@ -235,7 +234,7 @@ async function selectNote(id: string, barIndex: number): Promise<void> {
   await click('location-trigger'); await field('measure-select', BARS[barIndex]); await click('close-location');
   const panel = el<HTMLDetailsElement>('navigator-panel');
   if (!panel.open) panel.querySelector('summary')!.click();
-  const button = el('event-navigator').querySelector<HTMLButtonElement>(`button[data-source-id="${id}"]`);
+  const button = authorControlRoot(document, 'event-navigator')!.querySelector<HTMLButtonElement>(`button[data-source-id="${id}"]`);
   expect(button).not.toBeNull(); expect(available(button!)).toBe(true);
   actions.push(`select:${id}`); button!.click(); await nextTask(); await settled();
   expect(app!.session.selection.ids).toEqual([id]);
@@ -306,7 +305,7 @@ async function dragNote(id: string, changed: boolean): Promise<void> {
   expect(el('score-host').shadowRoot!.querySelector('.pointer-ghost[data-valid="true"]'), el('pointer-status').textContent || '').not.toBeNull();
   expect(accepted()).toEqual(before); expect(recipe()).toEqual(palette);
   pointer('pointerup', destination); expect(el('score-host').hasPointerCapture(73)).toBe(false);
-  await settled(); expect(document.activeElement).toBe(el('score-editor'));
+  await settled(); expect(authorActiveElement(document)).toBe(el('score-editor'));
 }
 async function place(point: Point, kind: 'note' | 'rest', expectedPitch?: string, admittedHover = true): Promise<string> {
   const before = accepted(), palette = recipe(), oldLayout = surface().getLayoutGeometry()!;
@@ -319,7 +318,7 @@ async function place(point: Point, kind: 'note' | 'rest', expectedPitch?: string
   expect(preview(), el('pointer-status').textContent || '').not.toBeNull();
   pointer('pointerup', point);
   expect(app!.session.revision, el('pointer-status').textContent || el('author-errors').textContent || '').toBe(before.revision + 1);
-  await settled(); writing(); expect(document.activeElement).toBe(el('score-editor'));
+  await settled(); writing(); expect(authorActiveElement(document)).toBe(el('score-editor'));
   expect(surface().getLayoutGeometry()!.revision).toBeGreaterThan(oldLayout.revision);
   const expected = structuredClone(palette); if (expectedPitch !== undefined) expected.values['event-pitch'] = expectedPitch;
   expect(recipe()).toEqual(expected); expect(el('entry-settings-label').textContent).toBe(kind === 'rest' ? 'Rest' : 'Note');
@@ -338,7 +337,7 @@ async function undoAll(checkpoints: readonly string[]): Promise<void> {
 
 beforeEach(async () => {
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell; document.body.className = 'author-app'; actions.length = 0;
+  mountAuthorFixture(); document.body.className = 'author-app'; actions.length = 0;
   for (const [name, value] of Object.entries({ innerWidth: 1360, innerHeight: 900 })) {
     dimensionsBefore.set(name, Object.getOwnPropertyDescriptor(window, name)); Object.defineProperty(window, name, { configurable: true, value });
   }

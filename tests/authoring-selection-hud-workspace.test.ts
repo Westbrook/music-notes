@@ -4,6 +4,7 @@
  * maps, and SelectionControls. Only engraving readiness/SVG measurements are
  * mocked. This is not native layout, popover, pointer-capture or browser evidence.
  */
+import { authorActiveElement, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngravingOptions, EngravingResult, EventGeometry, InsertionAnchor, MarkingGeometry, MeasureGeometry, SystemGeometry } from '../src/engraving/render.js';
 import type { Score } from '../src/model/types.js';
@@ -15,15 +16,14 @@ const engine = vi.hoisted(() => ({
 }));
 vi.mock('../src/engraving/render.js', () => ({ engravingReady: engine.ready, renderScore: engine.render }));
 import '../src/engraving/render.js';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { SelectionControls } from '../src/authoring/selection-controls.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import { MusicSurface } from '../src/components/music-surface.js';
 import type { LayoutGeometry } from '../src/components/music-surface.js';
+import type { ScoreViewport } from '../src/authoring/ui/score-viewport.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const events = `<music-note id="note" pitch="F4" duration="half"><music-articulation id="accent" type="accent"></music-articulation></music-note>
   <music-note id="next" pitch="G4" duration="half"></music-note>`;
 const source = (explicit: boolean): string => `<music-system id="hud-score"><music-staff id="staff" label="Flute"><music-measure id="bar">
@@ -64,10 +64,11 @@ class VisualViewportDouble extends EventTarget {
   offsetLeft = 0; offsetTop = 0; width = 1180; height = 660;
 }
 function control<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id); if (!element) throw new Error(`Missing Author control #${id}`); return element as T;
+  const element = findAuthorControl<T>(document, id); if (!element) throw new Error(`Missing Author control #${id}`); return element;
 }
+function scoreViewport(): ScoreViewport { return control<ScoreViewport>('score-host'); }
 function surface(): MusicSurface {
-  const element = control('score-host').shadowRoot!.querySelector('music-system');
+  const element = scoreViewport().surface;
   if (!(element instanceof MusicSurface)) throw new Error('The real workspace did not mount its MusicSurface.'); return element;
 }
 function dimensions(element: HTMLElement, width: () => number, height: () => number, rect: () => DOMRect): void {
@@ -143,7 +144,7 @@ async function mount(explicit = true, contextualHud = true, html = source(explic
   });
   app = new AuthorWorkspace({ project: createProject(html, 'HUD workspace boundary'), recovery, contextualHud });
   const viewport = control('score-scroll');
-  const mount = control('score-host').shadowRoot!.querySelector<HTMLElement>('.score-mount')!;
+  const mount = scoreViewport().scoreMount;
   dimensions(mount, () => hostWidth, () => 1000, () => new DOMRect(40, 80 - pageScroll - viewport.scrollTop, hostWidth, 1000));
   await settled();
   // Prime only AuthorWorkspace's observer. Surface and HUD observers remain real
@@ -193,7 +194,7 @@ function replaceProjected(score: Score, layout: LayoutGeometry): void {
 beforeEach(async () => {
   hostWidth = 900; pageScroll = 0; observers.length = 0; releaseEngraving = undefined;
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   for (const [name, value] of Object.entries({ innerWidth: 1180, innerHeight: 660 })) {
     dimensionDescriptors.set(name, Object.getOwnPropertyDescriptor(window, name)); Object.defineProperty(window, name, { configurable: true, value });
   }
@@ -215,6 +216,10 @@ beforeEach(async () => {
   });
   const viewport = control('score-scroll'); viewport.style.overflow = 'auto';
   dimensions(viewport, () => 900, () => 500, () => new DOMRect(40, 80 - pageScroll, 900, 500));
+  // Component styles now supply these clipping boxes in the test environment;
+  // their measured aperture contains the same viewport and reserved dock.
+  dimensions(control('author-workbench'), () => 1140, () => 580, () => new DOMRect(40, 80 - pageScroll, 1140, 580));
+  dimensions(control('score-editor'), () => 900, () => 500, () => new DOMRect(40, 80 - pageScroll, 900, 500));
   dimensions(control('score-host'), () => hostWidth, () => 1000, () => new DOMRect(40, 80 - pageScroll - viewport.scrollTop, hostWidth, 1000));
   const controls = control('selection-controls');
   Object.defineProperty(controls, 'getBoundingClientRect', { configurable: true, value: () => controls.style.position === 'fixed'
@@ -260,21 +265,21 @@ describe('HUD-OUTER-VIEWPORT: real workspace event wiring', () => {
     expectDocked(); control('selection-sharp').click(); noEdit(before);
   });
 
-  it('keeps the real inner-system scroll listener connected through MusicSurface shadow DOM', async () => {
+  it('forwards inner-system scrolling through the public surface event', async () => {
     await mount(); await select(); expectFloating(); press(); const before = accepted();
-    const row = surface().shadowRoot!.querySelector<HTMLElement>('.screen .system-row')!;
+    const row = surface().getRenderedProjection()!.frames[0].row!;
     row.scrollLeft = 500; row.dispatchEvent(new Event('scroll'));
     expectDocked(); control('selection-sharp').click(); noEdit(before);
   });
 
   it('returns focused Value chooser input to a usable related control when unsafe outer scroll docks it', async () => {
     await mount(); await select(); expectFloating(); openPicker();
-    control('selection-duration').focus(); expect(document.activeElement).toBe(control('selection-duration'));
+    control('selection-duration').focus(); expect(authorActiveElement(document)).toBe(control('selection-duration'));
     const before = accepted(); const cancel = vi.spyOn(SelectionControls.prototype, 'cancel');
     control('score-scroll').scrollTop = 10; control('score-scroll').dispatchEvent(new Event('scroll'));
     expectDocked(); expect(cancel).toHaveBeenCalledOnce(); expect(control('selection-value-chooser').hidden).toBe(true);
     await Promise.resolve();
-    const focused = document.activeElement as HTMLElement;
+    const focused = authorActiveElement(document) as HTMLElement;
     expect(focused).toBe(control('selection-value')); expect(focused.isConnected).toBe(true);
     expect(focused.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull(); expect(focused.matches(':disabled')).toBe(false);
     noEdit(before); expect(control('score-scroll').scrollTop).toBe(10);
@@ -287,7 +292,7 @@ describe('HUD-OUTER-VIEWPORT: real workspace event wiring', () => {
     expectDocked(); expect(control('selection-value-chooser').hidden).toBe(true);
     control('source-trigger').click(); control('source-input').focus();
     await Promise.resolve();
-    expect(document.activeElement).toBe(control('source-input')); expect(control('source-panel').hidden).toBe(false);
+    expect(authorActiveElement(document)).toBe(control('source-input')); expect(control('source-panel').hidden).toBe(false);
     noEdit(before); expect(control('score-scroll').scrollTop).toBe(10);
   });
 });
@@ -382,14 +387,14 @@ describe('ENTRY-VOICE: accepted source and the current insertion anchor', () => 
     expect(matching).toHaveLength(1);
     const anchor = matching[0]; expect(anchor.eventIndex).toBe(0); expect(anchor.onset).toEqual(rational(0));
     expect(anchor.beforeId).toBeUndefined(); expect(anchor.afterId).toBeUndefined();
-    const caret = control('score-host').shadowRoot!.querySelector<HTMLElement>('.author-caret'); expect(caret).not.toBeNull();
+    const caret = scoreViewport().overlayMount.querySelector<HTMLElement>('.author-caret'); expect(caret).not.toBeNull();
     expect(caret!.dataset.sourceId).toBe(projected.id);
-    const svg = surface().shadowRoot!.querySelector<SVGSVGElement>('.screen svg.notation-svg')!;
+    const svg = surface().getRenderedProjection()!.frames[0].svg;
     const point = new DOMPoint(anchor.x, anchor.y - 8).matrixTransform(svg.getScreenCTM()!);
     const host = control('score-host').getBoundingClientRect();
     expect(Number.parseFloat(caret!.style.left)).toBeCloseTo(point.x - host.left - 3, 6);
     expect(Number.parseFloat(caret!.style.top)).toBeCloseTo(point.y - host.top - 3, 6);
-    expect(control('score-host').shadowRoot!.querySelectorAll('.author-caret')).toHaveLength(1);
+    expect(scoreViewport().overlayMount.querySelectorAll('.author-caret')).toHaveLength(1);
     expect(control('remaining-time').textContent).toContain('Empty draft');
     control('tools-toggle').click(); control('tool-tab-measure').click(); await settled();
     expect(control('workspace-tools').hidden).toBe(false); expect(control('measure-inspector').hidden).toBe(false);
@@ -403,6 +408,9 @@ describe('ENTRY-VOICE: accepted source and the current insertion anchor', () => 
 
   it('names Return to target before offering Fill for an empty held measure elsewhere', async () => {
     const html = '<music-system id="hud-score"><music-staff id="staff" label="Flute"><music-measure id="bar" incomplete><music-voice id="empty"></music-voice></music-measure><music-measure id="later"><music-note id="later-note" pitch="G4" duration="whole"></music-note></music-measure></music-staff></music-system>';
+    // This scenario keeps the score and its held Properties draft visible together.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 }); visual.width = 1440;
+    dimensions(control('author-workbench'), () => 1360, () => 580, () => new DOMRect(40, 80 - pageScroll, 1360, 580));
     await mount(true, false, html);
     control('score-editor').focus();
     control('score-editor').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true, cancelable: true }));
@@ -442,13 +450,13 @@ describe('ENTRY-VOICE: accepted source and the current insertion anchor', () => 
     for (const other of layout.systems[0].anchors.filter(candidate => compare(candidate.onset, anchor.onset) === 0)) {
       expect({ x: other.x, y: other.y }).toEqual({ x: anchor.x, y: anchor.y });
     }
-    const svg = surface().shadowRoot!.querySelector<SVGSVGElement>(`.${layout.projection} svg.notation-svg`)!;
-    const caret = control('score-host').shadowRoot!.querySelector<HTMLElement>('.author-caret'); expect(caret).not.toBeNull();
+    const svg = surface().getRenderedProjection()!.frames[0].svg;
+    const caret = scoreViewport().overlayMount.querySelector<HTMLElement>('.author-caret'); expect(caret).not.toBeNull();
     const point = new DOMPoint(anchor.x, anchor.y - 8).matrixTransform(svg.getScreenCTM()!);
     const host = control('score-host').getBoundingClientRect();
     expect(Number.parseFloat(caret!.style.left)).toBeCloseTo(point.x - host.left - 3, 6);
     expect(Number.parseFloat(caret!.style.top)).toBeCloseTo(point.y - host.top - 3, 6);
-    expect(control('score-host').shadowRoot!.querySelectorAll('.author-caret')).toHaveLength(1);
+    expect(scoreViewport().overlayMount.querySelectorAll('.author-caret')).toHaveLength(1);
     expect(app!.session.project.sourceHtml).toBe(sourceBefore); expect(app!.session.project.layouts).toEqual(layoutBefore);
     expect(app!.session.revision).toBe(0); expect(app!.session.canUndo).toBe(false); expectDocked();
   });

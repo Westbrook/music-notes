@@ -94,6 +94,23 @@ function fixture(config: { preferredSide?: 'above' | 'below'; margin?: number; g
   };
 }
 
+// Happy DOM has no assignedSlot; these are explicit composed-routing doubles.
+function assign(element: Element, slot: HTMLSlotElement | null): void {
+  Object.defineProperty(element, 'assignedSlot', { configurable: true, value: slot });
+}
+function slottedFixture() {
+  const f = fixture(), root = f.container.attachShadow({ mode: 'open' });
+  root.innerHTML = '<first-tools><slot name="first" slot="fields"></slot></first-tools><second-tools><slot name="second" slot="fields"></slot></second-tools>';
+  const firstHost = root.querySelector<HTMLElement>('first-tools')!, secondHost = root.querySelector<HTMLElement>('second-tools')!;
+  const forward = firstHost.querySelector<HTMLSlotElement>('slot')!, secondForward = secondHost.querySelector<HTMLSlotElement>('slot')!;
+  const firstRoot = firstHost.attachShadow({ mode: 'open' }), secondRoot = secondHost.attachShadow({ mode: 'open' });
+  firstRoot.innerHTML = '<div><slot name="fields"></slot></div>'; secondRoot.innerHTML = '<div><slot name="fields"></slot></div>';
+  const wrapper = firstRoot.querySelector<HTMLElement>('div')!, secondWrapper = secondRoot.querySelector<HTMLElement>('div')!;
+  const slot = firstRoot.querySelector<HTMLSlotElement>('slot')!, secondSlot = secondRoot.querySelector<HTMLSlotElement>('slot')!;
+  f.trigger.slot = 'first'; assign(f.trigger, forward); assign(forward, slot); assign(secondForward, secondSlot);
+  return { ...f, root, firstHost, firstRoot, forward, wrapper, slot, secondHost, secondRoot, secondForward, secondWrapper, secondSlot };
+}
+
 describe('native chooser trigger placement', () => {
   it('places above the actual bottom-dock invoker and overrides the generic top-right inset', () => {
     const f = fixture(); f.panel.style.inset = '12px 12px auto auto'; f.open();
@@ -292,5 +309,106 @@ describe('bounded open-menu updates', () => {
     f.onMeasure(() => { void f.body.scrollTop; });
     f.controller.refresh();
     expect(f.body.getBoundingClientRect().height).toBe(520); expect(f.body.scrollTop).toBe(318);
+  });
+});
+
+describe('positioning across composed slot and shadow boundaries', () => {
+  it('observes forwarded slots and tracks noncomposed scroll in their nested roots', () => {
+    const f = slottedFixture(); f.open();
+    for (const ancestor of [f.trigger, f.forward, f.slot, f.wrapper, f.firstHost, f.container]) {
+      expect(sizes[0].observe).toHaveBeenCalledWith(ancestor);
+      expect(mutations[0].observe).toHaveBeenCalledWith(ancestor, { attributes: true, childList: true });
+    }
+    for (const root of [f.root, f.firstRoot]) expect(mutations[0].observe).toHaveBeenCalledWith(root, { childList: true });
+    f.setAnchor(new DOMRect(300, 500, 66, 44));
+    f.wrapper.dispatchEvent(new Event('scroll', { composed: false })); expect(frames.size).toBe(1); flushFrame();
+    expect(f.panel.getBoundingClientRect()).toMatchObject({ x: 300, y: 272 });
+    f.controller.close();
+    f.wrapper.dispatchEvent(new Event('scroll', { composed: false })); f.forward.dispatchEvent(new Event('slotchange'));
+    sizes[0].fire(); mutations[0].fire(); expect(frames.size).toBe(0);
+  });
+
+  it.each(['host-inert', 'slot-inert', 'wrapper-hidden', 'forward-hidden', 'host-content-hidden'] as const)('releases positioning when the composed chain becomes %s', kind => {
+    const f = slottedFixture(), original = f.panel.style.cssText; f.open();
+    if (kind === 'host-inert') f.container.setAttribute('inert', '');
+    if (kind === 'slot-inert') f.slot.setAttribute('inert', '');
+    if (kind === 'wrapper-hidden') f.wrapper.hidden = true;
+    if (kind === 'forward-hidden') f.forward.style.visibility = 'hidden';
+    if (kind === 'host-content-hidden') f.firstHost.style.contentVisibility = 'hidden';
+    mutations[0].fire(); flushFrame(); mutations[0].fire();
+    expect(f.unavailable).toHaveBeenCalledOnce(); expect(f.panel.style.cssText).toBe(original); expect(frames.size).toBe(0);
+    expect(sizes[0].disconnect).toHaveBeenCalledOnce(); expect(mutations[0].disconnect).toHaveBeenCalledOnce();
+    expect(f.show).not.toHaveBeenCalled(); expect(f.hide).not.toHaveBeenCalled();
+  });
+
+  it('rebinds the composed chain after reassignment and retires the old callbacks', () => {
+    const f = slottedFixture(); f.open();
+    f.trigger.slot = 'second'; assign(f.trigger, f.secondForward); f.forward.dispatchEvent(new Event('slotchange'));
+    expect(frames.size).toBe(1); flushFrame();
+    expect(sizes).toHaveLength(2); expect(mutations).toHaveLength(2);
+    expect(sizes[0].disconnect).toHaveBeenCalledOnce(); expect(mutations[0].disconnect).toHaveBeenCalledOnce();
+    expect(sizes[1].observe).toHaveBeenCalledWith(f.secondWrapper);
+    expect(mutations[1].observe).toHaveBeenCalledWith(f.secondRoot, { childList: true });
+    f.wrapper.dispatchEvent(new Event('scroll', { composed: false })); f.forward.dispatchEvent(new Event('slotchange'));
+    sizes[0].fire(); mutations[0].fire(); expect(frames.size).toBe(0);
+    f.setAnchor(new DOMRect(220, 450, 66, 44));
+    f.secondWrapper.dispatchEvent(new Event('scroll', { composed: false })); flushFrame();
+    expect(f.panel.getBoundingClientRect()).toMatchObject({ x: 220, y: 222 });
+    f.secondWrapper.hidden = true; mutations[1].fire(); flushFrame();
+    expect(f.unavailable).toHaveBeenCalledOnce(); expect(f.panel.style.position).toBe('');
+    f.secondSlot.dispatchEvent(new Event('slotchange')); f.secondWrapper.dispatchEvent(new Event('scroll')); sizes[1].fire();
+    expect(frames.size).toBe(0);
+  });
+
+  it('releases an invoker that becomes unassigned by its shadow host', () => {
+    const f = slottedFixture(); f.open();
+    f.trigger.slot = 'missing'; assign(f.trigger, null); f.forward.dispatchEvent(new Event('slotchange')); flushFrame();
+    expect(f.unavailable).toHaveBeenCalledOnce(); expect(f.panel.style.position).toBe('');
+    f.forward.dispatchEvent(new Event('slotchange')); mutations[0].fire(); expect(frames.size).toBe(0);
+  });
+
+  it('releases an invoker that becomes suppressed slot fallback content', () => {
+    const f = slottedFixture(); f.open();
+    f.forward.append(f.trigger); assign(f.trigger, null);
+    const replacement = document.createElement('button'); replacement.slot = 'first'; f.container.append(replacement);
+    vi.spyOn(f.forward, 'assignedNodes').mockReturnValue([replacement]);
+    mutations[0].fire(); flushFrame();
+    expect(f.unavailable).toHaveBeenCalledOnce(); expect(f.panel.style.position).toBe('');
+    mutations[0].fire(); expect(frames.size).toBe(0);
+  });
+
+  it('detects removal of a direct shadow child and cleans up its root listeners', () => {
+    const f = fixture({ shadow: true }); f.open();
+    expect(mutations[0].observe).toHaveBeenCalledWith(f.root, { childList: true });
+    f.trigger.remove(); mutations[0].fire(); flushFrame();
+    expect(f.unavailable).toHaveBeenCalledOnce(); expect(f.panel.style.position).toBe('');
+    expect(mutations[0].disconnect).toHaveBeenCalledOnce(); expect(sizes[0].disconnect).toHaveBeenCalledOnce();
+    f.root!.dispatchEvent(new Event('scroll')); mutations[0].fire(); expect(frames.size).toBe(0);
+  });
+
+  it('rebinds a new shadow root even when the composed element chain stays the same', () => {
+    const f = fixture(); f.open();
+    const root = f.container.attachShadow({ mode: 'open' }); root.append(f.trigger);
+    mutations[0].fire(); flushFrame();
+    expect(mutations).toHaveLength(2); expect(mutations[1].observe).toHaveBeenCalledWith(root, { childList: true });
+    expect(mutations[0].disconnect).toHaveBeenCalledOnce(); expect(sizes[0].disconnect).toHaveBeenCalledOnce();
+    f.setAnchor(new DOMRect(300, 500, 66, 44)); f.trigger.dispatchEvent(new Event('scroll', { composed: false })); flushFrame();
+    expect(f.panel.getBoundingClientRect()).toMatchObject({ x: 300, y: 272 });
+    f.controller.close(); root.dispatchEvent(new Event('scroll')); mutations[1].fire(); expect(frames.size).toBe(0);
+  });
+
+  it('rejects an invoker rendered inside the panel through a slot', () => {
+    const f = fixture(), root = f.container.attachShadow({ mode: 'open' }), slot = document.createElement('slot');
+    f.panel.append(slot); root.append(f.panel); assign(f.trigger, slot);
+    expect(f.panel.contains(f.trigger)).toBe(false); f.open();
+    expect(f.unavailable).toHaveBeenCalledOnce(); expect(f.measure).not.toHaveBeenCalled(); expect(frames.size).toBe(0);
+  });
+
+  it('ignores menu body scrolling when its content is rendered through a slot', () => {
+    const f = fixture({ shadow: true }), slot = document.createElement('slot');
+    f.container.append(f.body); f.panel.append(slot); f.root!.append(f.panel); assign(f.body, slot);
+    expect(f.panel.contains(f.body)).toBe(false); f.open();
+    f.body.dispatchEvent(new Event('scroll')); expect(frames.size).toBe(0);
+    f.controller.close(); f.body.dispatchEvent(new Event('scroll')); expect(frames.size).toBe(0);
   });
 });

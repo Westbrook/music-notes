@@ -1,9 +1,11 @@
+import { render } from 'lit/html.js';
 import { readScore, serializeScore } from '../dom/index.js';
-import { formatRational, harmonyIntervalDescription, harmonyIntervalText, pitchDescription } from '../model/index.js';
 import type { Diagnostic, Score } from '../model/types.js';
 import type { EngravingOptions, EngravingResult, HitRegion, SystemGeometry } from '../engraving/render.js';
 import { MusicDataElement, reflectAttributes } from './data-element.js';
-import style from './music-surface.css?inline';
+import { describeScore } from './score-description.js';
+import { surfaceTemplate } from './surface-template.js';
+import type { SurfaceView } from './surface-template.js';
 
 /** A snapshot of the currently displayed projection; coordinates belong to its SVGs. */
 export interface LayoutGeometry {
@@ -13,6 +15,27 @@ export interface LayoutGeometry {
   readonly revision: number;
   readonly scoreId: string;
   readonly systems: readonly SystemGeometry[];
+}
+
+/** Measured system and its current DOM frame. SVG references are measurement-only. */
+export interface RenderedFrame {
+  readonly system: SystemGeometry;
+  readonly svg: SVGSVGElement;
+  readonly row: HTMLElement | undefined;
+}
+
+/** Recheck layout identity/revision before using frames retained across an edit. */
+export interface RenderedProjection {
+  readonly surface: MusicSurface;
+  readonly renderRevision: number;
+  readonly layout: LayoutGeometry;
+  readonly frames: readonly RenderedFrame[];
+}
+
+/** The actual scroll owner is retained even when the event crosses a shadow root. */
+export interface NotationViewportChangeDetail {
+  readonly scroller: HTMLElement;
+  readonly layout: LayoutGeometry | undefined;
 }
 
 /** One semantic click, including the intent carried through either hit route. */
@@ -29,50 +52,16 @@ export interface NotationSelectionDetail {
 }
 
 let surfaceSequence = 0;
+const diagnosticsPresentationAttribute = 'data-diagnostics-presentation';
 
-function describeScore(score: Score): string {
-  const lines = [score.label || 'Music score'];
-  for (const staff of score.staves) {
-    const rhythm = staff.notation === 'rhythm';
-    const roads = staff.notation === 'three-roads';
-    lines.push(`${staff.label || 'Staff'}; ${roads ? '3 roads music; top higher, middle same, bottom lower; pitch chosen by the performer' : rhythm ? 'single-line rhythm staff; pitch unspecified' : `${staff.clef} clef`}.`);
-    if (roads) lines.push('Choose a starting reference pitch for each voice. Each attack compares with the last main pitch in that voice; rests preserve the reference. Harmony tones and ornament auxiliaries do not change that reference. A tied same direction sustains the main pitch and its harmonies without a new attack.');
-    for (const measure of staff.measures) {
-      lines.push(`Measure ${measure.number}; ${measure.meter.display}, groups ${measure.meter.groups.join(' + ')}`
-        + `${rhythm || roads ? '' : `; key ${measure.key}; ${measure.clef} clef`}${measure.pickup ? '; pickup' : ''}${measure.incomplete ? '; incomplete draft' : ''}.`);
-      for (const [index, voice] of measure.voices.entries()) {
-        const events = voice.events.map((event) => {
-          const name = event.kind === 'rest' ? event.measureRest ? 'full-measure rest' : 'rest'
-            : event.kind === 'slash' ? event.rhythmic ? 'rhythmic slash' : 'improvised beat slash'
-              : event.kind === 'rhythm' ? 'rhythm note; pitch unspecified'
-                : event.kind === 'road' ? `${event.pitchDirection}, ${event.pitchDirection === 'higher' ? 'top' : event.pitchDirection === 'lower' ? 'bottom' : 'middle'} road${event.tie === 'continue' || event.tie === 'end' ? '; sustain without a new attack' : ''}`
-                  : event.pitches.map(pitchDescription).join(' + ');
-          const tuplets = event.tupletIds.map((id) => voice.tuplets.find((tuplet) => tuplet.id === id))
-            .filter((tuplet) => tuplet !== undefined).map((tuplet) => `${tuplet.actual}:${tuplet.normal}`).join(' within ');
-          const markings = (event.markings ?? []).map(marking => marking.kind === 'interval'
-            ? `harmony ${harmonyIntervalText(marking.interval)}: ${harmonyIntervalDescription(marking.interval)} ${marking.placement} the main pitch`
-            : marking.type.replaceAll('-', ' '));
-          return `${name}, ${event.dots ? `${event.dots} dot${event.dots > 1 ? 's' : ''} ` : ''}${event.duration}`
-            + `${tuplets ? ` in ${tuplets} tuplet` : ''}${event.tie !== 'none' ? `, tie ${event.tie}` : ''}`
-            + `${markings.length ? `; ${markings.join('; ')}` : ''}`
-            + ` (at ${formatRational(event.onset)}, duration ${formatRational(event.time)} whole notes)`;
-        });
-        const content = events.length ? events.join('; ')
-          : `${measure.incomplete && !measure.pickup ? 'empty draft' : 'empty voice'}; rhythm not yet written`;
-        lines.push(`  Voice ${index + 1}: ${content}.`);
-      }
-      for (const annotation of measure.annotations) {
-        lines.push(`  ${annotation.kind} at ${formatRational(annotation.onset)}: ${annotation.text}`
-          + (annotation.bpm === undefined ? '' : `; ${annotation.dots ? 'dotted ' : ''}${annotation.beat ?? 'quarter'} = ${annotation.bpm}`));
-      }
-      if (measure.breakBefore !== 'auto') lines.push(`  Starts a new ${measure.breakBefore}.`);
-    }
-  }
-  return lines.join('\n');
+function hasSourceChanges(records: readonly MutationRecord[]): boolean {
+  // This one metadata attribute configures presentation, never musical meaning.
+  return records.some(record => record.type !== 'attributes' || record.attributeName !== diagnosticsPresentationAttribute);
 }
 
 /** One coordinator owns all descendant music; nested surfaces remain source data. */
 export class MusicSurface extends MusicDataElement {
+  static override observedAttributes = [...MusicDataElement.observedAttributes, diagnosticsPresentationAttribute];
   declare label: string;
   declare meter: string;
   declare groups: string;
@@ -83,8 +72,10 @@ export class MusicSurface extends MusicDataElement {
   declare measureNumbers: string;
   declare printWidth: number;
   declare printPreview: boolean;
+  /** Reflects presentation metadata without changing music or invalidating engraving. */
+  declare diagnosticsPresentation: 'all' | 'errors';
 
-  private readonly observer = new MutationObserver(() => this.scheduleRender());
+  private readonly observer = new MutationObserver(records => { if (hasSourceChanges(records)) this.scheduleRender(); });
   private resizeObserver?: ResizeObserver;
   private revision = 0;
   private scheduled = false;
@@ -92,7 +83,9 @@ export class MusicSurface extends MusicDataElement {
   private complete: Promise<void> = Promise.resolve();
   private width = -1;
   private currentScore?: Score;
-  private currentDiagnostics: readonly Diagnostic[] = [];
+  private view: SurfaceView = {
+    initialized: false, visible: false, loading: true, label: 'Music score', description: '', diagnostics: [], diagnosticsPresentation: 'all',
+  };
   private sources: ReadonlyMap<string, Element> = new Map();
   private hits: readonly HitRegion[] = [];
   private printed?: EngravingResult;
@@ -100,7 +93,15 @@ export class MusicSurface extends MusicDataElement {
   private geometryRevision = 0;
   private layoutGeometry?: LayoutGeometry;
   private printedGeometry?: LayoutGeometry;
+  private renderedProjection?: { projection: RenderedProjection; mount: HTMLElement };
   private readonly onNotationChange = () => this.scheduleRender();
+  private readonly onViewportScroll = (event: Event) => {
+    const scroller = event.composedPath()[0];
+    if (!this.isConnected || !this.isRoot || !(scroller instanceof HTMLElement)) return;
+    this.dispatchEvent(new CustomEvent<NotationViewportChangeDetail>('notation-viewport-change', {
+      bubbles: true, composed: true, detail: { scroller, layout: this.getLayoutGeometry() },
+    }));
+  };
   private readonly onSelection = (event: Event) => {
     if (event.defaultPrevented) return;
     const path = event.composedPath();
@@ -142,24 +143,73 @@ export class MusicSurface extends MusicDataElement {
   constructor() {
     super();
     const shadow = this.attachShadow({ mode: 'open' });
-    shadow.innerHTML = `<style>${style}</style><div class="surface"><div class="loading" role="status">Preparing notation…</div><details class="diagnostics" hidden><summary></summary><ul></ul></details><div class="screen"></div><div class="print"></div><details class="transcript"><summary>Read score as text</summary><pre></pre></details></div><slot hidden></slot>`;
+    this.updateView();
     shadow.addEventListener('click', this.onSelection);
+    shadow.addEventListener('scroll', this.onViewportScroll, { capture: true, passive: true });
     this.addEventListener('click', this.onHostSelection);
+  }
+
+  private updateView(patch: Partial<SurfaceView> = {}): void {
+    this.view = { ...this.view, ...patch };
+    // Commit synchronously inside the existing projection lifecycle so its
+    // completion promise and events always include the current accessible UI.
+    render(surfaceTemplate(this.view), this.shadowRoot!, { host: this });
+  }
+
+  override attributeChangedCallback(name: string, previous: string | null, value: string | null): void {
+    if (name === diagnosticsPresentationAttribute) {
+      if (previous !== value) this.updateView({ diagnosticsPresentation: value === 'errors' ? 'errors' : 'all' });
+      return;
+    }
+    super.attributeChangedCallback(name, previous, value);
+  }
+
+  /** Current complete frame association, without caching screen transforms. */
+  getRenderedProjection(): RenderedProjection | undefined {
+    const layout = this.getLayoutGeometry();
+    if (!this.isConnected || !this.isRoot || !layout) { this.renderedProjection = undefined; return undefined; }
+    const cached = this.renderedProjection;
+    if (cached?.projection.layout === layout) {
+      return cached.projection.frames.every(frame => frame.svg.isConnected && cached.mount.contains(frame.svg)) ? cached.projection : undefined;
+    }
+    const mount = this.shadowRoot!.querySelector<HTMLElement>(`.${layout.projection}`);
+    if (!mount) return undefined;
+    const svgs = mount.querySelectorAll<SVGSVGElement>('svg.notation-svg');
+    const frames: RenderedFrame[] = [];
+    for (const system of layout.systems) {
+      const svg = svgs[system.index];
+      if (!svg?.isConnected) return undefined;
+      frames.push({ system, svg, row: svg.closest<HTMLElement>('.system-row') ?? undefined });
+    }
+    const projection = { surface: this, renderRevision: this.geometryRevision, layout, frames };
+    this.renderedProjection = { projection, mount };
+    return projection;
+  }
+
+  /** Validate saved frames before reading fresh CTMs; scrolling itself changes no revision. */
+  isProjectionCurrent(projection: RenderedProjection): boolean {
+    return projection.surface === this && this.getRenderedProjection() === projection
+      && projection.renderRevision === this.renderRevision;
+  }
+
+  /** Client-coordinate obstacles that previews must not cover with decoration. */
+  getNativeControlBounds(): readonly DOMRectReadOnly[] {
+    if (!this.isConnected || !this.isRoot) return [];
+    return [...this.shadowRoot!.querySelectorAll<HTMLElement>('.diagnostics:not([hidden]),.transcript')]
+      .filter(element => element.getClientRects().length > 0).map(element => element.getBoundingClientRect())
+      .filter(bounds => bounds.width > 0 && bounds.height > 0);
   }
 
   /** Resolve inert drawings through their current, measured projection. */
   getSourceAtPoint(clientX: number, clientY: number): string | undefined {
     if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return undefined;
-    const layout = this.getLayoutGeometry();
-    if (!layout) return undefined;
-    const svgs = [...this.shadowRoot!.querySelectorAll<SVGSVGElement>(`.${layout.projection} svg.notation-svg`)];
+    const projection = this.getRenderedProjection();
+    if (!projection) return undefined;
     const contains = (box: { x: number; y: number; width: number; height: number }, x: number, y: number) =>
       x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
-    for (const system of layout.systems) {
-      const svg = svgs[system.index];
-      if (!svg) continue;
+    for (const { system, svg, row } of projection.frames) {
       const bounds = svg.getBoundingClientRect();
-      const viewport = svg.closest('.system-row')?.getBoundingClientRect();
+      const viewport = row?.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0 || !contains(bounds, clientX, clientY)
         || (viewport && !contains(viewport, clientX, clientY))) continue;
       const matrix = svg.getScreenCTM();
@@ -193,8 +243,8 @@ export class MusicSurface extends MusicDataElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    this.updateView({ visible: this.isRoot, initialized: this.view.initialized || this.isRoot });
     const surface = this.shadowRoot!.querySelector<HTMLElement>('.surface')!;
-    surface.hidden = !this.isRoot;
     if (!this.isRoot) return;
     this.observer.observe(this, {
       subtree: true, childList: true, characterData: true, attributes: true,
@@ -214,6 +264,7 @@ export class MusicSurface extends MusicDataElement {
           this.printed = undefined;
           this.printedGeometry = undefined;
           this.layoutGeometry = undefined;
+          this.renderedProjection = undefined;
           this.geometryRevision++;
           return;
         }
@@ -232,6 +283,7 @@ export class MusicSurface extends MusicDataElement {
     this.printed = undefined;
     this.printedGeometry = undefined;
     this.layoutGeometry = undefined;
+    this.renderedProjection = undefined;
     this.geometryRevision++;
     this.removeEventListener('notation-change', this.onNotationChange);
     this.revision++;
@@ -240,12 +292,12 @@ export class MusicSurface extends MusicDataElement {
 
   /** Await source edits. Use refresh() for an immediate ancestor-width change. */
   get renderComplete(): Promise<void> {
-    if (this.observer.takeRecords().length) this.scheduleRender();
+    if (hasSourceChanges(this.observer.takeRecords())) this.scheduleRender();
     return this.complete;
   }
 
   get score(): Score | undefined { return this.currentScore; }
-  get diagnostics(): readonly Diagnostic[] { return this.currentDiagnostics; }
+  get diagnostics(): readonly Diagnostic[] { return this.view.diagnostics; }
   getSource(id: string): Element | undefined { return this.sources.get(id); }
   getHitRegions(): readonly HitRegion[] { return this.hits; }
 
@@ -254,13 +306,13 @@ export class MusicSurface extends MusicDataElement {
    * A viewport-only resize retains the token when the fixed print view is cached.
    */
   get renderRevision(): number {
-    if (this.observer.takeRecords().length) this.scheduleRender();
+    if (hasSourceChanges(this.observer.takeRecords())) this.scheduleRender();
     return this.geometryRevision;
   }
 
   /** Undefined while current geometry is unavailable, invalidated, or erroneous. */
   getLayoutGeometry(): LayoutGeometry | undefined {
-    if (this.observer.takeRecords().length) this.scheduleRender();
+    if (hasSourceChanges(this.observer.takeRecords())) this.scheduleRender();
     return this.layoutGeometry;
   }
 
@@ -290,6 +342,7 @@ export class MusicSurface extends MusicDataElement {
     // screen work must not invalidate an unchanged, displayed print projection.
     if (reason !== 'resize' || !this.hasAttribute('print-preview') || !this.printedGeometry) {
       this.layoutGeometry = undefined;
+      this.renderedProjection = undefined;
       this.geometryRevision++;
     }
     this.revision++;
@@ -361,8 +414,7 @@ export class MusicSurface extends MusicDataElement {
       this.sources = result.sources;
       diagnostics = [...result.diagnostics];
       const options = this.options(diagnostics, result.score.id);
-      this.shadowRoot!.querySelector('.transcript pre')!.textContent = describeScore(result.score);
-      this.shadowRoot!.querySelector('.surface')!.setAttribute('aria-label', result.score.label || 'Music score');
+      this.updateView({ description: describeScore(result.score), label: result.score.label || 'Music score' });
       // The displayed print projection has not changed during a viewport-only
       // resize, so its selection coordinates remain valid while screen work waits.
       this.hits = this.hasAttribute('print-preview') && this.printed ? this.printed.hitRegions : [];
@@ -373,6 +425,7 @@ export class MusicSurface extends MusicDataElement {
         this.printedGeometry = undefined;
         if (this.layoutGeometry) this.geometryRevision++;
         this.layoutGeometry = undefined;
+        this.renderedProjection = undefined;
         this.hits = [];
       } else {
         const engraving = await import('../engraving/render.js');
@@ -408,6 +461,7 @@ export class MusicSurface extends MusicDataElement {
       this.printedGeometry = undefined;
       if (this.layoutGeometry) this.geometryRevision++;
       this.layoutGeometry = undefined;
+      this.renderedProjection = undefined;
       this.hits = [];
       diagnostics.push({ severity: 'error', code: 'engraving-error', sourceId: this.currentScore?.id ?? this.id,
         message: error instanceof Error ? error.message : 'Notation could not be rendered.' });
@@ -416,35 +470,17 @@ export class MusicSurface extends MusicDataElement {
       print.classList.remove('measuring');
       if (revision === this.revision) {
         this.syncPointerSurfaces();
-        this.currentDiagnostics = diagnostics;
-        this.showDiagnostics();
-        this.shadowRoot!.querySelector<HTMLElement>('.loading')!.hidden = true;
+        this.updateView({ diagnostics, loading: false });
         this.dispatchEvent(new CustomEvent('notation-diagnostics', { bubbles: true, composed: true, detail: { diagnostics: this.diagnostics } }));
         this.dispatchEvent(new CustomEvent('notation-render', { bubbles: true, composed: true,
           detail: { score: this.score, diagnostics: this.diagnostics, hitRegions: this.hits,
             layoutGeometry: this.layoutGeometry, renderRevision: this.geometryRevision } }));
         // A consumer may edit the source from either event handler. That new
         // revision must finish before this batch's completion promise resolves.
-        if (this.observer.takeRecords().length) this.scheduleRender();
+        if (hasSourceChanges(this.observer.takeRecords())) this.scheduleRender();
         if (revision === this.revision) this.finishRender();
       }
     }
-  }
-
-  private showDiagnostics(): void {
-    const panel = this.shadowRoot!.querySelector<HTMLDetailsElement>('.diagnostics')!;
-    const errors = this.currentDiagnostics.filter((diagnostic) => diagnostic.severity === 'error').length;
-    panel.hidden = this.currentDiagnostics.length === 0;
-    panel.toggleAttribute('data-errors', errors > 0);
-    panel.open = errors > 0;
-    panel.querySelector('summary')!.textContent = errors ? `Notation needs attention (${errors} error${errors === 1 ? '' : 's'})`
-      : `${this.currentDiagnostics.length} notation notice${this.currentDiagnostics.length === 1 ? '' : 's'}`;
-    panel.querySelector('ul')!.replaceChildren(...this.currentDiagnostics.map((diagnostic) => {
-      const item = document.createElement('li');
-      item.textContent = `${diagnostic.message} [${diagnostic.sourceId}]`;
-      item.dataset.sourceId = diagnostic.sourceId;
-      return item;
-    }));
   }
 }
 
@@ -452,4 +488,5 @@ reflectAttributes(MusicSurface, {
   label: {}, meter: { default: '4/4' }, groups: {}, clef: { default: 'treble' }, key: { default: 'C' },
   maxMeasures: { type: 'number' }, justifyLast: { type: 'boolean' }, measureNumbers: { default: 'system' },
   printWidth: { type: 'number', default: 680 }, printPreview: { type: 'boolean' },
+  diagnosticsPresentation: { attribute: diagnosticsPresentationAttribute, default: 'all' },
 });

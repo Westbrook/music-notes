@@ -1,4 +1,7 @@
 import type { ViewMode } from './types.js';
+import { activeElement, composedAncestors, composedContains, composedParent, isRenderedInParent } from '../ui/composed-dom.js';
+import { asControlScope } from './control-scope.js';
+import type { ControlRoot, ControlScope } from './control-scope.js';
 
 /** The edit route remains compatible with callers, but Properties is not a tab. */
 export type WorkspaceTool = 'edit' | 'rhythm' | 'markings' | 'measure';
@@ -46,6 +49,8 @@ export interface WorkspaceToolsDestinationToggle {
 export type WorkspaceToolsToggleResult = 'opened' | 'closed' | 'unavailable';
 
 export interface WorkspaceToolsOptions {
+  /** Attribute presentation belongs to the workspace owner, not a queried descendant. */
+  stateHost?: HTMLElement;
   initial?: Partial<Pick<WorkspaceToolsState, 'mode' | 'open' | 'expanded' | 'tab' | 'generalTab' | 'panePlacement'>>;
   /** Capture the visible musical anchor and cancel gestures before DOM layout changes. */
   beforeChange?: (transition: WorkspaceToolsTransition) => void;
@@ -78,13 +83,14 @@ function presentation(state: Pick<WorkspaceToolsState, 'mode' | 'open' | 'expand
 }
 
 function canFocus(element: HTMLElement | null | undefined): element is HTMLElement {
-  if (!element?.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]')
+  if (!element?.isConnected
     || element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true') return false;
   const view = element.ownerDocument.defaultView;
-  for (let current: HTMLElement | null = element; current && view; current = current.parentElement) {
-    const style = view.getComputedStyle(current);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'
-      || style.contentVisibility === 'hidden') return false;
+  for (const current of [element, ...composedAncestors(element)]) {
+    if (!isRenderedInParent(current) || current.matches('[hidden], [inert], [aria-hidden="true"], dialog:not([open])')) return false;
+    const style = view?.getComputedStyle(current);
+    if (style?.display === 'none' || style?.visibility === 'hidden' || style?.visibility === 'collapse'
+      || style?.contentVisibility === 'hidden') return false;
   }
   return true;
 }
@@ -93,6 +99,8 @@ function canFocus(element: HTMLElement | null | undefined): element is HTMLEleme
 export class WorkspaceTools {
   private readonly options: WorkspaceToolsOptions;
   private readonly document: Document;
+  private readonly scope: ControlScope;
+  private readonly stateHost: HTMLElement;
   private readonly abort = new AbortController();
   private readonly pane: HTMLElement;
   private readonly toggleButton: HTMLButtonElement;
@@ -109,33 +117,35 @@ export class WorkspaceTools {
   private invoker: HTMLElement | null = null;
   private disposed = false;
 
-  constructor(options: WorkspaceToolsOptions = {}, root: Document = document) {
+  constructor(options: WorkspaceToolsOptions = {}, root: ControlRoot = document) {
     this.options = options;
-    this.document = root;
+    this.scope = asControlScope(root);
+    this.document = this.scope.document;
+    this.stateHost = options.stateHost ?? this.document.body;
     const control = <T extends HTMLElement>(id: string): T => {
-      const element = root.getElementById(id);
+      const element = this.scope.getElementById(id);
       if (!element) throw new Error('Missing workspace tools control: ' + id);
       return element as T;
     };
     this.pane = control('workspace-tools');
     this.toggleButton = control('tools-toggle');
-    this.hideButton = root.getElementById('tools-hide') as HTMLButtonElement | null;
-    this.expandButton = root.getElementById('tools-expand') as HTMLButtonElement | null;
+    this.hideButton = this.scope.getElementById('tools-hide') as HTMLButtonElement | null;
+    this.expandButton = this.scope.getElementById('tools-expand') as HTMLButtonElement | null;
     this.otherButton = control('other-tools');
     this.backButton = control('back-to-properties');
-    const tablist = this.pane.querySelector<HTMLElement>('[role="tablist"]');
+    const tablist = this.scope.querySelectorAll<HTMLElement>('[role="tablist"]').find(element => composedContains(this.pane, element));
     if (!tablist) throw new Error('Missing workspace tools tablist.');
     this.tablist = tablist;
     this.panels = Object.fromEntries(tools.map(tool => {
       const panel = control<HTMLElement>(panelIds[tool]);
-      if (!this.pane.contains(panel) || this.tablist.contains(panel)) {
+      if (!composedContains(this.pane, panel) || composedContains(this.tablist, panel)) {
         throw new Error('Workspace tool ' + tool + ' must be a pane region outside the tablist.');
       }
       return [tool, panel];
     })) as Record<WorkspaceTool, HTMLElement>;
     this.tabs = Object.fromEntries(generalTools.map(tool => {
       const tab = control<HTMLButtonElement>('tool-tab-' + tool);
-      if (!this.tablist.contains(tab)) throw new Error('Workspace tool ' + tool + ' must belong to its tablist.');
+      if (!composedContains(this.tablist, tab)) throw new Error('Workspace tool ' + tool + ' must belong to its tablist.');
       tab.type = 'button';
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-controls', this.panels[tool].id);
@@ -154,7 +164,7 @@ export class WorkspaceTools {
     const markupTab = generalTools.find(tool => this.tabs[tool].getAttribute('aria-selected') === 'true');
     const tab = initial?.tab ?? 'edit';
     const generalTab = tab === 'edit' ? initial?.generalTab ?? markupTab ?? 'rhythm' : tab;
-    const mode = initial?.mode ?? (isViewMode(root.body.dataset.view) ? root.body.dataset.view : 'write');
+    const mode = initial?.mode ?? (isViewMode(this.stateHost.dataset.view) ? this.stateHost.dataset.view : 'write');
     const open = initial?.open ?? !this.pane.hidden;
     const expanded = initial?.expanded ?? false;
     const panePlacement = initial?.panePlacement === 'sheet' ? 'sheet' : 'side';
@@ -194,7 +204,7 @@ export class WorkspaceTools {
     this.tablist.addEventListener('keydown', event => this.keydown(event), { signal });
     this.tablist.addEventListener('focusout', event => {
       // Re-entering the widget starts at its active tab, not an unactivated arrow stop.
-      if (!event.relatedTarget || !this.tablist.contains(event.relatedTarget as Node)) this.rove(this.current.generalTab);
+      if (!event.relatedTarget || !composedContains(this.tablist, event.relatedTarget as Node)) this.rove(this.current.generalTab);
     }, { signal });
   }
 
@@ -229,8 +239,8 @@ export class WorkspaceTools {
     const changed = this.change({ open: true, tab }, this.current.visible ? 'tab' : 'show', true);
     if (!changed) this.options.onOpen?.();
     const field = typeof focusTarget === 'string'
-      ? this.document.getElementById(focusTarget.replace(/^#/, '')) : focusTarget;
-    if (field && this.panels[tab].contains(field) && canFocus(field)) {
+      ? this.scope.getElementById(focusTarget.replace(/^#/, '')) : focusTarget;
+    if (field && composedContains(this.panels[tab], field) && canFocus(field)) {
       field.focus({ preventScroll: true });
       this.revealField(field);
     } else this.focusDestination(tab);
@@ -271,12 +281,12 @@ export class WorkspaceTools {
 
   setMode(mode: ViewMode): void {
     if (this.disposed || mode === this.current.mode) return;
-    const focusedInPane = this.pane.contains(this.document.activeElement);
+    const focusedInPane = composedContains(this.pane, activeElement(this.document));
     this.change({ mode }, 'mode');
     if (focusedInPane && !this.current.visible) {
-      const viewButton = this.document.getElementById('view-' + mode);
+      const viewButton = this.scope.getElementById('view-' + mode);
       if (canFocus(viewButton)) viewButton.focus({ preventScroll: true });
-      else (this.document.activeElement as HTMLElement | null)?.blur();
+      else (activeElement(this.document) as HTMLElement | null)?.blur();
     }
   }
 
@@ -296,7 +306,7 @@ export class WorkspaceTools {
     if (this.current.panePlacement === 'sheet') this.change({ open: false, expanded: false }, 'hide');
     else this.setExpanded(false);
     this.options.onReturnToScore?.();
-    const active = this.document.activeElement as HTMLElement | null;
+    const active = activeElement(this.document) as HTMLElement | null;
     if (!this.options.onReturnToScore || active === this.document.body || !canFocus(active)) this.focusInvoker();
   }
 
@@ -332,9 +342,9 @@ export class WorkspaceTools {
     this.pane.dataset.activeTool = state.tab;
     this.pane.dataset.toolsView = state.view;
     this.pane.dataset.toolsPresentation = state.presentation;
-    this.document.body.dataset.toolsOpen = String(state.visible);
-    this.document.body.dataset.toolsExpanded = String(state.visible && state.expanded);
-    this.document.body.dataset.toolsPresentation = state.presentation;
+    this.stateHost.dataset.toolsOpen = String(state.visible);
+    this.stateHost.dataset.toolsExpanded = String(state.visible && state.expanded);
+    this.stateHost.dataset.toolsPresentation = state.presentation;
     this.tablist.hidden = state.view !== 'tools';
     const expandLabel = this.expandButton?.querySelector<HTMLElement>('[data-tools-expand-label]') ?? this.expandButton;
     if (expandLabel) expandLabel.textContent = state.presentation === 'sheet' ? 'Return to score' : 'Expand task';
@@ -412,7 +422,8 @@ export class WorkspaceTools {
 
   private visibleInPane(element: HTMLElement, isRegion: boolean): boolean {
     const target = element.getBoundingClientRect();
-    for (let container = element.parentElement; container && this.pane.contains(container); container = container.parentElement) {
+    for (let ancestor = composedParent(element); ancestor && composedContains(this.pane, ancestor); ancestor = composedParent(ancestor)) {
+      const container = ancestor as HTMLElement;
       const bounds = container.getBoundingClientRect();
       const top = bounds.top + container.clientTop;
       const left = bounds.left + container.clientLeft;
@@ -434,13 +445,13 @@ export class WorkspaceTools {
   }
 
   private rememberInvoker(explicit?: HTMLElement): void {
-    const candidate = explicit ?? this.document.activeElement as HTMLElement | null;
-    if (candidate && candidate !== this.document.body && !this.pane.contains(candidate) && canFocus(candidate)) this.invoker = candidate;
+    const candidate = explicit ?? this.scope.activeElement as HTMLElement | null;
+    if (candidate && candidate !== this.document.body && !composedContains(this.pane, candidate) && canFocus(candidate)) this.invoker = candidate;
     else if (!this.invoker) this.invoker = this.toggleButton;
   }
 
   private validToggleInvoker(invoker: HTMLElement): boolean {
-    if (invoker.ownerDocument !== this.document || this.pane.contains(invoker) || !canFocus(invoker)
+    if (invoker.ownerDocument !== this.document || composedContains(this.pane, invoker) || !canFocus(invoker)
       || invoker.matches('input[type="hidden"]')) return false;
     const tabIndex = invoker.getAttribute('tabindex');
     return invoker.tabIndex >= 0 || tabIndex !== null && /^[+-]?\d+$/.test(tabIndex.trim())
@@ -449,7 +460,8 @@ export class WorkspaceTools {
 
   private revealField(field: HTMLElement): void {
     // Reveal a direct task inside the pane only; scrollIntoView could also move the score.
-    for (let container = field.parentElement; container && this.pane.contains(container); container = container.parentElement) {
+    for (let ancestor = composedParent(field); ancestor && composedContains(this.pane, ancestor); ancestor = composedParent(ancestor)) {
+      const container = ancestor as HTMLElement;
       const bounds = container.getBoundingClientRect();
       const target = field.getBoundingClientRect();
       const top = bounds.top + container.clientTop;
@@ -467,14 +479,15 @@ export class WorkspaceTools {
   }
 
   private focusInvoker(): void {
-    const target = [this.invoker, this.toggleButton, this.document.getElementById('score-editor')].find(canFocus);
+    const target = [this.invoker, this.toggleButton, this.scope.getElementById('score-editor')].find(canFocus);
     target?.focus({ preventScroll: true });
   }
 
   private keydown(event: KeyboardEvent): void {
     if (this.disposed || !this.current.visible || this.current.view !== 'tools' || event.defaultPrevented
       || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
-    const focused = generalTools.find(tool => event.target === this.tabs[tool]);
+    const target = event.composedPath()[0] ?? event.target;
+    const focused = generalTools.find(tool => target === this.tabs[tool]);
     if (!focused || !this.available(focused) || !canFocus(this.tabs[focused])) return;
     const available = generalTools.filter(tool => this.available(tool));
     const index = available.indexOf(focused);
@@ -500,7 +513,7 @@ export class WorkspaceTools {
       this.options.closeTransientPopovers();
       return;
     }
-    for (const popover of this.document.querySelectorAll<HTMLElement>('[popover]')) {
+    for (const popover of this.scope.querySelectorAll<HTMLElement>('[popover]')) {
       if (typeof popover.hidePopover !== 'function') continue;
       try { popover.hidePopover(); } catch { /* Unsupported, disconnected, or closed surfaces need no dismissal. */ }
     }

@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
+import { findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { SourceFeedback } from '../src/authoring/source-feedback.js';
 
 const source = '<music-staff><music-measure incomplete></music-measure></music-staff>';
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const simpleMarkup = `<div id="score-editor" tabindex="0"></div>
   <section id="source-panel" popover="auto"><div class="popover-body">
     <label for="source-input">Musical HTML</label><textarea id="source-input" aria-describedby="source-status source-error"></textarea>
@@ -13,18 +12,19 @@ const simpleMarkup = `<div id="score-editor" tabindex="0"></div>
   </div></section>`;
 
 function element<T extends HTMLElement = HTMLElement>(id: string): T {
-  const result = document.getElementById(id);
+  const result = findAuthorControl(document, id);
   if (!result) throw new Error(`Missing ${id}`);
   return result as T;
 }
 
-function fixture(markup = simpleMarkup) {
-  document.body.innerHTML = markup;
+function fixture(markup: string | (() => void) = simpleMarkup) {
+  if (typeof markup === 'function') markup();
+  else document.body.innerHTML = markup;
   const input = element<HTMLTextAreaElement>('source-input');
   const error = element('source-error');
-  const body = error.closest<HTMLElement>('.popover-body')!;
+  const body = document.querySelector<HTMLElement>('#source-panel .popover-body')!;
   input.value = source;
-  const feedback = new SourceFeedback();
+  const feedback = new SourceFeedback(input.getRootNode() as Document | ShadowRoot);
   return { feedback, input, error, body };
 }
 
@@ -55,10 +55,11 @@ afterEach(() => { document.body.replaceChildren(); });
 
 describe('Source feedback identity and accessible text', () => {
   it('requires the actual textarea and alert supplied by the authoring shell', () => {
-    const f = fixture(shellMarkup);
+    const f = fixture(mountAuthorFixture);
     expect(f.input.localName).toBe('textarea');
     expect(f.error.getAttribute('role')).toBe('alert');
-    expect(f.error.closest('#source-panel')).not.toBeNull();
+    expect(f.body.closest('#source-panel')).not.toBeNull();
+    expect(f.input.getRootNode()).toBe(f.error.getRootNode());
     expect(f.body).not.toBeNull();
     expect(f.input.getAttribute('aria-describedby')?.split(/\s+/)).toContain('source-error');
     f.feedback.fail('opened-1', source, 'The measure contains an unsupported element.');
@@ -174,9 +175,61 @@ describe('Source feedback identity and accessible text', () => {
     expect(global.feedback.message).toBe('');
     expect(global.error.hidden).toBe(true);
   });
+
+  it.each(['element', 'shadow'] as const)('keeps independent %s roots isolated from duplicate control and musical source IDs', kind => {
+    const global = fixture();
+    const score = document.createElement('music-staff');
+    score.innerHTML = '<music-measure><music-note id="source-input" pitch="C4" duration="whole"></music-note><music-direction id="source-error">Accepted music</music-direction></music-measure>';
+    document.body.prepend(score);
+    const accepted = score.innerHTML;
+    const create = () => {
+      const host = document.createElement('section');
+      document.body.append(host);
+      const root = kind === 'shadow' ? host.attachShadow({ mode: 'open' }) : host;
+      root.innerHTML = simpleMarkup;
+      const input = root.querySelector<HTMLTextAreaElement>('#source-input')!;
+      const error = root.querySelector<HTMLElement>('#source-error')!;
+      input.value = source;
+      return { feedback: new SourceFeedback(root), input, error };
+    };
+    const first = create();
+    const second = create();
+
+    first.feedback.fail('first', source, 'Correct the first draft.');
+    second.feedback.fail('second', source, 'Correct the second draft.');
+    first.feedback.refresh('first', `${source}\n`);
+
+    expect(first.error.hidden).toBe(true);
+    expect(first.input.hasAttribute('aria-invalid')).toBe(false);
+    expect(second.error.textContent).toBe('Correct the second draft.');
+    expect(second.error.hidden).toBe(false);
+    expect(second.input.getAttribute('aria-invalid')).toBe('true');
+    expect(second.input.getRootNode()).toBe(second.error.getRootNode());
+    expect(global.feedback.message).toBe('');
+    expect(global.error.hidden).toBe(true);
+    expect(global.input.hasAttribute('aria-invalid')).toBe(false);
+    expect(score.innerHTML).toBe(accepted);
+  });
 });
 
 describe('Source error scroll containment', () => {
+  it('reveals an owned shadow error inside its external source-body scroller', () => {
+    document.body.innerHTML = '<div id="score-editor" tabindex="0"></div><section class="popover-body"><div id="source-host"></div></section>';
+    const body = document.querySelector<HTMLElement>('.popover-body')!;
+    const root = element('source-host').attachShadow({ mode: 'open' });
+    root.innerHTML = '<label for="source-input">Musical HTML</label><textarea id="source-input"></textarea><p id="source-error" role="alert" hidden></p><button id="source-apply">Apply</button>';
+    const error = root.getElementById('source-error')!;
+    const apply = root.getElementById('source-apply')!;
+    const score = element('score-editor');
+    geometry(body, error, { errorTop: 300, errorHeight: 40 });
+    score.scrollTop = 321;
+    apply.focus();
+    new SourceFeedback(root).fail('opened-1', source, 'Error inside the Source component.');
+    expect(body.scrollTop).toBe(160);
+    expect(score.scrollTop).toBe(321);
+    expect(root.activeElement).toBe(apply);
+  });
+
   it('reveals a newly failed message below the body viewport by scrolling only that body', () => {
     const f = fixture();
     geometry(f.body, f.error, { errorTop: 300, errorHeight: 40 });

@@ -5,6 +5,7 @@
  * explicit doubles. These tests do not qualify native geometry, CSS fit,
  * popovers, pointer capture, touch, or PDF output.
  */
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngravingOptions, EngravingResult, EventGeometry, MeasureGeometry, SystemGeometry } from '../src/engraving/render.js';
 import type { Score } from '../src/model/types.js';
@@ -15,14 +16,11 @@ const engine = vi.hoisted(() => ({
 }));
 vi.mock('../src/engraving/render.js', () => ({ engravingReady: engine.ready, renderScore: engine.render }));
 import '../src/engraving/render.js';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { MusicSurface } from '../src/components/music-surface.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const source = `<music-system id="frame-score">${['upper', 'lower'].map((staff, staffIndex) =>
   `<music-staff id="${staff}" label="${staffIndex ? 'Lower piano' : 'Upper piano'}" clef="${staffIndex ? 'bass' : 'treble'}">${Array.from({ length: 64 }, (_, index) =>
     `<music-measure id="${staff}-bar-${index + 1}" number="${index + 1}"><music-voice id="${staff}-voice-${index + 1}"><music-note id="${staff}-note-${index + 1}" pitch="${staffIndex ? 'C3' : 'F4'}" duration="whole"></music-note></music-voice></music-measure>`).join('')}</music-staff>`).join('')}</music-system>`;
@@ -49,9 +47,9 @@ class ResizeObserverDouble implements ResizeObserver {
 }
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+  const element = findAuthorControl<T>(document, id);
   if (!element) throw new Error(`Missing actual Author control #${id}.`);
-  return element as T;
+  return element;
 }
 function surface(): MusicSurface {
   const element = el('score-host').shadowRoot!.querySelector('music-system');
@@ -150,7 +148,11 @@ async function mount(width = 1400): Promise<void> {
   await settled(); workspaceObserver().fire(); await settled();
 }
 function available(element: HTMLElement): boolean {
-  return !element.closest('[hidden], [inert], [aria-hidden="true"]') && !element.matches(':disabled');
+  if (element.matches(':disabled')) return false;
+  for (let ancestor: HTMLElement | null = element; ancestor; ancestor = authorControlParent(ancestor)) {
+    if (ancestor.matches('[hidden], [inert], [aria-hidden="true"]')) return false;
+  }
+  return true;
 }
 async function click(id: string): Promise<void> {
   expect(available(el(id)), `#${id} must be available`).toBe(true); el(id).click(); await nextTask();
@@ -206,7 +208,7 @@ async function changeFirstPitch(pitch: string): Promise<void> {
 beforeEach(async () => {
   workbenchWidth = 1400; contentHeight = 13000; releaseEngraving = undefined; observers.length = 0;
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   for (const [name, value] of Object.entries({ innerWidth: 1440, innerHeight: 720 })) {
     dimensionsBefore.set(name, Object.getOwnPropertyDescriptor(window, name)); Object.defineProperty(window, name, { configurable: true, value });
   }
@@ -265,7 +267,7 @@ describe('stable writing frame through actual workspace task transitions', () =>
     await click('edit-selected-event'); expect(el('score-editor').inert).toBe(true);
     const panel = el('selection-inspector'); panel.scrollTop = 173;
     await click('tools-expand'); expect(document.body.dataset.toolsPresentation).toBe('closed');
-    expect(el('score-editor').inert).toBe(false); expect(document.activeElement).toBe(el('score-editor'));
+    expect(el('score-editor').inert).toBe(false); expect(authorActiveElement(document)).toBe(el('score-editor'));
     expect(point()).toEqual(anchor); expect(rowFor().scrollLeft).toBe(500); expect(accepted()).toEqual(before);
     await click('edit-selected-event'); expect(panel.scrollTop).toBe(173); expect(accepted()).toEqual(before);
   });

@@ -12,6 +12,7 @@ import { insertionTarget, pitchAtStaffY, staffPitchY } from './pointer-targets.j
 import { copySourceContext, getSourceHtml } from './project.js';
 import type { AuthorCommand, Cursor, EventInput, ViewMode } from './types.js';
 import { AuthorTextSelection, classifyAuthorInput, hasInputModifier, isNativeSecondaryClick, selectionModifier } from './input-ownership.js';
+import { composedParent } from '../ui/composed-dom.js';
 
 type Position = 'before' | 'after' | 'replace';
 export interface PointerFeedback {
@@ -37,7 +38,11 @@ export interface PointerSelection {
 interface InteractionOptions {
   session: EditorSession;
   host: HTMLElement;
-  editor: HTMLElement;
+  /** Stable mount reserved by the presentation component for disposable previews. */
+  overlayMount: HTMLElement;
+  getViewport: () => HTMLElement | undefined;
+  /** Visible independent controls in physical client-coordinate CSS pixels. */
+  getChromeBounds?: () => readonly DOMRectReadOnly[];
   entryHandle: HTMLButtonElement;
   pitchHandle: HTMLButtonElement;
   status: HTMLElement;
@@ -133,7 +138,7 @@ const overlapsBox = (a: ScreenBox, b: ScreenBox, gap = 4): boolean => a.left < b
 /** A rectangular clip cannot safely approximate rotation, skew, or perspective. */
 function hasRectangularClip(element: HTMLElement): boolean {
   const view = element.ownerDocument.defaultView!;
-  for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+  for (let ancestor: Element | null = element; ancestor; ancestor = composedParent(ancestor)) {
     const style = view.getComputedStyle(ancestor);
     if (style.perspective && style.perspective !== 'none') return false;
     if (style.rotate && !['none', '0deg'].includes(style.rotate)) return false;
@@ -191,7 +196,7 @@ export class StaffInteraction {
     this.content = doc.createElement('div');
     this.content.className = 'pointer-preview-content';
     this.overlay.append(style, this.content);
-    options.host.shadowRoot!.append(this.overlay);
+    options.overlayMount.append(this.overlay);
     this.textSelection = new AuthorTextSelection({ host: options.host, context: () => {
       const state = options.state(); return { enabled: state.mode === 'write', surface: state.surface };
     } });
@@ -216,10 +221,10 @@ export class StaffInteraction {
     });
     options.host.addEventListener('pointermove', event => this.hoverAt(event), { signal: this.abort.signal });
     options.host.addEventListener('pointerleave', () => { if (!this.controller.active) this.clear(); }, { signal: this.abort.signal });
-    // Native #score-scroll movement stays unprevented and cancels the old geometry.
-    // The inner score mount's non-composed scroll needs its own shadow listener.
+    // Components report their private scrollers across shadow boundaries. Native
+    // document scrolling stays unprevented and cancels the old geometry too.
     doc.addEventListener('scroll', () => this.cancel('scroll'), { capture: true, passive: true, signal: this.abort.signal });
-    options.host.shadowRoot!.addEventListener('scroll', () => this.cancel('scroll'), { capture: true, passive: true, signal: this.abort.signal });
+    options.host.addEventListener('notation-viewport-change', () => this.cancel('scroll'), { capture: true, passive: true, signal: this.abort.signal });
     doc.defaultView!.addEventListener('resize', () => this.cancel('resize'), { signal: this.abort.signal });
     doc.addEventListener('visibilitychange', () => { if (doc.visibilityState === 'hidden') this.cancel('visibility'); }, { signal: this.abort.signal });
     for (const name of ['input', 'change']) doc.addEventListener(name, () => this.cancel('settings'), { capture: true, signal: this.abort.signal });
@@ -249,15 +254,14 @@ export class StaffInteraction {
   private snapshot(kind: Gesture['kind']): Gesture | undefined {
     const state = { ...this.options.state() };
     if (state.mode !== 'write' || !state.ready || this.options.canStartGesture?.() === false) return undefined;
-    const layout = state.surface?.getLayoutGeometry();
-    if (!layout || layout.projection !== 'screen') return undefined;
+    const projection = state.surface?.getRenderedProjection();
+    if (!projection || projection.layout.projection !== 'screen') return undefined;
+    const { layout } = projection;
     const source = this.options.session.source.cloneNode(true) as Element;
     copySourceContext(this.options.session.source, source);
-    const svgNodes = [...state.surface!.shadowRoot!.querySelectorAll<SVGSVGElement>('.screen svg.notation-svg')];
     const frames: Frame[] = [];
-    for (const system of layout.systems) {
-      const svg = svgNodes[system.index];
-      const matrix = svg?.getScreenCTM();
+    for (const { system, svg } of projection.frames) {
+      const matrix = svg.getScreenCTM();
       if (!matrix) return undefined;
       frames.push({ svg, system, matrix: matrixKey(matrix) });
     }
@@ -326,7 +330,7 @@ export class StaffInteraction {
   private isCurrent(gesture: Gesture): boolean {
     if (this.options.canStartGesture?.() === false) return false;
     const state = this.options.state();
-    const layout = state.surface?.getLayoutGeometry();
+    const layout = state.surface?.getRenderedProjection()?.layout;
     const selection = this.options.selection?.();
     const sameSelection = !selection && !gesture.selection || !!selection && !!gesture.selection
       && selection.fingerprint === gesture.selection.fingerprint && selection.selectMore === gesture.selection.selectMore
@@ -405,32 +409,21 @@ export class StaffInteraction {
 
   private containsPoint(event: Pick<PointerEvent, 'clientX' | 'clientY'>): boolean {
     const bounds = this.visibleScoreBounds();
-    const cover = this.visibleChromeBounds();
-    if (cover && event.clientX >= cover.left && event.clientX <= cover.right && event.clientY >= cover.top && event.clientY <= cover.bottom) return false;
+    if (this.visibleChromeBounds().some(cover => event.clientX >= cover.left && event.clientX <= cover.right
+      && event.clientY >= cover.top && event.clientY <= cover.bottom)) return false;
     return bounds.right > bounds.left && bounds.bottom > bounds.top
       && event.clientX >= bounds.left && event.clientX <= bounds.right
       && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
   }
-  private visibleChromeBounds(): ScreenBox | undefined {
-    // The current dock is a sibling of the score editor. Resolve it from a
-    // trusted control, retaining the old embedded toolbar for older integrations.
-    const chrome = this.options.status.closest<HTMLElement>('#workspace-dock')
-      ?? this.options.status.closest<HTMLElement>('#pointer-tools')
-      ?? this.options.editor.querySelector<HTMLElement>('#pointer-tools');
-    if (!chrome?.isConnected) return undefined;
-    const view = chrome.ownerDocument.defaultView!;
-    for (let element: HTMLElement | null = chrome; element; element = element.parentElement) {
-      const style = view.getComputedStyle(element);
-      if (element.hidden || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return undefined;
-    }
-    const bounds = chrome.getBoundingClientRect();
-    return [bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite)
-      && bounds.right > bounds.left && bounds.bottom > bounds.top ? bounds : undefined;
+  private visibleChromeBounds(): readonly ScreenBox[] {
+    return (this.options.getChromeBounds?.() ?? []).filter(bounds =>
+      [bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite)
+      && bounds.right > bounds.left && bounds.bottom > bounds.top);
   }
   private visibleScoreBounds(): ScreenBox {
     const host = this.options.host.getBoundingClientRect();
     const view = this.options.host.ownerDocument.defaultView!;
-    const viewport = this.options.host.closest<HTMLElement>('#score-scroll');
+    const viewport = this.options.getViewport();
     const bounds = viewport?.getBoundingClientRect();
     if (viewport && bounds && (!viewport.offsetWidth || !viewport.offsetHeight || !hasRectangularClip(viewport))) {
       return { left: 0, top: 0, right: 0, bottom: 0 };
@@ -684,8 +677,7 @@ export class StaffInteraction {
       return matrix ? [screenBox(frame.system.ink, matrix)] : [];
     });
     const activeInk = screenBox(candidate.frame.system.ink, originalMatrix);
-    const nativeControls = [...this.options.state().surface?.shadowRoot?.querySelectorAll<HTMLElement>('.diagnostics,.transcript') ?? []]
-      .filter(element => element.getClientRects().length > 0).map(element => element.getBoundingClientRect());
+    const nativeControls = this.options.state().surface?.getNativeControlBounds() ?? [];
     const yBeside = Math.max(minY, Math.min(ghostBounds.top, maxY));
     const xAbove = Math.max(minX, Math.min(ghostBounds.left, maxX));
     const positions = [
@@ -701,7 +693,7 @@ export class StaffInteraction {
     const clear = positions.find(position => {
       if (position.x < minX || position.x > maxX || position.y < minY || position.y > maxY) return false;
       const box = { left: position.x, top: position.y, right: position.x + labelBounds.width, bottom: position.y + labelBounds.height };
-      return ![ghostBounds, ...notation, ...nativeControls, ...(chrome ? [chrome] : [])].some(obstacle => overlapsBox(box, obstacle));
+      return ![ghostBounds, ...notation, ...nativeControls, ...chrome].some(obstacle => overlapsBox(box, obstacle));
     });
     // The dock status retains the complete proposal when no nearby space is
     // clear. Never obscure another staff to keep an optional local chip visible.

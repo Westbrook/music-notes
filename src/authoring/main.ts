@@ -1,15 +1,25 @@
 import '../components/index.js';
 import './pages.css';
+import { mountAuthorShell } from './ui/author-shell.js';
+import type { ScoreViewport } from './ui/score-viewport.js';
+import type { AuthorViewSwitch } from './ui/view-switch.js';
+import { ControlScope } from './control-scope.js';
+import { composedAncestors, composedContains } from '../ui/composed-dom.js';
+import { AuthorViewState } from './state/view-state.js';
+import { renderEventNavigator } from './ui/event-navigator.js';
+import { renderNotationNotices } from './ui/notation-notices.js';
+import { renderNativeOptions } from '../ui/native-options.js';
+import { directionLabel, eventLabel, markingLabel } from './event-label.js';
 import { MusicSurface } from '../components/music-surface.js';
 import type { NotationSelectionDetail } from '../components/music-surface.js';
-import { add, compare, formatRational, harmonyIntervalText, meterTime, parsePitch, pitchDescription, pitchText, rational, subtract } from '../model/index.js';
+import { add, compare, formatRational, meterTime, parsePitch, pitchText, rational, subtract } from '../model/index.js';
 import type { Annotation, Clef, Diagnostic, Duration, EventMarking, Measure, MusicEvent, PitchDirection, Staff, StaffNotation, Tuplet, Voice } from '../model/types.js';
 import { serializeScore } from '../dom/index.js';
 import { applyCommand } from './commands.js';
 import { EditorSession } from './editor.js';
 import { createProject, defaultLayout, getProjectNotices, importProject, serializeProject } from './project.js';
 import { buildProjection } from './projection.js';
-import { renderPageView, updatePagePreflight } from './page-view.js';
+import { renderPageView, updatePagePreflight, setPagePreflightMessage } from './page-view.js';
 import type { PageViewResult } from './page-view.js';
 import { RecoveryStore } from './storage.js';
 import { createTemplate } from './templates.js';
@@ -25,10 +35,10 @@ import { classifyAuthorInput, isNativeAuthorInput, isNativeSecondaryClick, selec
 import { WorkspaceTools } from './workspace-tools.js';
 import { WritingFrame } from './writing-frame.js';
 import type { WorkspaceTool } from './workspace-tools.js';
-import { NativeSurfaces } from './native-surfaces.js';
+import { NativeSurfaces, isNativeSurfaceOpen } from './native-surfaces.js';
 import { ActionConfirmation } from './action-confirmation.js';
 import { confirmationReturnTarget } from './confirmation-focus.js';
-import { SourceFeedback } from './source-feedback.js';
+import type { MusicSourceEditor, SourceValueDetail } from './ui/source-editor.js';
 import { SelectedFileReader } from './selected-file-reader.js';
 import { partLabel } from './part-label.js';
 import { InspectorForms } from './inspector-forms.js';
@@ -46,7 +56,7 @@ import type { AuthorCommand, AuthorProject, Cursor, EventInput, LayoutProfile, M
 
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 interface Location { staff: Staff; measure: Measure; measureIndex: number; voice: Voice; voiceIndex: number; event?: MusicEvent; annotation?: Annotation; tuplet?: Tuplet }
-interface WorkspaceOptions {
+export interface WorkspaceOptions {
   project?: AuthorProject; recovery?: RecoveryStore; print?: () => void;
   /** Kept off in production until the native placement gate is qualified. */
   contextualHud?: boolean;
@@ -57,30 +67,21 @@ interface ContinuationOffer { documentId: string; revision: number; selectionId:
 interface ActiveMarking { documentId: string; partId: string; revision: number; eventId: string; marking: EventMarking }
 interface MarkingRecovery { documentId: string; revision: number; partId: string; eventId: string; markingId: string; message: string }
 
-const directionLabel = (direction: string | undefined): string => direction === 'higher' ? 'Higher (top)'
-  : direction === 'same' ? 'Same (middle)' : direction === 'lower' ? 'Lower (bottom)' : 'Choose direction';
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = ''): HTMLElementTagNameMap[K] => {
   const result = document.createElement(tag); result.textContent = text; result.className = className; return result;
 };
-const eventLabel = (event: MusicEvent): string => {
-  const name = event.kind === 'rest' ? event.measureRest ? 'Measure rest' : 'Rest'
-    : event.kind === 'slash' ? event.rhythmic ? 'Written slash rhythm' : 'Open slash'
-      : event.kind === 'road' ? `3 roads note · ${directionLabel(event.pitchDirection)}`
-      : event.kind === 'rhythm' ? 'Rhythm note' : event.pitches.map(pitchDescription).join(' + ');
-  return `${name} · ${event.duration}${event.dots ? `, ${event.dots} dot${event.dots === 1 ? '' : 's'}` : ''}`;
-};
-const markingLabel = (marking: EventMarking): string => marking.kind === 'interval'
-  ? `Harmony ${harmonyIntervalText(marking.interval)} ${marking.placement}` : marking.type.replaceAll('-', ' ');
-
 /** The application owns commands and project metadata; musical meaning remains in its source DOM. */
 export class AuthorWorkspace {
   readonly session: EditorSession;
+  private readonly viewState = new AuthorViewState();
+  /** Observe workspace choices; transitions run through the workspace controls. */
+  readonly view = this.viewState.snapshot;
   private readonly controls = new Map<string, HTMLElement>();
+  private readonly controlScope: ControlScope;
   private readonly abort = new AbortController();
   private readonly recovery: RecoveryStore;
   private readonly printRequest: () => void;
-  private readonly scoreShadow: ShadowRoot;
   private readonly scoreMount: HTMLDivElement;
   private readonly overlays: HTMLDivElement;
   private readonly staffInteraction: StaffInteraction;
@@ -91,7 +92,7 @@ export class AuthorWorkspace {
   private readonly writingFrame: WritingFrame;
   private readonly surfaces: NativeSurfaces;
   private readonly confirmation: ActionConfirmation;
-  private readonly sourceFeedback: SourceFeedback;
+  private readonly sourceEditor: MusicSourceEditor;
   private readonly fileReader: SelectedFileReader;
   private readonly inspectors: InspectorForms;
   private readonly markings: MarkingsEditor;
@@ -119,26 +120,41 @@ export class AuthorWorkspace {
   private surfaceScrollAbort?: AbortController;
   private notationNotices: readonly Diagnostic[] = [];
   private notationReviewContext?: { surface: MusicSurface; generation: number; documentId: string; sourceHtml: string; partId: string };
-  private mode: ViewMode = 'write';
-  private partId = 'score';
+  private get mode(): ViewMode { return this.viewState.snapshot.get().mode; }
+  private set mode(value: ViewMode) { this.viewState.update({ mode: value }); }
+  private get partId(): string { return this.viewState.snapshot.get().partId; }
+  private set partId(value: string) { this.viewState.update({ partId: value }); }
   private cursor!: Cursor;
-  private entryMode = false;
-  private resumeWritingAfterView = false;
-  private entryDragArmed = false;
+  private get entryMode(): boolean { return this.viewState.snapshot.get().entryMode; }
+  private set entryMode(value: boolean) { this.viewState.update({ entryMode: value }); }
+  private get resumeWritingAfterView(): boolean { return this.viewState.snapshot.get().resumeWritingAfterView; }
+  private set resumeWritingAfterView(value: boolean) { this.viewState.update({ resumeWritingAfterView: value }); }
+  private get entryDragArmed(): boolean { return this.viewState.snapshot.get().entryDragArmed; }
+  private set entryDragArmed(value: boolean) { this.viewState.update({ entryDragArmed: value }); }
   private blockedScorePress = false;
   private scorePressActive = false;
-  private pointerSummary = '';
-  private writingStatus = false;
-  private selectMore = false;
-  private pitchDragArmed = false;
+  private get pointerSummary(): string { return this.viewState.snapshot.get().pointerSummary; }
+  private set pointerSummary(value: string) { this.viewState.update({ pointerSummary: value }); }
+  private get writingStatus(): boolean { return this.viewState.snapshot.get().writingStatus; }
+  private set writingStatus(value: boolean) { this.viewState.update({ writingStatus: value }); }
+  private get selectMore(): boolean { return this.viewState.snapshot.get().selectMore; }
+  private set selectMore(value: boolean) { this.viewState.update({ selectMore: value }); }
+  private get pitchDragArmed(): boolean { return this.viewState.snapshot.get().pitchDragArmed; }
+  private set pitchDragArmed(value: boolean) { this.viewState.update({ pitchDragArmed: value }); }
   /** The last deliberate inspection, never the incidental result of entry. */
-  private inspectionSelectionId: string | null = null;
-  private propertiesVisited = false;
-  private selectionError?: string;
+  private get inspectionSelectionId(): string | null { return this.viewState.snapshot.get().inspectionSelectionId; }
+  private set inspectionSelectionId(value: string | null) { this.viewState.update({ inspectionSelectionId: value }); }
+  private get propertiesVisited(): boolean { return this.viewState.snapshot.get().propertiesVisited; }
+  private set propertiesVisited(value: boolean) { this.viewState.update({ propertiesVisited: value }); }
+  private get selectionError(): string | undefined { return this.viewState.snapshot.get().selectionError; }
+  private set selectionError(value: string | undefined) { this.viewState.update({ selectionError: value }); }
   private lastNotationClick?: { id: string; documentEpoch: number; selectionVersion: number };
-  private rangeStart = '';
-  private rangeEnd = '';
-  private readingWidth?: number;
+  private get rangeStart(): string { return this.viewState.snapshot.get().rangeStart; }
+  private set rangeStart(value: string) { this.viewState.update({ rangeStart: value }); }
+  private get rangeEnd(): string { return this.viewState.snapshot.get().rangeEnd; }
+  private set rangeEnd(value: string) { this.viewState.update({ rangeEnd: value }); }
+  private get readingWidth(): number | undefined { return this.viewState.snapshot.get().readingWidth; }
+  private set readingWidth(value: number | undefined) { this.viewState.update({ readingWidth: value }); }
   private pageView?: PageViewResult;
   private pageViewRevision = -1;
   private pageViewGeneration = -1;
@@ -158,10 +174,23 @@ export class AuthorWorkspace {
   private disposed = false;
 
   constructor(options: WorkspaceOptions = {}) {
+    const shell = mountAuthorShell();
+    shell.viewState = this.viewState;
+    this.controlScope = new ControlScope(shell);
+    // Only explicitly owned UI roots participate in control discovery. The
+    // score viewport's imported musical source remains outside this scope.
+    for (const id of ['view-switch', 'event-navigator', 'source-editor']) {
+      const root = shell.querySelector<HTMLElement>(`#${id}`)?.shadowRoot;
+      if (root) this.controlScope.register(root);
+    }
     this.contextualHud = options.contextualHud ?? false;
     // Cache the application's controls before mounting any user-authored source.
-    for (const element of document.querySelectorAll<HTMLElement>('[id]')) this.controls.set(element.id, element);
-    this.sourceFeedback = new SourceFeedback();
+    for (const element of this.controlScope.querySelectorAll<HTMLElement>('[id]')) this.controls.set(element.id, element);
+    this.sourceEditor = this.el<MusicSourceEditor>('source-editor');
+    this.sourceEditor.mount();
+    this.sourceEditor.clearFailure();
+    this.el('author-errors').hidden = true;
+    this.el('author-errors').textContent = '';
     this.fileReader = new SelectedFileReader(this.el<HTMLInputElement>('project-file'));
     const workspace = new URL(location.href).searchParams.get('workspace') ?? 'default';
     const safeWorkspace = /^[a-zA-Z0-9-]{1,80}$/.test(workspace) ? workspace : 'default';
@@ -174,26 +203,36 @@ export class AuthorWorkspace {
     if (recovered.status === 'invalid' || recovered.status === 'unavailable') this.recoveryWarning = recovered.message;
     this.el('save-status').textContent = recovered.status === 'ok' ? 'Recovered on this device'
       : recovered.status === 'empty' ? 'Local recovery · download a backup' : recovered.message;
-    this.scoreShadow = this.el('score-host').attachShadow({ mode: 'open' });
-    const style = document.createElement('style');
-    style.textContent = ':host{display:block;position:relative;min-width:0}.score-mount{min-width:0;overflow:auto}.author-overlays{position:absolute;inset:0;pointer-events:none;overflow:hidden}.author-selection{position:absolute;border:2px solid var(--author-selection,#175c96);border-radius:3px;background:var(--author-selection-fill,rgba(23,92,150,.12));box-sizing:border-box}.author-caret{position:absolute;width:2px;background:var(--author-insertion,#087368);box-shadow:0 0 0 2px var(--author-paper,#fff)}.author-measure-selection{border-style:dashed;background:transparent}.author-event-focus{border:2px dashed var(--author-focus,#7037a0);background:transparent;box-shadow:0 0 0 1px var(--author-paper,#fff)}@media(forced-colors:active){.author-selection{border-color:Highlight;background:transparent}.author-caret{background:Highlight;box-shadow:0 0 0 2px Canvas}.author-event-focus{border-color:CanvasText;box-shadow:none}}@media print{.author-overlays{display:none}}';
-    this.scoreMount = node('div', '', 'score-mount');
-    this.overlays = node('div', '', 'author-overlays');
-    this.overlays.setAttribute('aria-hidden', 'true');
-    this.scoreShadow.append(style, this.scoreMount, this.overlays);
-    const guard = node('div', 'Prepare the composition in Pages and resolve publication checks before printing. Use Print / Save as PDF in the authoring workspace.');
+    const viewport = this.el<ScoreViewport>('score-host');
+    viewport.mount();
+    this.scoreMount = viewport.scoreMount;
+    this.overlays = viewport.overlayMount;
+    const guard = document.getElementById('print-guard')
+      ?? node('div', 'Prepare the composition in Pages and resolve publication checks before printing. Use Print / Save as PDF in the authoring workspace.');
     guard.id = 'print-guard'; document.body.append(guard);
     document.body.dataset.authorReady = 'false';
     document.body.dataset.authorPrintReady = 'false';
-    enhanceSelects(document);
+    for (const root of this.controlScope.roots) enhanceSelects(root);
     this.resetCursor();
     this.entryPitch = new EntryPitch({
-      isEnabled: () => this.mode === 'write' && this.session.project.pendingSource === null
+      isEnabled: () => this.mode === 'write' && this.session.signals.pendingSource.get() === null
         && this.value('event-kind') === 'note' && (this.location().staff.notation ?? 'pitched') === 'pitched',
       changed: () => { this.syncEntryVisibility(); this.invalidateOffers(); },
-    });
+    }, this.controlScope);
     this.staffInteraction = new StaffInteraction({
-      session: this.session, host: this.el('score-host'), editor: this.el('score-editor'),
+      session: this.session, host: viewport, overlayMount: viewport.previewMount,
+      getViewport: () => this.el('score-scroll'),
+      getChromeBounds: () => {
+        const bounds = viewport.getNativeControlBounds();
+        const dock = this.el('workspace-dock');
+        for (const ancestor of [dock, ...composedAncestors(dock)]) {
+          const style = getComputedStyle(ancestor);
+          if (ancestor.hasAttribute('hidden') || style.display === 'none'
+            || style.visibility === 'hidden' || style.visibility === 'collapse') return bounds;
+        }
+        const dockBounds = dock.getBoundingClientRect();
+        return dockBounds.width > 0 && dockBounds.height > 0 ? [...bounds, dockBounds] : bounds;
+      },
       entryHandle: this.el('drag-entry'), pitchHandle: this.el('drag-pitch'), status: this.el('pointer-status'),
       state: () => ({ mode: this.mode, entryMode: this.entryMode, voiceIndex: this.cursor.voiceIndex,
         partId: this.partId, position: this.value('insert-position') as 'before' | 'after' | 'replace',
@@ -236,7 +275,7 @@ export class AuthorWorkspace {
       getSelection: () => ({ sourceId: this.entryMode ? this.cursor.eventId ?? this.cursor.measureId
         : this.currentMarking()?.marking.id ?? this.session.selectionId ?? this.cursor.measureId,
         staffId: this.cursor.staffId, measureId: this.cursor.measureId, voiceIndex: this.cursor.voiceIndex }),
-      getContextKey: () => `${this.session.project.id}:${this.partId}:${this.mode}`,
+      getContextKey: () => `${this.session.signals.project.get().id}:${this.partId}:${this.mode}`,
     });
     this.surfaces = new NativeSurfaces({
       ids: ['document-menu', 'location-panel', 'entry-settings', 'entry-value-chooser', 'entry-direction-chooser', 'source-panel', 'score-setup', 'continuation-review', 'pointer-recovery', 'workspace-review'],
@@ -244,7 +283,7 @@ export class AuthorWorkspace {
       fallbackFocus: () => this.el('score-editor'),
       beforeOpen: () => this.cancelForSurface(),
       afterClose: () => this.syncReviewNotice(),
-    });
+    }, this.controlScope);
     this.writingFrame = new WritingFrame(this.el('author-workbench'));
     this.tools = new WorkspaceTools({
       initial: { open: false },
@@ -256,14 +295,12 @@ export class AuthorWorkspace {
       },
       onOpen: () => this.syncEntryVisibility(),
       afterChange: (_state, transition) => {
+        this.syncToolsPresentation(transition.next.presentation);
         const sheet = transition.next.presentation === 'sheet';
         const editor = this.el('score-editor');
-        editor.inert = sheet;
         if (sheet) {
-          editor.setAttribute('aria-hidden', 'true');
-          if (editor.contains(document.activeElement)) this.el('tools-expand').focus({ preventScroll: true });
+          if (composedContains(editor, this.controlScope.activeElement)) this.el('tools-expand').focus({ preventScroll: true });
         } else {
-          editor.removeAttribute('aria-hidden');
           if (transition.previous.presentation === 'sheet') {
             if (document.body.dataset.renderState === 'rendering') {
               // The task may have changed Source while its paper was hidden.
@@ -280,7 +317,8 @@ export class AuthorWorkspace {
       },
       onReturnToScore: () => { this.el('score-editor').focus({ preventScroll: true }); this.syncReturnControl(); },
       closeTransientPopovers: () => this.closeTransientSurfaces(),
-    });
+    }, this.controlScope);
+    this.syncToolsPresentation(this.tools.state.presentation);
     this.inspectors = new InspectorForms({
       session: this.session,
       context: () => ({ mode: this.mode, partId: this.partId, cursor: this.cursor, selectionId: this.session.selectionId,
@@ -294,14 +332,14 @@ export class AuthorWorkspace {
         this.revealAfterRender = true; this.requestRender();
       },
       onDraftChange: () => this.syncDraftStatus(), report: message => this.status(message),
-    });
+    }, this.controlScope);
     this.markings = new MarkingsEditor({
       session: this.session,
       context: () => ({ mode: this.mode, ...this.location() }),
       select: id => { this.rangeStart = ''; this.rangeEnd = ''; this.select(id, false); this.revealAfterRender = true; this.scrollToSelection(); this.el('score-editor').focus({ preventScroll: true }); },
       openTools: () => { this.surfaces.close('location-panel'); this.tools.open('markings', '#annotation-text', this.el('add-chord-symbol')); },
       onDraftChange: () => this.syncDraftStatus(), report: message => this.status(message),
-    });
+    }, this.controlScope);
     this.eventMarkings = new EventMarkingsEditor({
       session: this.session,
       context: () => ({ mode: this.mode, selectionId: this.session.selectionId, rangeEventIds: this.safeSelectedEvents(),
@@ -309,7 +347,7 @@ export class AuthorWorkspace {
       select: id => { this.parkEntry(); this.select(id, false); this.revealAfterRender = true; this.scrollToSelection(); },
       openTools: () => { this.propertiesVisited = true; this.tools.open('edit', '#event-markings-draft-status'); },
       onDraftChange: () => this.syncDraftStatus(), report: message => this.status(message),
-    });
+    }, this.controlScope);
     this.selectionControls = new SelectionControls({
       state: () => this.selectionControlsState(),
       execute: command => this.editNote(() => this.execute(command)),
@@ -329,7 +367,7 @@ export class AuthorWorkspace {
         this.selectionError = undefined; document.body.dataset.selectionFeedback = 'none';
         this.el('author-errors').hidden = true; this.syncReviewNotice();
       },
-    });
+    }, this.controlScope);
     this.selectionHud = createSelectionHud({
       element: this.el('selection-controls'), getSurface: () => this.surface, getViewport: () => this.el('score-scroll'),
       getContext: () => {
@@ -338,7 +376,7 @@ export class AuthorWorkspace {
           revision: this.session.revision, partId: this.partId, mode: this.mode,
           allowFloating: this.contextualHud && this.mode === 'write' && !this.entryMode && !this.selectMore && !this.pitchDragArmed
             && window.innerWidth >= 1100 && window.innerHeight > 480 && !!target
-            && this.session.project.pendingSource === null && document.body.dataset.renderState === 'ready'
+            && this.session.signals.pendingSource.get() === null && document.body.dataset.renderState === 'ready'
             && !document.body.dataset.pointerGesture,
           target,
         };
@@ -352,24 +390,26 @@ export class AuthorWorkspace {
       cancelInteraction: reason => {
         this.staffInteraction.cancel(reason);
         if (!this.selectionControls.cancel(reason)) return;
-        const recovered = document.activeElement;
+        const recovered = this.controlScope.activeElement;
         // Placement settles synchronously after this callback. Repair only a
         // just-closed chooser's focus, never a subsequently focused native field.
         queueMicrotask(() => {
           if (this.disposed || this.mode !== 'write') return;
-          const active = document.activeElement;
+          const active = this.controlScope.activeElement;
           if (active !== recovered && active !== document.body) return;
           let usable = active instanceof HTMLElement && active !== document.body && active.isConnected
             && !active.closest('[hidden], [inert], [aria-hidden="true"]') && !active.matches(':disabled');
-          for (let ancestor = active instanceof HTMLElement ? active : null; usable && ancestor; ancestor = ancestor.parentElement) {
+          if (active instanceof HTMLElement) for (const ancestor of [active, ...composedAncestors(active)]) {
+            if (!usable) break;
             const style = getComputedStyle(ancestor);
-            usable = style.display !== 'none' && style.visibility !== 'hidden';
+            usable = !ancestor.matches('[hidden], [inert], [aria-hidden="true"]')
+              && style.display !== 'none' && style.visibility !== 'hidden';
           }
           if (!usable && !this.el('score-editor').hidden) this.el('score-editor').focus({ preventScroll: true });
         });
       },
     });
-    this.confirmation = new ActionConfirmation({ dialogId: 'author-confirmation' });
+    this.confirmation = new ActionConfirmation({ dialogId: 'author-confirmation' }, this.controlScope);
     this.bind();
     this.session.addEventListener('change', (event) => this.changed(event as CustomEvent), { signal: this.abort.signal });
     this.resizeObserver = new ResizeObserver(() => {
@@ -383,7 +423,9 @@ export class AuthorWorkspace {
     this.resizeObserver.observe(this.el('score-host'));
     this.resizeObserver.observe(this.el('workspace-dock'));
     this.resizeObserver.observe(this.el('author-workbench'));
-    this.scoreMount.addEventListener('scroll', () => { this.revealAfterRender = false; this.drawSelection(); this.syncReturnControl(); }, { capture: true, signal: this.abort.signal });
+    viewport.addEventListener('notation-viewport-change', () => {
+      this.revealAfterRender = false; this.drawSelection(); this.syncReturnControl();
+    }, { signal: this.abort.signal });
     this.el('score-scroll').addEventListener('scroll', () => {
       this.revealAfterRender = false; this.selectionHud.refresh(); this.syncReturnControl();
     }, { passive: true, signal: this.abort.signal });
@@ -404,13 +446,14 @@ export class AuthorWorkspace {
       if (this.metadataDirty || this.savedRevision !== this.session.revision || this.dirtyInspectorCount() > 0) { event.preventDefault(); event.returnValue = ''; }
     }, { signal: this.abort.signal });
     window.addEventListener('beforeprint', () => { this.refreshPreflight(); }, { signal: this.abort.signal });
-    this.measureWritingFrame();
-    this.syncPanels(false);
-    if (this.session.score.staves.every(staff => staff.measures.every(measure => measure.voices.every(voice => !voice.events.length)))) {
+    // A retained shell can be attached to a fresh workspace. Publish the new
+    // session's Source and view before inspecting focus or rendering geometry.
+    this.syncSourceNotice(true);
+    this.setMode(this.mode);
+    if (this.session.signals.score.get().staves.every(staff => staff.measures.every(measure => measure.voices.every(voice => !voice.events.length)))) {
       this.status('Choose Write notes, then click the staff.');
     }
     if (this.savedRevision !== this.session.revision) this.scheduleSave();
-    this.requestRender();
   }
 
   private el<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -431,23 +474,16 @@ export class AuthorWorkspace {
     const frame = this.writingFrame.measure();
     if (frame.measured) this.tools.setPanePlacement(frame.paneFits ? 'side' : 'sheet');
   }
-  private surfaceIsOpen(panel: HTMLElement): boolean {
-    if (panel.matches('dialog[open]')) return true;
-    if (panel.dataset.popoverFallback === 'true') return !panel.hidden;
-    if (typeof panel.showPopover === 'function' && typeof panel.hidePopover === 'function') {
-      try { return panel.matches(':popover-open'); } catch { return false; }
-    }
-    return !panel.hidden && panel.dataset.surfaceState === 'open';
+  private syncToolsPresentation(presentation: 'closed' | 'side' | 'sheet'): void {
+    this.el('author-workbench').setAttribute('tools-presentation', presentation);
+    const editor = this.el('score-editor');
+    editor.inert = presentation === 'sheet';
+    if (presentation === 'sheet') editor.setAttribute('aria-hidden', 'true');
+    else editor.removeAttribute('aria-hidden');
   }
   /** Native surfaces own input while open; merely inspecting a sidebar does not stop writing. */
   private isScoreInputBlocked(): boolean {
-    if (this.tools?.state.presentation === 'sheet') return true;
-    return [...document.querySelectorAll<HTMLElement>('[popover], [data-popover-fallback="true"], dialog[open], select')].some(panel => {
-      if (panel instanceof HTMLSelectElement) {
-        try { return panel.matches(':open'); } catch { return false; }
-      }
-      return this.surfaceIsOpen(panel);
-    });
+    return this.tools?.state.presentation === 'sheet' || this.surfaces?.hasOpenSurface() === true;
   }
   private cancelForSurface(): void {
     // Keep a blocked press blocked even if its light-dismissed surface closes
@@ -459,12 +495,14 @@ export class AuthorWorkspace {
     this.el(id).addEventListener(event, (e) => { void this.run(() => action(e)); }, { signal: this.abort.signal });
   }
   private async run(action: () => unknown | Promise<unknown>): Promise<void> {
+    if (this.disposed) return;
     if (!this.selectionError) this.el('author-errors').hidden = true;
     try { await action(); } catch (error) {
+      if (this.disposed) return;
       this.showError(error, this.mode === 'write' && [this.el('score-editor'), this.el('workspace-dock')]
-        .some(region => region.contains(document.activeElement)));
+        .some(region => composedContains(region, this.controlScope.activeElement)));
     }
-    finally { this.syncReviewNotice(); }
+    finally { if (!this.disposed) this.syncReviewNotice(); }
   }
   private showError(error: unknown, atSelection = false): void {
     this.markingRecovery = undefined;
@@ -476,7 +514,7 @@ export class AuthorWorkspace {
       const marking = place.event?.id === error.eventId ? place.event.markings?.find(item => item.id === error.markingId) : undefined;
       if (marking) {
         message = `${markingLabel(marking)} · ${this.staffName(place.staff.id)}, bar ${place.measure.number}, voice ${place.voiceIndex + 1}. ${message}`;
-        this.markingRecovery = { documentId: this.session.project.id, revision: this.session.revision,
+        this.markingRecovery = { documentId: this.session.signals.project.get().id, revision: this.session.revision,
           partId: this.partId, eventId: error.eventId, markingId: error.markingId, message };
       }
     }
@@ -492,8 +530,8 @@ export class AuthorWorkspace {
   private validMarkingRecovery(): MarkingRecovery | undefined {
     const recovery = this.markingRecovery;
     if (!recovery) return undefined;
-    if (recovery.documentId !== this.session.project.id || recovery.revision !== this.session.revision
-      || recovery.partId !== this.partId || this.mode !== 'write' || this.session.project.pendingSource !== null) {
+    if (recovery.documentId !== this.session.signals.project.get().id || recovery.revision !== this.session.revision
+      || recovery.partId !== this.partId || this.mode !== 'write' || this.session.signals.pendingSource.get() !== null) {
       this.markingRecovery = undefined; return undefined;
     }
     const place = this.location(recovery.eventId);
@@ -518,11 +556,7 @@ export class AuthorWorkspace {
     const list = this.controls.get('notation-review-list');
     if (section && list) {
       section.hidden = !this.notationNotices.length;
-      list.replaceChildren(...this.notationNotices.map(item => {
-        const row = node('li', `${item.message} [${item.sourceId}]`);
-        row.dataset.sourceId = item.sourceId; row.dataset.diagnosticCode = item.code;
-        return row;
-      }));
+      renderNotationNotices(list, this.notationNotices);
       this.el('notation-review-heading').textContent = `${this.notationNotices.length} notation notice${this.notationNotices.length === 1 ? '' : 's'}`;
     }
     this.syncReviewNotice();
@@ -531,7 +565,7 @@ export class AuthorWorkspace {
     const context = this.notationReviewContext;
     if (!context || this.disposed || this.mode === 'pages' || surface !== this.surface || surface !== context.surface
       || !surface.isConnected || context.generation !== this.renderGeneration
-      || context.documentId !== this.session.project.id || context.sourceHtml !== this.session.project.sourceHtml || context.partId !== this.partId) return;
+      || context.documentId !== this.session.signals.project.get().id || context.sourceHtml !== this.session.signals.project.get().sourceHtml || context.partId !== this.partId) return;
     // Ordinary unfinished writing belongs in Review, not above the ink. Fatal
     // diagnostics retain the renderer's visible error panel and editing guard.
     this.setNotationNotices(surface.diagnostics);
@@ -549,11 +583,11 @@ export class AuthorWorkspace {
     const trigger = this.controls.get('workspace-review-trigger');
     const summary = this.controls.get('workspace-review-summary');
     if (!trigger || !summary) return;
-    if (this.el('author-errors').hidden && this.sourceFeedback.message) {
-      this.el('author-errors').textContent = this.sourceFeedback.message;
+    if (this.el('author-errors').hidden && this.sourceEditor.failureMessage) {
+      this.el('author-errors').textContent = this.sourceEditor.failureMessage;
       this.el('author-errors').hidden = false;
     }
-    const pending = this.session.project.pendingSource !== null;
+    const pending = this.session.signals.pendingSource.get() !== null;
     const count = this.dirtyInspectorCount();
     const problem = !this.el('author-errors').hidden ? this.el('author-errors').textContent?.trim() ?? '' : '';
     const selectionProblem = !!this.selectionError && problem === this.selectionError;
@@ -566,9 +600,9 @@ export class AuthorWorkspace {
     summary.textContent = pending ? [problem ? 'Editing problem' : '', drafts].filter(Boolean).join(' · ')
       : [drafts, problem.split('\n')[0].slice(0, 100)].filter(Boolean).join(' · ');
     const feedback = this.controls.get('workspace-feedback-label');
-    const localChooserError = [...document.querySelectorAll<HTMLElement>('.selection-chooser [role="alert"]')].some(element => {
+    const localChooserError = [...this.controlScope.querySelectorAll<HTMLElement>('.selection-chooser [role="alert"]')].some(element => {
       const panel = element.closest<HTMLElement>('[popover], [data-popover-fallback="true"]');
-      return !element.hidden && !element.closest('[hidden]') && !!element.textContent?.trim() && !!panel && this.surfaceIsOpen(panel);
+      return !element.hidden && !element.closest('[hidden]') && !!element.textContent?.trim() && !!panel && isNativeSurfaceOpen(panel);
     });
     const recoveryDetail = this.controls.get('workspace-recovery-detail');
     const recoveryDownload = this.controls.get('review-download-project');
@@ -622,13 +656,13 @@ export class AuthorWorkspace {
   }
   private requireWriting(): void {
     if (this.mode !== 'write') throw new Error('Return to Write to change music.');
-    if (this.session.project.pendingSource !== null) throw new Error('Apply or Revert the Source draft before changing the accepted music.');
+    if (this.session.signals.pendingSource.get() !== null) throw new Error('Apply or Revert the Source draft before changing the accepted music.');
   }
   private async confirmAction(title: string, message: string, confirmLabel: string, destructive = true): Promise<boolean> {
     // Accept already typed metadata before taking the decision snapshot, so its
     // own debounce cannot invalidate the dialog while the musician reads it.
     this.commitMetadata();
-    const documentId = this.session.project.id;
+    const documentId = this.session.signals.project.get().id;
     const revision = this.session.revision;
     const selectionId = this.session.selectionId;
     const cursor = JSON.stringify(this.cursor);
@@ -637,8 +671,8 @@ export class AuthorWorkspace {
     const settings = this.confirmationSettings();
     const fileInput = this.el<HTMLInputElement>('project-file');
     const selectedFiles = [...(fileInput.files ?? [])];
-    const returnFocus = confirmationReturnTarget(document.activeElement);
-    const isCurrent = () => this.session.project.id === documentId && this.session.revision === revision
+    const returnFocus = confirmationReturnTarget(this.controlScope.activeElement, this.controlScope);
+    const isCurrent = () => !this.disposed && this.session.signals.project.get().id === documentId && this.session.revision === revision
       && this.session.selectionId === selectionId && JSON.stringify(this.cursor) === cursor && this.partId === partId && this.mode === mode
       && this.confirmationSettings() === settings
       && selectedFiles.length === (fileInput.files?.length ?? 0)
@@ -667,10 +701,10 @@ export class AuthorWorkspace {
     if (editor && typeof editor.hidePopover === 'function' && editor.matches(':popover-open')) editor.hidePopover();
   }
   private rememberEntry(cursor = this.cursor, partId = this.partId): void {
-    const staff = this.session.score.staves.find(item => item.id === cursor.staffId);
+    const staff = this.session.signals.score.get().staves.find(item => item.id === cursor.staffId);
     const voice = staff?.measures.find(item => item.id === cursor.measureId)?.voices[cursor.voiceIndex];
     if (!voice || cursor.eventId !== undefined && !voice.events.some(event => event.id === cursor.eventId)) return;
-    this.bookmark = { documentId: this.session.project.id, cursor: { ...cursor }, voiceId: voice.id, partId };
+    this.bookmark = { documentId: this.session.signals.project.get().id, cursor: { ...cursor }, voiceId: voice.id, partId };
   }
   private parkEntry(): void {
     if (this.entryMode) this.rememberEntry();
@@ -679,8 +713,8 @@ export class AuthorWorkspace {
   }
   private validBookmark(): EntryBookmark | undefined {
     const mark = this.bookmark;
-    if (!mark || mark.documentId !== this.session.project.id) return undefined;
-    const staff = this.session.score.staves.find(item => item.id === mark.cursor.staffId);
+    if (!mark || mark.documentId !== this.session.signals.project.get().id) return undefined;
+    const staff = this.session.signals.score.get().staves.find(item => item.id === mark.cursor.staffId);
     const measure = staff?.measures.find(item => item.id === mark.cursor.measureId);
     const voice = measure?.voices[mark.cursor.voiceIndex];
     if (voice?.id !== mark.voiceId || (mark.cursor.eventId && !voice.events.some(item => item.id === mark.cursor.eventId))) return undefined;
@@ -688,12 +722,12 @@ export class AuthorWorkspace {
     return mark;
   }
   private entryLocationLabel(cursor: Cursor): string {
-    const staff = this.session.score.staves.find(item => item.id === cursor.staffId);
+    const staff = this.session.signals.score.get().staves.find(item => item.id === cursor.staffId);
     const measure = staff?.measures.find(item => item.id === cursor.measureId);
     return `${this.staffName(cursor.staffId)}, bar ${measure?.number ?? '?'}, voice ${cursor.voiceIndex + 1}`;
   }
   private staffName(id: string): string {
-    const staves = this.session.score.staves;
+    const staves = this.session.signals.score.get().staves;
     const index = staves.findIndex(staff => staff.id === id);
     const label = staves[index]?.label.trim();
     if (!label) return index >= 0 ? `Staff ${index + 1}` : 'Removed staff';
@@ -799,7 +833,7 @@ export class AuthorWorkspace {
   }
   private resetCursor(): void {
     this.clearActiveMarking();
-    const staff = this.session.score.staves[0];
+    const staff = this.session.signals.score.get().staves[0];
     this.cursor = { staffId: staff.id, measureId: staff.measures[0].id, voiceIndex: 0 };
     this.rangeStart = ''; this.rangeEnd = ''; this.entryMode = false; this.bookmark = undefined;
     this.resumeWritingAfterView = false; this.entryDragArmed = false;
@@ -813,7 +847,7 @@ export class AuthorWorkspace {
   }
 
   private visibleStaves(): readonly Staff[] {
-    const staves = this.session.score.staves;
+    const staves = this.session.signals.score.get().staves;
     const part = this.session.project.parts.find(part => part.id === this.partId);
     return part ? staves.filter(staff => part.staffIds.includes(staff.id)) : staves;
   }
@@ -831,7 +865,7 @@ export class AuthorWorkspace {
 
   private location(id = this.entryMode ? this.cursor?.eventId ?? this.cursor?.measureId
     : this.session.selectionId ?? (this.selectMore ? this.session.selection.focusId : undefined)): Location {
-    const score = this.session.score;
+    const score = this.session.signals.score.get();
     for (const staff of score.staves) for (const [measureIndex, measure] of staff.measures.entries()) {
       for (const [voiceIndex, voice] of measure.voices.entries()) {
         const event = voice.events.find(item => item.id === id || item.markings?.some(marking => marking.id === id));
@@ -852,7 +886,7 @@ export class AuthorWorkspace {
     return { staff, measure, measureIndex, voiceIndex, voice: measure.voices[voiceIndex] };
   }
   private selectionContext(): SelectionContext {
-    return { score: this.session.score, documentId: this.session.project.id, documentEpoch: this.session.documentEpoch,
+    return { score: this.session.signals.score.get(), documentId: this.session.signals.project.get().id, documentEpoch: this.session.documentEpoch,
       partId: this.partId, visibleStaffIds: this.visibleStaves().map(staff => staff.id) };
   }
   private selectionFingerprint(): string {
@@ -907,7 +941,7 @@ export class AuthorWorkspace {
     if (intent === 'replace') this.selectMore = false;
     this.pitchDragArmed = false;
     const marking = intent === 'replace' ? location.event?.markings?.find(item => item.id === id) : undefined;
-    this.activeMarking = marking ? { documentId: this.session.project.id, partId: this.partId,
+    this.activeMarking = marking ? { documentId: this.session.signals.project.get().id, partId: this.partId,
       revision: this.session.revision, eventId: location.event!.id, marking } : undefined;
     this.syncRangeFields(); this.syncPanels(false);
     this.drawSelection(); this.syncReturnControl(); this.invalidateOffers();
@@ -920,7 +954,7 @@ export class AuthorWorkspace {
   private currentMarking(): ActiveMarking | undefined {
     const active = this.activeMarking;
     if (!active) { delete this.el('score-editor').dataset.activeMarkingId; return undefined; }
-    if (active.documentId !== this.session.project.id || active.partId !== this.partId
+    if (active.documentId !== this.session.signals.project.get().id || active.partId !== this.partId
       || active.eventId !== this.session.selectionId || this.entryMode || this.safeSelectedEvents().length !== 1) {
       this.clearActiveMarking(); return undefined;
     }
@@ -998,7 +1032,7 @@ export class AuthorWorkspace {
     if (owner && this.isSingleEventSelection(owner.id)) this.inspectionSelectionId = owner.id;
     this.inspectors.refresh(); this.eventMarkings.refresh(); this.syncEntryVisibility();
     const draft = this.inspectors.snapshot('selected');
-    const ready = owner && draft.targetId === owner.id && draft.documentId === this.session.project.id
+    const ready = owner && draft.targetId === owner.id && draft.documentId === this.session.signals.project.get().id
       && draft.matchesSelection && !draft.blockedReason && draft.status !== 'conflict'
       && draft.status !== 'missing' && draft.status !== 'document-changed';
     const field = ready && target === 'nominal-span' ? this.el('selected-nominal-span').hidden ? '#selected-kind' : '#selected-duration'
@@ -1009,21 +1043,16 @@ export class AuthorWorkspace {
       for (let disclosure = control?.closest('details'); disclosure; disclosure = disclosure.parentElement?.closest('details') ?? null) disclosure.open = true;
     }
     this.tools.open('edit', field, this.el('edit-selected-event'));
-    if (!ready) this.status(this.session.project.pendingSource !== null
+    if (!ready) this.status(this.session.signals.pendingSource.get() !== null
       ? 'Properties is read-only while Source has unapplied changes.'
       : `Review or discard the existing Properties draft for ${draft.label ?? 'its previous selection'} before editing these properties.`);
   }
   private options(id: string, options: readonly { value: string; label: string }[], selected: string): void {
     const select = this.el<HTMLSelectElement>(id);
-    const signature = JSON.stringify(options);
-    if (select.dataset.options !== signature) {
-      for (const option of [...select.querySelectorAll('option, optgroup')]) option.remove();
-      for (const item of options) { const option = node('option', item.label); option.value = item.value; select.append(option); }
-      select.dataset.options = signature;
-      enhanceSelects(select.parentElement!);
-    }
-    select.value = options.some(option => option.value === selected) ? selected : options[0]?.value ?? '';
+    renderNativeOptions(select, options, selected);
+    enhanceSelects(select.parentElement!);
   }
+
   private allVoiceEvents(): { event: MusicEvent; measure: Measure }[] {
     const { staff, voiceIndex } = this.location();
     return staff.measures.flatMap(measure => (measure.voices[voiceIndex]?.events ?? []).map(event => ({ event, measure })));
@@ -1098,7 +1127,6 @@ export class AuthorWorkspace {
     this.syncStructuralActions();
     this.el<HTMLButtonElement>('remove-part').disabled ||= !part;
     this.el<HTMLButtonElement>('clear-short-review').disabled ||= !project.reviewedShortMeasures.includes(measure.id);
-    if (document.activeElement !== this.el('source-input')) this.setValue('source-input', project.pendingSource ?? project.sourceHtml);
     this.syncSourceNotice();
     this.syncEntryVisibility();
     this.selectionControls?.refresh();
@@ -1112,8 +1140,8 @@ export class AuthorWorkspace {
     try { selectionCount = this.selectedEvents().length; } catch { /* A measure or instruction has no event selection. */ }
     const used = location.voice.events.reduce((time, event) => add(time, event.time), rational(0));
     return {
-      documentId: this.session.project.id, mode: this.mode, revision: this.session.revision,
-      pendingSource: this.session.project.pendingSource !== null,
+      documentId: this.session.signals.project.get().id, mode: this.mode, revision: this.session.revision,
+      pendingSource: this.session.signals.pendingSource.get() !== null,
       activeMarkingId: this.currentMarking()?.marking.id,
       event: this.isSingleEventSelection(location.event?.id) ? location.event : undefined,
       staffLabel: location.staff.label || 'Staff', measureNumber: String(location.measure.number),
@@ -1125,11 +1153,11 @@ export class AuthorWorkspace {
   private selectionControlsState(): SelectionControlsState {
     const note = this.noteEditorState();
     const ids = this.safeSelectedEvents();
-    const all = this.session.score.staves.flatMap(staff => staff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)));
+    const all = this.session.signals.score.get().staves.flatMap(staff => staff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)));
     const place = this.location();
     const bookmark = this.validBookmark();
     return { ...note, event: all.find(event => event.id === this.session.selection.primaryId),
-      score: this.session.score, events: all.filter(event => ids.includes(event.id)), eventIds: ids,
+      score: this.session.signals.score.get(), events: all.filter(event => ids.includes(event.id)), eventIds: ids,
       entryMode: this.entryMode, selectionVersion: this.session.selectionVersion, documentEpoch: this.session.documentEpoch,
       inspectionMatchesSelection: !this.entryMode && !!note.event && this.inspectors.snapshot('selected').matchesSelection
         && this.inspectors.snapshot('selected').targetId === note.event.id,
@@ -1200,10 +1228,17 @@ export class AuthorWorkspace {
     this.updateRangeStatus();
   }
 
-  private syncSourceNotice(): void {
-    this.sourceFeedback.refresh(this.session.project.id, this.value('source-input'));
-    const pending = this.session.project.pendingSource !== null;
-    this.el('source-status').textContent = pending ? 'Unapplied source draft · the engraving still shows the accepted music. Printing is blocked until Apply or Revert.' : 'Source and engraving agree. Apply validates the whole score as one undoable action.';
+  private syncSourceNotice(forceValue = false): void {
+    const project = this.session.signals.project.get();
+    const pending = this.session.signals.pendingSource.get() !== null;
+    this.sourceEditor.renderState({
+      documentId: project.id,
+      value: project.pendingSource ?? project.sourceHtml,
+      readOnly: this.mode !== 'write',
+      status: pending ? 'Unapplied source draft · the engraving still shows the accepted music. Printing is blocked until Apply or Revert.'
+        : 'Source and engraving agree. Apply validates the whole score as one undoable action.',
+    }, { forceValue });
+    this.sourceEditor.refreshFailure(project.id, this.sourceEditor.inputValue);
     const notice = this.el('source-draft-notice');
     notice.hidden = !pending;
     notice.textContent = pending ? 'Preview has unapplied source changes. The score below is the last accepted music. Open Source in Write to Apply or Revert; printing is blocked.' : '';
@@ -1241,7 +1276,7 @@ export class AuthorWorkspace {
         tieReason = 'Include the complete existing tie chain before changing its connections.'; break;
       }
     }
-    const blocked = this.mode !== 'write' || this.session.project.pendingSource !== null;
+    const blocked = this.mode !== 'write' || this.session.signals.pendingSource.get() !== null;
     this.el<HTMLButtonElement>('tie-events').disabled = blocked || !!tieReason;
     this.el<HTMLButtonElement>('clear-ties').disabled = blocked || !chosen.some(event => event.tie !== 'none');
     this.el('clear-ties').textContent = 'Clear connected ties';
@@ -1309,7 +1344,7 @@ export class AuthorWorkspace {
       : this.safeSelectedEvents().length > 1 ? `Selected ${this.safeSelectedEvents().length}` : 'Selected';
     this.el('tools-toggle').hidden = !this.entryMode;
     if (mark) {
-      const measure = this.session.score.staves.find(staff => staff.id === mark.cursor.staffId)?.measures.find(item => item.id === mark.cursor.measureId);
+      const measure = this.session.signals.score.get().staves.find(staff => staff.id === mark.cursor.staffId)?.measures.find(item => item.id === mark.cursor.measureId);
       this.el('resume-entry').textContent = `Resume at bar ${measure?.number ?? '?'}`;
       this.el('resume-entry').setAttribute('aria-label', `Resume writing at ${this.entryLocationLabel(mark.cursor)}`);
       this.el('resume-entry').title = this.entryLocationLabel(mark.cursor);
@@ -1361,7 +1396,7 @@ export class AuthorWorkspace {
     handle.hidden = !this.entryMode || !this.entryDragArmed;
     let validPitch = false;
     try { parsePitch(this.value('event-pitch')); validPitch = true; } catch { /* The native field remains editable. */ }
-    handle.disabled = !supportsPlacement || kind === 'note' && !validPitch || this.mode !== 'write' || this.session.project.pendingSource !== null;
+    handle.disabled = !supportsPlacement || kind === 'note' && !validPitch || this.mode !== 'write' || this.session.signals.pendingSource.get() !== null;
     handle.setAttribute('aria-label', ordinaryRest ? 'Drag the configured rest to the staff' : 'Drag the configured note to the staff');
     handle.title = ordinaryRest ? 'Drag a rest to its musical position; height does not change the rest' : 'Drag a note to the staff';
     handle.querySelector('span')!.textContent = ordinaryRest ? 'Drag rest' : 'Drag note';
@@ -1397,7 +1432,7 @@ export class AuthorWorkspace {
     for (const [id, active] of [['convert-pitch', kind === 'note'], ['convert-rhythmic', kind === 'slash'], ['convert-direction', kind === 'road']] as const) {
       const input = this.el<Control>(id); input.disabled = !active; input.closest('label')!.hidden = !active;
     }
-    this.el<HTMLButtonElement>('convert-events').disabled = !entryKinds[notation].includes(kind) || this.mode !== 'write' || this.session.project.pendingSource !== null;
+    this.el<HTMLButtonElement>('convert-events').disabled = !entryKinds[notation].includes(kind) || this.mode !== 'write' || this.session.signals.pendingSource.get() !== null;
   }
   private syncHistoryControls(): void {
     const writing = this.mode === 'write';
@@ -1413,34 +1448,10 @@ export class AuthorWorkspace {
   }
   private renderNavigator(): void {
     const { measure, voiceIndex } = this.location();
-    const activeMarkingId = this.currentMarking()?.marking.id;
-    const navigator = this.el('event-navigator');
-    const focusedId = navigator.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.sourceId : undefined;
-    const fragment = document.createDocumentFragment();
-    for (const [index, voice] of measure.voices.entries()) {
-      const group = node('div', '', 'event-voice-group'); group.append(node('p', `Voice ${index + 1}`, 'field-help'));
-      for (const event of voice.events) {
-        const button = node('button', `${eventLabel(event)} · at ${formatRational(event.onset)}`);
-        button.type = 'button'; button.dataset.sourceId = event.id; button.setAttribute('aria-pressed', String(this.session.selection.ids.includes(event.id)));
-        if (index === voiceIndex) button.classList.add('active-voice'); group.append(button);
-        for (const marking of event.markings ?? []) {
-          const child = node('button', `${markingLabel(marking)} · attached to ${eventLabel(event)}`, 'event-marking-link');
-          child.type = 'button'; child.dataset.sourceId = marking.id;
-          if (activeMarkingId === marking.id) child.setAttribute('aria-current', 'true');
-          group.append(child);
-        }
-      }
-      fragment.append(group);
-    }
-    for (const annotation of measure.annotations) {
-      const button = node('button', `${annotation.kind}: ${annotation.text || annotation.bpm} · at ${formatRational(annotation.onset)}`);
-      button.type = 'button'; button.dataset.sourceId = annotation.id; fragment.append(button);
-    }
-    navigator.replaceChildren(fragment);
-    if (focusedId) {
-      const replacement = [...navigator.querySelectorAll<HTMLButtonElement>('button[data-source-id]')].find(button => button.dataset.sourceId === focusedId);
-      (replacement ?? navigator.querySelector<HTMLButtonElement>('button') ?? this.el('score-editor')).focus({ preventScroll: true });
-    }
+    renderEventNavigator(this.el('event-navigator'), {
+      measure, voiceIndex, selectedIds: this.session.selection.ids,
+      activeMarkingId: this.currentMarking()?.marking.id,
+    }, this.el('score-editor'));
   }
 
   private readEvent(prefix = 'event'): EventInput {
@@ -1471,19 +1482,22 @@ export class AuthorWorkspace {
   }
 
   private bind(): void {
-    for (const mode of ['write', 'read', 'pages'] as const) this.on(`view-${mode}`, 'click', () => this.setMode(mode));
+    this.on('view-switch', 'view-request', event => {
+      const mode = (event as CustomEvent<{ mode: ViewMode }>).detail?.mode;
+      if (mode === 'write' || mode === 'read' || mode === 'pages') this.setMode(mode);
+    });
     this.on('undo', 'click', () => { if (this.mode === 'write') this.session.undo(); }); this.on('redo', 'click', () => { if (this.mode === 'write') this.session.redo(); });
     for (const id of ['project-title', 'project-composer', 'project-subtitle']) this.on(id, 'input', () => {
       this.metadataDirty = true;
       document.body.dataset.authorPrintReady = 'false';
-      if (this.mode === 'pages') this.el('page-preflight').textContent = 'Updating composition details. Printing waits for the new pages.';
+      if (this.mode === 'pages') setPagePreflightMessage(this.el('page-preflight'), 'Updating composition details. Printing waits for the new pages.');
       clearTimeout(this.metadataTimer); this.metadataTimer = setTimeout(() => { void this.run(() => this.commitMetadata()); }, 350);
     });
     this.on('new-project', 'click', async () => {
       this.commitMetadata();
       const template = this.value('new-template') as TemplateId;
       const templateName = this.el<HTMLSelectElement>('new-template').selectedOptions[0]?.textContent || 'a new composition';
-      if (!await this.confirmAction('Start a new composition', `Replace “${this.session.project.metadata.title || 'Untitled composition'}” with ${templateName}?${this.dirtyInspectorCount() || this.session.project.pendingSource !== null ? ' Unapplied Source and form drafts will be discarded.' : ''} Download this project first to keep a separate copy.`, 'Replace composition')) return;
+      if (!await this.confirmAction('Start a new composition', `Replace “${this.session.signals.project.get().metadata.title || 'Untitled composition'}” with ${templateName}?${this.dirtyInspectorCount() || this.session.signals.pendingSource.get() !== null ? ' Unapplied Source and form drafts will be discarded.' : ''} Download this project first to keep a separate copy.`, 'Replace composition')) return;
       this.closeTransientSurfaces();
       this.partId = 'score'; this.entryMode = false; this.rangeStart = ''; this.rangeEnd = '';
       this.session.replaceProject(createTemplate(template)); this.resetCursor(); this.inspectors.reset(); this.markings.reset(); this.eventMarkings.reset();
@@ -1494,14 +1508,14 @@ export class AuthorWorkspace {
     this.on('project-file', 'change', () => this.fileReader.read(async (file, text, isCurrent) => {
       const project = text.trimStart().startsWith('{') ? importProject(text) : createProject(text, file.name.replace(/\.[^.]+$/, ''));
       if (!isCurrent()) return;
-      if (!await this.confirmAction('Open another composition', `Replace this workspace with “${project.metadata.title || file.name}”?${this.dirtyInspectorCount() || this.session.project.pendingSource !== null ? ' Unapplied Source and form drafts will be discarded.' : ''} Download the current project first to keep a separate copy.`, 'Open composition') || !isCurrent()) return;
+      if (!await this.confirmAction('Open another composition', `Replace this workspace with “${project.metadata.title || file.name}”?${this.dirtyInspectorCount() || this.session.signals.pendingSource.get() !== null ? ' Unapplied Source and form drafts will be discarded.' : ''} Download the current project first to keep a separate copy.`, 'Open composition') || !isCurrent()) return;
       this.closeTransientSurfaces();
         this.partId = 'score'; this.session.replaceProject(project); this.resetCursor(); this.inspectors.reset(); this.markings.reset(); this.eventMarkings.reset(); this.setMode('write');
     }));
     this.on('download-project', 'click', () => { this.closeDocumentMenu(); this.commitMetadata(); this.download(serializeProject(this.session.project), 'application/json', '.music-notes.json'); this.status('Project download requested, including layout settings and unapplied source drafts.'); });
     this.on('export-html', 'click', () => {
       this.closeDocumentMenu();
-      this.commitMetadata(); if (this.session.project.pendingSource !== null) throw new Error('Apply or revert the source draft before exporting accepted musical HTML. Download a project to preserve both versions.');
+      this.commitMetadata(); if (this.session.signals.pendingSource.get() !== null) throw new Error('Apply or revert the source draft before exporting accepted musical HTML. Download a project to preserve both versions.');
       const projection = buildProjection(this.session.project, this.partId); const html = serializeScore(projection.score);
       this.download(html, 'text/html', '.music.html'); this.status('Exported canonical musical HTML for this view. Download a project to retain all metadata and layout profiles.');
     });
@@ -1512,7 +1526,7 @@ export class AuthorWorkspace {
     });
     this.on('staff-select', 'change', () => {
       this.parkEntry();
-      const old = this.location(); const staff = this.session.score.staves.find(item => item.id === this.value('staff-select'))!;
+      const old = this.location(); const staff = this.session.signals.score.get().staves.find(item => item.id === this.value('staff-select'))!;
       this.cursor.staffId = staff.id; this.cursor.measureId = staff.measures[Math.min(old.measureIndex, staff.measures.length - 1)].id;
       this.rangeStart = ''; this.rangeEnd = ''; this.select(this.cursor.measureId, false); this.scrollToSelection();
     });
@@ -1555,7 +1569,7 @@ export class AuthorWorkspace {
     this.on('review-source', 'click', event => {
       event.preventDefault(); this.surfaces.close('workspace-review');
       if (this.mode !== 'write') this.setMode('write');
-      this.surfaces.open('source-panel', '#source-input');
+      if (this.surfaces.open('source-panel')) this.sourceEditor.focusInput();
     });
     this.on('review-download-project', 'click', () => {
       this.commitMetadata(); this.download(serializeProject(this.session.project), 'application/json', '.music-notes.json');
@@ -1604,7 +1618,7 @@ export class AuthorWorkspace {
     this.on('add-measure', 'click', () => { this.parkEntry(); this.execute({ type: 'append-measure', afterMeasureId: this.cursor.measureId, voiceIndex: this.cursor.voiceIndex }); this.surfaces.close('location-panel'); this.revealAfterRender = true; this.scrollToSelection(); });
     this.on('add-voice', 'click', () => this.execute({ type: 'add-voice', measureId: this.structuralTarget('measure') }));
     this.on('apply-measure', 'click', () => this.applyInspector('measure', draft => {
-      const pitched = this.session.score.staves.some(staff => staff.id === draft.context.staffId && (staff.notation ?? 'pitched') === 'pitched');
+      const pitched = this.session.signals.score.get().staves.some(staff => staff.id === draft.context.staffId && (staff.notation ?? 'pitched') === 'pitched');
       const values: MeasureInput = { meter: this.value('measure-meter').trim(), groups: this.value('measure-groups').trim(),
         ...(pitched ? { key: this.value('measure-key').trim(), clef: this.value('measure-clef') as Clef } : {}),
         pickup: this.checked('measure-pickup'), incomplete: this.checked('measure-incomplete'), endBar: this.value('measure-end-bar') as Measure['endBar'], repeatStart: this.checked('measure-repeat-start') };
@@ -1736,30 +1750,32 @@ export class AuthorWorkspace {
     this.on('print-score', 'click', () => this.print());
     this.on('turn-boundary', 'change', () => this.renderTurn());
     this.on('mark-turn-reviewed', 'click', () => this.reviewTurn(true)); this.on('clear-turn-review', 'click', () => this.reviewTurn(false));
-    this.on('source-input', 'input', () => {
-      const text = this.value('source-input');
-      this.sourceFeedback.refresh(this.session.project.id, text);
-      try { this.session.setPendingSource(text === this.session.project.sourceHtml ? null : text); }
-      catch (error) { this.sourceFeedback.fail(this.session.project.id, text, messageOf(error)); throw error; }
+    this.on('source-editor', 'source-change', event => {
+      const text = (event as CustomEvent<SourceValueDetail>).detail.value;
+      this.sourceEditor.refreshFailure(this.session.signals.project.get().id, text);
+      try { this.session.setPendingSource(text === this.session.signals.project.get().sourceHtml ? null : text); }
+      catch (error) { this.sourceEditor.fail(this.session.signals.project.get().id, text, messageOf(error)); throw error; }
     });
-    this.on('source-apply', 'click', () => {
+    this.on('source-editor', 'source-apply', event => {
       if (this.mode !== 'write') throw new Error('Return to Write to apply Source.');
-      const text = this.value('source-input');
-      this.sourceFeedback.clear();
+      const text = (event as CustomEvent<SourceValueDetail>).detail.value;
+      this.sourceEditor.clearFailure();
       try { this.session.applySource(text); }
-      catch (error) { this.sourceFeedback.fail(this.session.project.id, text, messageOf(error)); throw error; }
+      catch (error) { this.sourceEditor.fail(this.session.signals.project.get().id, text, messageOf(error)); throw error; }
     });
-    this.on('source-revert', 'click', () => { this.sourceFeedback.clear(); this.session.setPendingSource(null); this.setValue('source-input', this.session.project.sourceHtml); });
+    this.on('source-editor', 'source-revert', () => {
+      this.sourceEditor.clearFailure(); this.session.setPendingSource(null); this.syncSourceNotice(true);
+    });
     this.on('read-previous', 'click', () => this.moveReading(-1)); this.on('read-next', 'click', () => this.moveReading(1));
     this.on('read-go', 'click', () => { this.select(this.value('read-measure'), false); this.scrollToSelection(); });
     this.on('read-refit', 'click', () => { this.readingWidth = undefined; this.requestRender(); });
-    this.el('event-navigator').addEventListener('click', (event) => {
-      const button = (event.target as Element).closest<HTMLElement>('[data-source-id]'); if (button?.dataset.sourceId) {
-        this.parkEntry();
-        this.select(button.dataset.sourceId, false, selectionModifier(event as MouseEvent) ?? (this.selectMore ? 'toggle' : 'replace'));
-        this.scrollToSelection();
-      }
-    }, { signal: this.abort.signal });
+    this.on('event-navigator', 'navigate-request', event => {
+      const detail = (event as CustomEvent<{ sourceId: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }>).detail;
+      if (!detail?.sourceId) return;
+      this.parkEntry();
+      this.select(detail.sourceId, false, selectionModifier(detail) ?? (this.selectMore ? 'toggle' : 'replace'));
+      this.scrollToSelection();
+    });
     this.el('score-host').addEventListener('notation-select', (event) => {
       if (this.isScoreInputBlocked() || this.blockedScorePress) return;
       const detail = (event as CustomEvent<NotationSelectionDetail>).detail;
@@ -1792,7 +1808,7 @@ export class AuthorWorkspace {
       // A fresh browser text gesture relinquishes score shortcuts. Keep the
       // Range itself intact; selecting notation explicitly claims focus again.
       if (event.defaultPrevented || classifyAuthorInput(event, { host: this.el('score-host'), surface: this.surface }).owner === 'notation') return;
-      const focused = document.activeElement;
+      const focused = this.controlScope.activeElement;
       if (focused === this.el('score-editor') || focused === this.el('score-scroll')) (focused as HTMLElement).blur();
     }, { signal: this.abort.signal });
     document.addEventListener('pointerdown', event => {
@@ -1806,7 +1822,7 @@ export class AuthorWorkspace {
     }, { capture: true, passive: true, signal: this.abort.signal });
     // This also covers chooser popovers owned by SelectionControls and native
     // Document openings. A surface is a temporary task, never a mode switch.
-    document.addEventListener('beforetoggle', event => {
+    for (const root of this.controlScope.roots) root.addEventListener('beforetoggle', event => {
       if ((event as ToggleEvent).newState === 'open') this.cancelForSurface();
     }, { capture: true, signal: this.abort.signal });
   }
@@ -1830,7 +1846,7 @@ export class AuthorWorkspace {
       ['part', ['remove-part']],
     ] as const) {
       const draft = this.inspectors.snapshot(form);
-      const blocked = this.mode !== 'write' || this.session.project.pendingSource !== null || !draft.targetId
+      const blocked = this.mode !== 'write' || this.session.signals.pendingSource.get() !== null || !draft.targetId
         || !!draft.context?.creating || !draft.matchesSelection || draft.status === 'missing' || draft.status === 'document-changed';
       for (const id of ids) {
         const button = this.el<HTMLButtonElement>(id); button.disabled = blocked;
@@ -1840,7 +1856,7 @@ export class AuthorWorkspace {
     }
     const measureDraft = this.inspectors.snapshot('measure');
     const measureTargetId = measureDraft.targetId;
-    const inspectedMeasure = this.session.score.staves.flatMap(staff => staff.measures).find(measure => measure.id === measureTargetId);
+    const inspectedMeasure = this.session.signals.score.get().staves.flatMap(staff => staff.measures).find(measure => measure.id === measureTargetId);
     const hasEmptyVoice = inspectedMeasure?.voices.some(voice => !voice.events.length) === true;
     const review = this.el<HTMLButtonElement>('review-short-measure');
     review.disabled ||= !inspectedMeasure?.incomplete || hasEmptyVoice;
@@ -1857,7 +1873,7 @@ export class AuthorWorkspace {
           : 'This measure has unwritten voices. In Location & actions, choose this measure and an empty voice before writing or using Fill remainder with rests.';
     }
     if (hasEmptyVoice) review.title = 'Write each empty voice or add explicit rests before approving a short ending.';
-    this.el<HTMLButtonElement>('clear-short-review').disabled ||= !inspectedMeasure || !this.session.project.reviewedShortMeasures.includes(inspectedMeasure.id);
+    this.el<HTMLButtonElement>('clear-short-review').disabled ||= !inspectedMeasure || !this.session.signals.project.get().reviewedShortMeasures.includes(inspectedMeasure.id);
   }
   private applyInspector(form: InspectorFormName, action: (draft: InspectorResolution) => void, consume = false): void {
     try {
@@ -1885,7 +1901,7 @@ export class AuthorWorkspace {
     label.textContent = 'Insert here'; caption.textContent = ''; caption.hidden = true;
     button.title = 'Insert at the current musical location';
     button.setAttribute('aria-label', 'Insert at the current musical location');
-    button.disabled = this.mode !== 'write' || this.session.project.pendingSource !== null;
+    button.disabled = this.mode !== 'write' || this.session.signals.pendingSource.get() !== null;
     if (button.disabled) { this.syncReviewNotice(); return; }
     try {
       const analysis = analyzeContinuation(this.session.source, this.insertionCommand());
@@ -1908,7 +1924,7 @@ export class AuthorWorkspace {
     this.surfaces?.close('continuation-review'); this.surfaces?.close('pointer-recovery');
   }
   private captureOffer(command: Insertion, pointer: boolean): ContinuationOffer {
-    return { documentId: this.session.project.id, revision: this.session.revision, selectionId: this.session.selectionId,
+    return { documentId: this.session.signals.project.get().id, revision: this.session.revision, selectionId: this.session.selectionId,
       selectionFingerprint: this.selectionFingerprint(),
       command: structuredClone(command), recipe: this.recipeKey(), pointer };
   }
@@ -1922,7 +1938,7 @@ export class AuthorWorkspace {
     this.surfaces.open('continuation-review', '#confirm-continue-piece');
   }
   private offerPointerContinuation(command: Insertion, _error: unknown): boolean {
-    if (this.mode !== 'write' || this.session.project.pendingSource !== null) return false;
+    if (this.mode !== 'write' || this.session.signals.pendingSource.get() !== null) return false;
     const analysis = analyzeContinuation(this.session.source, command);
     if (!analysis.eligible && !analysis.ending) return false;
     this.pointerOffer = this.captureOffer(command, true);
@@ -1934,7 +1950,7 @@ export class AuthorWorkspace {
   private confirmContinuation(pointer: boolean): void {
     this.requireWriting();
     const offer = pointer ? this.pointerOffer : this.continuationOffer;
-    if (!offer || offer.documentId !== this.session.project.id || offer.revision !== this.session.revision
+    if (!offer || offer.documentId !== this.session.signals.project.get().id || offer.revision !== this.session.revision
       || offer.selectionId !== this.session.selectionId || offer.selectionFingerprint !== this.selectionFingerprint() || offer.recipe !== this.recipeKey()) {
       this.invalidateOffers(); throw new Error('That insertion offer changed. Choose the location and try again.');
     }
@@ -1968,7 +1984,7 @@ export class AuthorWorkspace {
     clearTimeout(this.metadataTimer);
     this.metadataDirty = false;
     const metadata = { title: this.value('project-title').trim() || 'Untitled composition', composer: this.value('project-composer').trim(), subtitle: this.value('project-subtitle').trim() };
-    if (JSON.stringify(metadata) !== JSON.stringify(this.session.project.metadata)) this.session.update('Edit composition details', project => { project.metadata = metadata; });
+    if (JSON.stringify(metadata) !== JSON.stringify(this.session.signals.project.get().metadata)) this.session.update('Edit composition details', project => { project.metadata = metadata; });
   }
   private editPart(update: boolean): void {
     this.applyInspector('part', draft => {
@@ -2008,14 +2024,14 @@ export class AuthorWorkspace {
     }
     const restored = this.session.cursor;
     if (restored) this.cursor = restored;
-    else if (change.kind === 'source' || change.kind === 'replace') this.cursor = { staffId: this.session.score.staves[0].id, measureId: this.session.score.staves[0].measures[0].id, voiceIndex: 0 };
+    else if (change.kind === 'source' || change.kind === 'replace') this.cursor = { staffId: this.session.signals.score.get().staves[0].id, measureId: this.session.signals.score.get().staves[0].measures[0].id, voiceIndex: 0 };
     if (!this.entryMode) {
       const location = this.location(change.selectionId);
       this.cursor = { staffId: location.staff.id, measureId: location.measure.id, voiceIndex: location.voiceIndex, eventId: location.event?.id };
     }
     if (change.kind === 'replace') {
       clearTimeout(this.metadataTimer); this.metadataDirty = false;
-      this.sourceFeedback.clear();
+      this.sourceEditor.clearFailure(); this.syncSourceNotice(true);
       this.clearActiveMarking(); this.markingRecovery = undefined;
       this.partId = 'score'; this.rangeStart = ''; this.rangeEnd = ''; this.bookmark = undefined;
       this.entryMode = false; this.entryDragArmed = false; this.resumeWritingAfterView = false;
@@ -2051,6 +2067,9 @@ export class AuthorWorkspace {
       if (result.status === 'saved') this.savedRevision = revision;
       if (result.status !== 'saved') this.saveRequestedRevision = -1;
       this.recoveryWarning = result.status === 'saved' ? '' : result.message;
+      // Persistence can finish after disposal; only the active workspace may
+      // publish UI into a retained shell now owned by another session.
+      if (this.disposed) return;
       this.el('save-status').textContent = result.status === 'saved'
         ? this.session.revision === revision ? 'Saved on this device · download a backup' : 'Unsaved changes · saving locally…'
         : result.message;
@@ -2059,13 +2078,14 @@ export class AuthorWorkspace {
     }).catch(error => {
       this.saveRequestedRevision = -1;
       this.recoveryWarning = `Recovery failed: ${messageOf(error)}. Download a project to keep your work.`;
+      if (this.disposed) return;
       this.el('save-status').textContent = this.recoveryWarning; this.syncReviewNotice();
     });
     return this.saveWork;
   }
   private download(text: string, type: string, suffix: string): void {
     const url = URL.createObjectURL(new Blob([text], { type })); const link = node('a');
-    link.href = url; link.download = `${(this.session.project.metadata.title || 'music-notes').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0,80) || 'music-notes'}${suffix}`;
+    link.href = url; link.download = `${(this.session.signals.project.get().metadata.title || 'music-notes').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0,80) || 'music-notes'}${suffix}`;
     document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
@@ -2091,9 +2111,10 @@ export class AuthorWorkspace {
     }
     this.tools.setMode(mode);
     document.body.dataset.view = mode;
-    for (const view of ['write', 'read', 'pages']) {
-      this.el(`view-${view}`).setAttribute('aria-pressed', String(view === mode)); this.el(`${view}-tools`).hidden = view !== mode;
-    }
+    const switcher = this.el<AuthorViewSwitch>('view-switch');
+    switcher.mode = mode; switcher.mount();
+    this.el('author-workbench').setAttribute('mode', mode);
+    for (const view of ['write', 'read', 'pages']) this.el(`${view}-tools`).hidden = view !== mode;
     this.el('score-editor').hidden = mode === 'pages'; this.el('page-host').hidden = mode !== 'pages';
     this.el('author-workbench').hidden = mode === 'pages';
     this.el('workspace-dock').hidden = mode !== 'write';
@@ -2150,14 +2171,6 @@ export class AuthorWorkspace {
       const surface = this.surface!;
       if (this.observedSurface !== surface) {
         this.surfaceScrollAbort?.abort(); this.surfaceScrollAbort = new AbortController(); this.observedSurface = surface;
-        // Inner system scroll events do not cross MusicSurface's shadow boundary.
-        surface.shadowRoot!.addEventListener('scroll', () => {
-          this.revealAfterRender = false; this.drawSelection(); this.syncReturnControl();
-        }, { capture: true, passive: true, signal: this.surfaceScrollAbort.signal });
-        const style = node('style');
-        style.dataset.authorNotationReview = '';
-        style.textContent = '.diagnostics:not([data-errors]){display:none!important}';
-        surface.shadowRoot!.append(style);
         surface.addEventListener('notation-diagnostics', event => {
           // A listener earlier in this event's path can accept newer Source.
           // During an Author render, only its awaited current refresh may
@@ -2165,6 +2178,7 @@ export class AuthorWorkspace {
           if (event.target === surface && document.body.dataset.renderState === 'ready') this.collectNotationNotices(surface);
         }, { signal: this.surfaceScrollAbort.signal });
       }
+      surface.diagnosticsPresentation = 'errors';
       this.notationReviewContext = { surface, generation, documentId: project.id, sourceHtml: project.sourceHtml, partId: this.partId };
       surface.removeAttribute('print-preview');
       surface.style.width = mode === 'read' ? `${this.readingWidth ??= Math.max(240, Math.floor(this.el('score-host').getBoundingClientRect().width))}px` : '';
@@ -2190,8 +2204,7 @@ export class AuthorWorkspace {
     this.overlays.replaceChildren();
     const activeMarkingId = this.currentMarking()?.marking.id;
     if (this.mode !== 'write' || !this.surface) return;
-    const layout = this.surface.getLayoutGeometry(); if (!layout) return;
-    const svgNodes = [...this.surface.shadowRoot!.querySelectorAll<SVGSVGElement>(`.${layout.projection === 'print' ? 'print' : 'screen'} svg.notation-svg`)];
+    const projection = this.surface.getRenderedProjection(); if (!projection) return;
     const bounds = this.el('score-host').getBoundingClientRect();
     const chosen = new Set<string>();
     if (activeMarkingId) chosen.add(activeMarkingId);
@@ -2206,8 +2219,7 @@ export class AuthorWorkspace {
       element.style.width = `${Math.max(2, end.x - start.x + 6)}px`; element.style.height = `${Math.max(4, end.y - start.y + 6)}px`;
       this.overlays.append(element);
     };
-    for (const system of layout.systems) {
-      const svg = svgNodes[system.index]; if (!svg) continue;
+    for (const { system, svg } of projection.frames) {
       for (const region of [...system.events, ...(system.markings ?? []), ...system.annotations, ...system.tuplets, ...system.measures]) if (chosen.has(region.sourceId)) box(svg, region, `author-selection${region.sourceId === this.cursor.measureId ? ' author-measure-selection' : ''}`);
       if (this.selectMore && this.session.selection.focusId) {
         const focused = system.events.find(region => region.sourceId === this.session.selection.focusId);
@@ -2235,10 +2247,9 @@ export class AuthorWorkspace {
     if (event.defaultPrevented || this.isScoreInputBlocked() || this.blockedScorePress || isNativeSecondaryClick(event) || this.mode !== 'write' || this.entryMode || this.selectMore || selectionModifier(event)
       || classifyAuthorInput(event, { host: this.el('score-host'), surface: this.surface }).owner === 'native'
       || event.composedPath().some(item => item instanceof Element && item.hasAttribute('data-source-id'))) return;
-    const layout = this.surface?.getLayoutGeometry(); if (!layout) return;
-    const svgNodes = [...this.surface!.shadowRoot!.querySelectorAll<SVGSVGElement>('.screen svg.notation-svg')];
-    for (const system of layout.systems) {
-      const svg = svgNodes[system.index]; const matrix = svg?.getScreenCTM(); if (!matrix) continue;
+    const projection = this.surface?.getRenderedProjection(); if (!projection || projection.layout.projection !== 'screen') return;
+    for (const { system, svg } of projection.frames) {
+      const matrix = svg.getScreenCTM(); if (!matrix) continue;
       const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
       const measure = system.measures.find(region => point.x >= region.x && point.x <= region.x + region.width && point.y >= region.y && point.y <= region.y + region.height);
       if (measure) { this.parkEntry(); this.rangeStart = ''; this.rangeEnd = ''; this.select(measure.sourceId, false); return; }
@@ -2287,13 +2298,14 @@ export class AuthorWorkspace {
       const path = event.composedPath();
       const owner = classifyAuthorInput(event, { host: this.el('score-host'), surface: this.surface });
       const scoreFocus = ['score-editor', 'score-scroll', 'score-host'].some(id => path[0] === this.el(id)) || path[0] === this.surface;
-      const nativeSurface = [...document.querySelectorAll<HTMLElement>('[popover], dialog[open], select')].some(panel => {
-        if (panel.dataset.popoverFallback === 'true') return false;
-        if (panel instanceof HTMLSelectElement) { try { return panel.matches(':open'); } catch { return false; } }
-        return this.surfaceIsOpen(panel);
-      });
+      // Escape belongs to any open native surface in the document, including
+      // one outside this workspace. This browser policy is separate from the
+      // explicitly scoped controls that may block or mutate this workspace.
+      const nativeSurface = this.surfaces.hasOpenSurface({ nativeOnly: true })
+        || [...document.querySelectorAll<HTMLElement>('[popover], dialog[open], select')]
+          .some(panel => isNativeSurfaceOpen(panel, { nativeOnly: true }));
       if (event.key === 'Escape' && !isNativeAuthorInput(event) && !nativeSurface && (scoreFocus || owner.owner === 'notation')
-        && [...document.querySelectorAll<HTMLElement>('[data-popover-fallback="true"]')].some(panel => !panel.hidden)) {
+        && this.surfaces.hasOpenFallback()) {
         event.preventDefault(); this.closeTransientSurfaces(); this.staffInteraction.cancel('escape');
         this.el('score-editor').focus({ preventScroll: true });
       }
@@ -2400,7 +2412,7 @@ export class AuthorWorkspace {
     for (let index = 1; index < pages.length; index++) {
       const start = pages[index].systems[0].start;
       const measure = score?.staves[0].measures[start];
-      const column = this.session.project.columns.find(column => column.measureIds.includes(measure?.id ?? ''));
+      const column = this.session.signals.project.get().columns.find(column => column.measureIds.includes(measure?.id ?? ''));
       if (column) choices.push({ value: column.id, label: `Page ${index} → ${index + 1} · before measure ${measure!.number}` });
     }
     this.options('turn-boundary', choices, this.value('turn-boundary')); this.renderTurn();
@@ -2408,7 +2420,7 @@ export class AuthorWorkspace {
   private renderTurn(): void {
     const host = this.el('turn-preview'); host.replaceChildren(); const id = this.value('turn-boundary');
     if (!id || !this.pageView) { host.append(node('p', 'Choose a boundary to inspect the outgoing system and next entrance.', 'field-help')); return; }
-    const column = this.session.project.columns.find(column => column.id === id); const pages = this.pageView.plan.pages;
+    const column = this.session.signals.project.get().columns.find(column => column.id === id); const pages = this.pageView.plan.pages;
     const index = pages.findIndex(page => page.index > 0 && column?.measureIds.includes(this.pageView!.projection.score.staves[0].measures[page.systems[0].start].id));
     if (index < 1) return;
     const reviewed = this.profile().reviewedTurns[id] === this.pageView.fingerprint;
@@ -2428,7 +2440,7 @@ export class AuthorWorkspace {
     });
   }
   private async print(): Promise<void> {
-    if (this.printPreparing) return;
+    if (this.disposed || this.printPreparing) return;
     this.printPreparing = true;
     const button = this.el<HTMLButtonElement>('print-score');
     button.disabled = true;
@@ -2437,33 +2449,22 @@ export class AuthorWorkspace {
       if (this.mode !== 'pages') this.setMode('pages');
       if (!this.currentPageView()) this.requestRender();
       await this.renderWork;
+      if (this.disposed) return;
       if (!this.refreshPreflight()) throw new Error('The composition is not ready for this print request. Resolve the publication checks or choose an explicitly marked draft.');
       const revision = this.session.revision;
       if (!this.currentPageView() || this.pageViewRevision !== revision) throw new Error('The layout changed while preparing printing. Review Pages and try again.');
       // No asynchronous gap between the final revision/preflight check and request.
       this.printRequest();
       this.status('Print requested. Choose matching paper, 100% scale, no browser margins, and no browser headers/footers. If no dialog opens, use a browser with printing support. A request does not confirm a saved PDF.');
-    } finally { this.printPreparing = false; button.disabled = false; }
+    } finally { this.printPreparing = false; if (!this.disposed) button.disabled = false; }
   }
 
   dispose(): void {
+    if (this.disposed) return;
     this.commitMetadata(); void this.saveNow(); this.disposed = true; this.renderGeneration++; clearTimeout(this.saveTimer); clearTimeout(this.metadataTimer);
     this.selectionHud.dispose(); this.selectionControls.dispose(); this.staffInteraction.dispose(); this.resizeObserver?.disconnect(); this.abort.abort();
     this.tools.dispose(); this.writingFrame.dispose(); this.surfaces.dispose(); this.inspectors.dispose(); this.markings.dispose(); this.eventMarkings.dispose(); this.viewport.dispose();
     this.fileReader.dispose(); this.confirmation.dispose(); this.entryPitch.dispose();
     this.surfaceScrollAbort?.abort();
-  }
-}
-
-if (document.body.classList.contains('author-app')) {
-  try { new AuthorWorkspace(); }
-  catch (error) {
-    document.body.dataset.authorReady = 'true'; document.body.dataset.renderState = 'error';
-    const output = document.getElementById('author-errors');
-    if (output) { output.hidden = false; output.textContent = messageOf(error); }
-    const summary = document.getElementById('workspace-review-summary');
-    if (summary) { summary.hidden = false; summary.textContent = `The editor could not open: ${messageOf(error)}`; }
-    const trigger = document.getElementById('workspace-review-trigger');
-    if (trigger) { trigger.hidden = false; trigger.textContent = 'Review error'; }
   }
 }

@@ -1,14 +1,12 @@
 // @vitest-environment happy-dom
+import { authorActiveElement, authorControlParent, findAuthorControl, queryAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 import { parsePitch, pitchText } from '../src/model/index.js';
 import type { AuthorProject } from '../src/authoring/types.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const roadSource = `<music-staff id="roads" label="Road lead" notation="three-roads">
   <music-measure id="road-bar" number="12A">
     <music-road id="main" direction="same" duration="half">
@@ -35,7 +33,7 @@ const conversionSource = `<music-staff id="staff" label="Flugelhorn"><music-meas
 let workspace: AuthorWorkspace | undefined;
 let sequence = 0;
 function control<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+  const element = findAuthorControl(document, id);
   if (!element) throw new Error(`The real Author shell is missing #${id}.`);
   return element as T;
 }
@@ -52,14 +50,15 @@ function mount(source = roadSource): AuthorWorkspace {
 async function click(id: string): Promise<void> { control<HTMLButtonElement>(id).click(); await flush(); }
 function available(element: HTMLElement): boolean {
   if (element.closest('[hidden], [inert], [aria-hidden="true"]') || element.matches(':disabled')) return false;
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) {
+    if (parent.matches('[hidden],[inert],[aria-hidden="true"]')) return false;
     if (parent instanceof HTMLDetailsElement && !parent.open && !parent.querySelector(':scope > summary')?.contains(element)) return false;
   }
   return true;
 }
 async function disclose(element: HTMLElement): Promise<void> {
   const ancestors: HTMLDetailsElement[] = [];
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) {
     if (parent instanceof HTMLDetailsElement) ancestors.unshift(parent);
   }
   for (const details of ancestors) if (!details.open) {
@@ -92,7 +91,7 @@ async function check(id: string, checked: boolean): Promise<void> {
   element.dispatchEvent(new Event('change', { bubbles: true })); await flush();
 }
 async function select(id: string): Promise<void> {
-  const button = document.querySelector<HTMLButtonElement>(`#event-navigator [data-source-id="${id}"]`);
+  const button = queryAuthorControl<HTMLButtonElement>(document, `#event-navigator [data-source-id="${id}"]`);
   if (!button) throw new Error(`The real event navigator has no ${id} button.`);
   await disclose(button); expect(available(button)).toBe(true);
   button.click(); await flush();
@@ -145,7 +144,7 @@ function row(id: string): HTMLElement {
 
 beforeEach(() => {
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   // Real application listeners, session, guards, and controllers. Rendering is
   // the only stub; this suite makes no geometry, top-layer, or visual claims.
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
@@ -265,7 +264,7 @@ describe('explicit selection and Properties routes', () => {
     expect(control('workspace-tools').hidden).toBe(true);
     await visibleClick('selection-mark-edit');
     expectProperties();
-    expect(row(id).contains(document.activeElement)).toBe(true);
+    expect(row(id).contains(authorActiveElement(document))).toBe(true);
     expect(row(id).getAttribute('aria-current')).toBe('true');
     expect(control('event-markings-editor').dataset.activeMarkingId).toBe(id);
     expectNoEdit(app, source, 0);
@@ -282,7 +281,7 @@ describe('explicit selection and Properties routes', () => {
     expect(available(control('add-event-articulation'))).toBe(true);
     expect(control<HTMLDetailsElement>('event-details').open).toBe(false);
     expect(control('event-markings-editor').compareDocumentPosition(control('event-details')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(control('selection-inspector').contains(document.activeElement)).toBe(true);
+    expect(control('selection-inspector').contains(authorActiveElement(document))).toBe(true);
     expect(entry()).toEqual(recipe); expectNoEdit(app, source, 0);
   });
 
@@ -314,7 +313,7 @@ describe('explicit selection and Properties routes', () => {
     await visibleClick('selection-pitch'); expectProperties();
     expect(control('selection-inspector').dataset.draftTarget).toBe('chord');
     expect(control<HTMLDetailsElement>('event-details').open).toBe(true);
-    expect(document.activeElement).toBe(control('selected-pitches'));
+    expect(authorActiveElement(document)).toBe(control('selected-pitches'));
     expect(control<HTMLInputElement>('selected-pitches').value).toBe('G4 Bb4 D5');
     expectNoEdit(app, source, 0);
   });
@@ -325,7 +324,7 @@ describe('explicit selection and Properties routes', () => {
     const marking = app.session.source.querySelector('#chord-accent')!.outerHTML;
     await visibleClick('selection-pitch'); expectProperties();
     expect(control<HTMLDetailsElement>('event-details').open).toBe(true);
-    expect(document.activeElement).toBe(control('selected-pitches'));
+    expect(authorActiveElement(document)).toBe(control('selected-pitches'));
     await visibleField('selected-pitches', 'Aqf4 Cqs5 E5');
     expectNoEdit(app, before, 0); await visibleClick('update-event');
     expect(eventById('chord').pitches.map(pitch => pitchText(pitch))).toEqual(['Aqf4', 'Cqs5', 'E5']);
@@ -343,7 +342,7 @@ describe('explicit selection and Properties routes', () => {
     await visibleClick('selection-pitch'); expectProperties();
     expect(control('selection-inspector').dataset.draftTarget).toBe('note');
     expect(control<HTMLInputElement>('selected-pitch').value).toBe('Aqf4');
-    expect(document.activeElement).toBe(control('selected-draft-status'));
+    expect(authorActiveElement(document)).toBe(control('selected-draft-status'));
     expect(app.session.selectionId).toBe('chord'); expectNoEdit(app, source, 0);
   });
 
@@ -356,7 +355,7 @@ describe('explicit selection and Properties routes', () => {
     await visibleClick('selection-mark-edit'); expectProperties();
     expect(control('event-markings-editor').dataset.draftTarget).toBe('main');
     expect(row('fifth').querySelector<HTMLInputElement>('[data-marking-field="value"]')?.value).toBe('#5');
-    expect(document.activeElement).toBe(control('event-markings-draft-status'));
+    expect(authorActiveElement(document)).toBe(control('event-markings-draft-status'));
     expect(app.session.selectionId).toBe('higher'); expectNoEdit(app, source, 0);
   });
 });
@@ -415,7 +414,7 @@ describe('Enter inserts the exact native next-entry recipe', () => {
     const pressed = await key('Enter');
     expect(pressed.defaultPrevented).toBe(true);
     expectProperties(); expect(control('selection-inspector').dataset.draftTarget).toBe('note');
-    expect(control('selection-inspector').contains(document.activeElement)).toBe(true);
+    expect(control('selection-inspector').contains(authorActiveElement(document))).toBe(true);
     expect(entry()).toEqual(recipe); expect(app.session.cursor).toEqual(writer); expectNoEdit(app, source, 0);
   });
 
@@ -534,7 +533,7 @@ describe('structured incompatible-mark recovery in Author', () => {
     expect(control<HTMLButtonElement>('review-incompatible-mark').hidden).toBe(false);
     await click('review-incompatible-mark');
     expect(app.session.selectionId).toBe('note'); expect(activeMark()).toBe('note-trill');
-    expect(row('note-trill').contains(document.activeElement)).toBe(true);
+    expect(row('note-trill').contains(authorActiveElement(document))).toBe(true);
     expect(row('note-trill').getAttribute('aria-current')).toBe('true'); expectNoEdit(app, source, 0);
   });
 
@@ -559,7 +558,7 @@ describe('structured incompatible-mark recovery in Author', () => {
     // Exercise the connected stale control even when normal UI hides/disables it.
     action.dispatchEvent(new MouseEvent('click', { bubbles: true })); await flush();
     expect(activeMark()).toBeUndefined(); expect(app.session.selectionId).toBe(selection);
-    expect(control('workspace-tools').hidden).toBe(true); expect(document.activeElement).toBe(control('view-write'));
+    expect(control('workspace-tools').hidden).toBe(true); expect(authorActiveElement(document)).toBe(control('view-write'));
     expectNoEdit(app, source, revision);
   });
 });

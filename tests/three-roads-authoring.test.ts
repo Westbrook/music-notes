@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { analyzeContinuation } from '../src/authoring/continuation.js';
 import { EditorSession } from '../src/authoring/editor.js';
 import { patchEventFields } from '../src/authoring/event-field-patch.js';
@@ -444,7 +444,6 @@ describe('road ties and written rhythmic value', () => {
 });
 
 // Use the authored controls without importing main or starting a render surface.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const uiCleanups: (() => void)[] = [];
 
 function control<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -454,7 +453,7 @@ function control<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 function inspectorFixture(source: string, selectionId = 'n') {
-  document.body.innerHTML = shellMarkup;
+  mountAuthorFixture();
   const editor = session(source);
   const context: InspectorContext = { mode: 'write', partId: 'score', cursor: { staffId: '', measureId: '', voiceIndex: 0 } };
   let forms: InspectorForms | undefined;
@@ -493,7 +492,7 @@ describe('three-roads controls and inspector drafts in the real shell', () => {
   });
 
   it('offers explicit native direction choices and an unwritten three-roads draft template', () => {
-    document.body.innerHTML = shellMarkup;
+    mountAuthorFixture();
     for (const id of ['event-direction', 'selected-direction']) {
       const select = control<HTMLSelectElement>(id);
       expect(select.tagName).toBe('SELECT');

@@ -14,16 +14,22 @@ export default defineConfig({
     },
   }],
   build: {
+    manifest: true,
     rollupOptions: {
       input: {
         workbook: fileURLToPath(new URL('./index.html', import.meta.url)),
         author: fileURLToPath(new URL('./author.html', import.meta.url)),
       },
       output: {
+        onlyExplicitManualChunks: true,
         // Embedded fonts are stable, relatively large assets. Cache them apart
         // from the adapter, so editing notation code does not redownload fonts.
         manualChunks(id) {
           if (id.includes('/vexflow/build/esm/src/fonts/')) return 'notation-fonts';
+          // Shared, pinned runtimes can stay cached across application changes.
+          if (/\/node_modules\/(?:lit(?:-html|-element)?\/|@lit\/|signal-polyfill\/|signal-utils\/)/.test(id)) return 'ui-runtime';
+          // Native presentation templates change independently of commands.
+          if (id.includes('/src/authoring/ui/')) return 'author-ui';
         },
       },
     },

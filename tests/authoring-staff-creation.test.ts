@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { applyCommand } from '../src/authoring/commands.js';
 import { EditorSession } from '../src/authoring/editor.js';
 import { AuthorWorkspace } from '../src/authoring/main.js';
@@ -9,8 +9,6 @@ import { RecoveryStore } from '../src/authoring/storage.js';
 import { readScore } from '../src/dom/index.js';
 import type { Clef } from '../src/model/types.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 
 function source(firstBarKey?: string): string {
   return `<music-system id="score" key="F"><music-staff id="original" label="Flute" clef="treble" key="G" data-preserve="yes">
@@ -157,7 +155,7 @@ async function field(id: string, value: string): Promise<void> {
 describe('STAFF-INITIAL-KEY actual Author shell', () => {
   beforeEach(() => {
     for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-    document.body.innerHTML = shell;
+    mountAuthorFixture();
     // Real shell, application listeners, forms, commands, and history. This
     // intentionally stubs rendering and makes no engraving/geometry claim.
     vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});

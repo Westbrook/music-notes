@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { NoteEditor } from '../src/authoring/note-editor.js';
 import type { NoteEditorState } from '../src/authoring/note-editor.js';
@@ -9,7 +9,6 @@ import type { AuthorCommand, ViewMode } from '../src/authoring/types.js';
 import { add, meterTime, rational, subtract } from '../src/model/index.js';
 
 // Exercise the real controls without loading main, stylesheets, or remote assets.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const cleanups: (() => void)[] = [];
 const accidentalIds = ['note-double-flat', 'note-flat', 'note-natural', 'note-sharp', 'note-double-sharp'];
 const note = (id: string, attributes = 'pitch="F4" duration="quarter"') => `<music-note id="${id}" ${attributes}></music-note>`;
@@ -52,7 +51,7 @@ function stubNativePopover(panel: HTMLElement) {
 }
 
 function fixture(html = source(), native = false) {
-  document.body.innerHTML = shellMarkup;
+  mountAuthorFixture();
   const panel = control('note-editor');
   const popover = native ? stubNativePopover(panel) : undefined;
   if (!native) Object.defineProperties(panel, {

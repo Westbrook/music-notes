@@ -1,29 +1,39 @@
 // @vitest-environment happy-dom
+import { authorActiveElement, authorControlRoot, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { ActionConfirmation } from '../src/authoring/action-confirmation.js';
 import { confirmationReturnTarget } from '../src/authoring/confirmation-focus.js';
 import { NativeSurfaces } from '../src/authoring/native-surfaces.js';
+import { ControlScope } from '../src/authoring/control-scope.js';
+import type { ControlRoot } from '../src/authoring/control-scope.js';
 
 const cleanups: (() => void)[] = [];
 const surfaceIds = ['location-panel', 'entry-settings', 'source-panel', 'score-setup', 'continuation-review', 'pointer-recovery', 'workspace-review'];
+let controls: ControlScope;
+
+function returnTarget(active: Element | null, root: ControlRoot = controls): HTMLElement | undefined {
+  return confirmationReturnTarget(active, root);
+}
 
 function control<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+  const element = findAuthorControl(document, id);
   if (!element) throw new Error(`Missing actual Author control: ${id}`);
   return element as T;
 }
 
 function fixture() {
-  const markup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
-  const shell = new DOMParser().parseFromString(markup, 'text/html');
-  document.body.innerHTML = shell.body.innerHTML;
+  mountAuthorFixture();
+  controls = new ControlScope(document);
+  for (const id of ['view-switch', 'event-navigator', 'source-editor'] as const) {
+    const root = authorControlRoot(document, id);
+    if (root) controls.register(root);
+  }
   document.body.dataset.view = 'write';
   document.body.dataset.entryMode = 'false';
   for (const id of surfaceIds) Object.defineProperties(control(id), {
     showPopover: { configurable: true, value: undefined }, hidePopover: { configurable: true, value: undefined },
   });
-  const surfaces = new NativeSurfaces({ ids: surfaceIds });
+  const surfaces = new NativeSurfaces({ ids: surfaceIds }, controls);
   cleanups.push(() => surfaces.dispose());
   // This focus-policy fixture intentionally omits these surfaces from its
   // local manager. Represent their ordinary in-flow fallback directly; the
@@ -47,7 +57,7 @@ function confirmation(native: boolean) {
       dialog.dispatchEvent(new Event('close'));
     } : undefined },
   });
-  const manager = new ActionConfirmation();
+  const manager = new ActionConfirmation({}, controls);
   cleanups.push(() => manager.dispose());
   return manager;
 }
@@ -77,7 +87,7 @@ describe('confirmation return targets in the actual Author shell', () => {
     fixture();
     control<HTMLButtonElement>('edit-selected-event').disabled = false;
     control('workspace-review-trigger').hidden = false;
-    expect(confirmationReturnTarget(control(from))).toBe(control(to));
+    expect(returnTarget(control(from))).toBe(control(to));
   });
 
   it('retains an exact live persistent invoker without focusing or changing the page', () => {
@@ -90,8 +100,8 @@ describe('confirmation return targets in the actual Author shell', () => {
     document.documentElement.scrollTop = 600;
     control('score-scroll').scrollTop = 1250;
     const html = document.body.innerHTML;
-    expect(confirmationReturnTarget(target)).toBe(target);
-    expect(confirmationReturnTarget(control('document-menu-trigger'))).toBe(control('document-menu-trigger'));
+    expect(returnTarget(target)).toBe(target);
+    expect(returnTarget(control('document-menu-trigger'))).toBe(control('document-menu-trigger'));
     expect(focus).not.toHaveBeenCalled();
     expect(document.body.innerHTML).toBe(html);
     expect(document.documentElement.scrollTop).toBe(600);
@@ -100,7 +110,7 @@ describe('confirmation return targets in the actual Author shell', () => {
 
   it('resolves a nested label to its persistent focusable button', () => {
     fixture();
-    expect(confirmationReturnTarget(control('selection-context'))).toBe(control('location-trigger'));
+    expect(returnTarget(control('selection-context'))).toBe(control('location-trigger'));
   });
 
   it.each(['hidden', 'inert', 'aria-hidden', 'disabled', 'aria-disabled', 'display', 'visibility', 'content-visibility', 'opacity'])('rejects a primary Location trigger made unavailable by %s', reason => {
@@ -109,14 +119,14 @@ describe('confirmation return targets in the actual Author shell', () => {
     if (reason === 'hidden' || reason === 'inert' || reason === 'disabled') target.setAttribute(reason, '');
     else if (reason === 'aria-hidden' || reason === 'aria-disabled') target.setAttribute(reason, 'true');
     else target.style.setProperty(reason, reason === 'display' ? 'none' : reason === 'opacity' ? '0' : 'hidden');
-    expect(confirmationReturnTarget(control('add-measure'))).toBe(control('active-part-label'));
+    expect(returnTarget(control('add-measure'))).toBe(control('active-part-label'));
   });
 
   it('falls back to Document when both local Location controls are unavailable', () => {
     fixture();
     control('location-trigger').hidden = true;
     control('active-part-label').hidden = true;
-    expect(confirmationReturnTarget(control('add-measure'))).toBe(control('document-menu-trigger'));
+    expect(returnTarget(control('add-measure'))).toBe(control('document-menu-trigger'));
   });
 
   it('does not select a visible invoker nested in another transient that will also close', () => {
@@ -124,7 +134,7 @@ describe('confirmation return targets in the actual Author shell', () => {
     surfaces.open('score-setup');
     control('score-setup').append(control('location-trigger'));
     control('active-part-label').hidden = true;
-    expect(confirmationReturnTarget(control('add-measure'))).toBe(control('document-menu-trigger'));
+    expect(returnTarget(control('add-measure'))).toBe(control('document-menu-trigger'));
   });
 
   it('rejects an unknown native or fallback transient without depending on current open state', () => {
@@ -133,10 +143,10 @@ describe('confirmation return targets in the actual Author shell', () => {
     surface.setAttribute('popover', 'auto');
     surface.innerHTML = '<button>Nested action</button>';
     document.body.append(surface);
-    expect(confirmationReturnTarget(surface.firstElementChild)).toBe(control('document-menu-trigger'));
+    expect(returnTarget(surface.firstElementChild)).toBe(control('document-menu-trigger'));
     surface.removeAttribute('popover');
     surface.dataset.popoverFallback = 'true';
-    expect(confirmationReturnTarget(surface.firstElementChild)).toBe(control('document-menu-trigger'));
+    expect(returnTarget(surface.firstElementChild)).toBe(control('document-menu-trigger'));
   });
 
   it('rejects persistent controls with hidden or inert ancestors and disabled fieldsets', () => {
@@ -147,7 +157,7 @@ describe('confirmation return targets in the actual Author shell', () => {
     document.body.append(fieldset);
     for (const name of ['hidden', 'inert', 'disabled']) {
       fieldset.setAttribute(name, '');
-      expect(confirmationReturnTarget(button)).toBe(control('document-menu-trigger'));
+      expect(returnTarget(button)).toBe(control('document-menu-trigger'));
       fieldset.removeAttribute(name);
     }
   });
@@ -158,8 +168,8 @@ describe('confirmation return targets in the actual Author shell', () => {
     fieldset.disabled = true;
     fieldset.innerHTML = '<legend><button>Enable actions</button></legend><legend><button>Other legend</button></legend>';
     document.body.append(fieldset);
-    expect(confirmationReturnTarget(fieldset.querySelector('button'))).toBe(fieldset.querySelector('button'));
-    expect(confirmationReturnTarget(fieldset.lastElementChild!.querySelector('button'))).toBe(control('document-menu-trigger'));
+    expect(returnTarget(fieldset.querySelector('button'))).toBe(fieldset.querySelector('button'));
+    expect(returnTarget(fieldset.lastElementChild!.querySelector('button'))).toBe(control('document-menu-trigger'));
   });
 
   it('checks computed CSS visibility on ancestors, not only inline attributes', () => {
@@ -168,7 +178,7 @@ describe('confirmation return targets in the actual Author shell', () => {
     style.textContent = '.unavailable-entry { display: none; }';
     document.body.append(style);
     control('write-tools').classList.add('unavailable-entry');
-    expect(confirmationReturnTarget(control('event-pitch'))).toBe(control('document-menu-trigger'));
+    expect(returnTarget(control('event-pitch'))).toBe(control('document-menu-trigger'));
   });
 
   it('rejects closed dialogs and closed details content but retains a visible summary', () => {
@@ -176,9 +186,9 @@ describe('confirmation return targets in the actual Author shell', () => {
     const details = document.createElement('details');
     details.innerHTML = '<summary>More actions</summary><button>Action</button>';
     document.body.append(details);
-    expect(confirmationReturnTarget(details.querySelector('button'))).toBe(control('document-menu-trigger'));
-    expect(confirmationReturnTarget(details.querySelector('summary'))).toBe(details.querySelector('summary'));
-    expect(confirmationReturnTarget(control('author-confirmation-cancel'))).toBe(control('document-menu-trigger'));
+    expect(returnTarget(details.querySelector('button'))).toBe(control('document-menu-trigger'));
+    expect(returnTarget(details.querySelector('summary'))).toBe(details.querySelector('summary'));
+    expect(returnTarget(control('author-confirmation-cancel'))).toBe(control('document-menu-trigger'));
   });
 
   it('rejects hidden inputs, detached invokers, and reused IDs without retargeting them', () => {
@@ -188,27 +198,27 @@ describe('confirmation return targets in the actual Author shell', () => {
     document.body.append(previous);
     const replacement = previous.cloneNode(true);
     previous.replaceWith(replacement);
-    expect(confirmationReturnTarget(previous)).toBe(control('document-menu-trigger'));
+    expect(returnTarget(previous)).toBe(control('document-menu-trigger'));
     const hidden = document.createElement('input');
     hidden.type = 'hidden';
     document.body.append(hidden);
-    expect(confirmationReturnTarget(hidden)).toBe(control('document-menu-trigger'));
+    expect(returnTarget(hidden)).toBe(control('document-menu-trigger'));
   });
 
   it('falls back for absent, body, or non-focusable targets and rejects an unusable fallback', () => {
     fixture();
     for (const target of [null, document.body, control('score-host')]) {
-      expect(confirmationReturnTarget(target)).toBe(control('document-menu-trigger'));
+      expect(returnTarget(target)).toBe(control('document-menu-trigger'));
     }
     control('document-menu-trigger').hidden = true;
-    expect(confirmationReturnTarget(null)).toBeUndefined();
+    expect(returnTarget(null)).toBeUndefined();
   });
 
   it('respects the supplied document and does not retain another document\'s active control', () => {
     fixture();
     const other = document.implementation.createHTMLDocument('Other Author');
     other.body.innerHTML = '<button id="document-menu-trigger">Document</button>';
-    expect(confirmationReturnTarget(control('document-menu-trigger'), other)).toBe(other.getElementById('document-menu-trigger'));
+    expect(returnTarget(control('document-menu-trigger'), other)).toBe(other.getElementById('document-menu-trigger'));
   });
 });
 
@@ -220,8 +230,8 @@ describe('confirmation focus after closing in-flow surfaces', () => {
     control<HTMLInputElement>('event-pitch').value = 'F#5';
     const initialMarkup = control('source-input').textContent;
     surfaces.open('score-setup', '#remove-part');
-    expect(document.activeElement).toBe(control('remove-part'));
-    const target = confirmationReturnTarget(document.activeElement);
+    expect(authorActiveElement(document)).toBe(control('remove-part'));
+    const target = returnTarget(authorActiveElement(document));
     surfaces.closeAll();
     control('document-menu').hidden = true;
     expect(control('score-setup').hidden).toBe(true);
@@ -231,7 +241,7 @@ describe('confirmation focus after closing in-flow surfaces', () => {
       .then(accepted => { if (accepted) mutateMusic(); return accepted; });
     control('author-confirmation-cancel').click();
     await expect(result).resolves.toBe(false);
-    expect(document.activeElement).toBe(control('document-menu-trigger'));
+    expect(authorActiveElement(document)).toBe(control('document-menu-trigger'));
     expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
     expect(mutateMusic).not.toHaveBeenCalled();
     expect(control('source-input').textContent).toBe(initialMarkup);
@@ -241,14 +251,14 @@ describe('confirmation focus after closing in-flow surfaces', () => {
   it.each(['project-file', 'open-project'])('hidden file/Open initiator %s returns to Document after Cancel', async id => {
     const surfaces = fixture();
     const decision = confirmation(false);
-    const target = confirmationReturnTarget(control(id));
+    const target = returnTarget(control(id));
     surfaces.closeAll();
     control('document-menu').hidden = true;
     const focus = vi.spyOn(control('document-menu-trigger'), 'focus');
     const result = decision.ask({ title: 'Open composition?', message: 'Replace this workspace.', confirmLabel: 'Open composition', destructive: true, returnFocus: target, isCurrent: () => true });
     control('author-confirmation-cancel').click();
     await expect(result).resolves.toBe(false);
-    expect(document.activeElement).toBe(control('document-menu-trigger'));
+    expect(authorActiveElement(document)).toBe(control('document-menu-trigger'));
     expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
   });
 
@@ -259,14 +269,14 @@ describe('confirmation focus after closing in-flow surfaces', () => {
     control('measure-inspector').hidden = false;
     const invoker = control('remove-measure');
     invoker.focus();
-    const target = confirmationReturnTarget(document.activeElement);
+    const target = returnTarget(authorActiveElement(document));
     surfaces.closeAll();
     const focus = vi.spyOn(invoker, 'focus');
     control('score-scroll').scrollTop = 2450;
     const result = decision.ask({ title: 'Remove measure 48?', message: 'All staves are affected.', confirmLabel: 'Remove measure', destructive: true, returnFocus: target, isCurrent: () => true });
     control('author-confirmation-cancel').click();
     await expect(result).resolves.toBe(false);
-    expect(document.activeElement).toBe(invoker);
+    expect(authorActiveElement(document)).toBe(invoker);
     expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
     expect(control('score-scroll').scrollTop).toBe(2450);
   });

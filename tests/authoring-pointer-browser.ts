@@ -2,6 +2,7 @@ import type { MusicSurface } from '../src/components/index.js';
 import { parsePitch, pitchDescription, pitchText } from '../src/model/index.js';
 import type { EventGeometry, InsertionAnchor, MeasureGeometry, SystemGeometry } from '../src/engraving/render.js';
 import type { Clef, MusicEvent, Score } from '../src/model/types.js';
+import { authorActiveElement, authorControlParent, queryAuthorControl } from './author-fixture.js';
 
 interface Fixture {
   frame: HTMLIFrameElement; doc: Document; view: Window; workspace: string; syntheticCapture: boolean;
@@ -66,7 +67,7 @@ function boundsOf(element: Element | null | undefined): object | null {
 }
 function diagnostic(fixture: Fixture): string {
   try {
-    const host = fixture.doc.querySelector<HTMLElement>('#score-host');
+    const host = queryAuthorControl<HTMLElement>(fixture.doc, '#score-host');
     const root = host?.shadowRoot?.querySelector<MusicSurface>('music-system, music-staff');
     const layout = root?.getLayoutGeometry();
     const trace = pointerTraces.get(fixture);
@@ -76,27 +77,27 @@ function diagnostic(fixture: Fixture): string {
       workspace: fixture.workspace, url: fixture.frame.src, syntheticCapture: fixture.syntheticCapture,
       viewport: { width: fixture.view.innerWidth, height: fixture.view.innerHeight, scrollX: fixture.view.scrollX, scrollY: fixture.view.scrollY },
       state: { mode: fixture.doc.body.dataset.view, render: fixture.doc.body.dataset.renderState, revision: fixture.doc.body.dataset.authorRevision,
-        gesture: fixture.doc.body.dataset.pointerGesture ?? null, entry: fixture.doc.querySelector('#toggle-entry')?.getAttribute('aria-pressed'),
-        voice: fixture.doc.querySelector<HTMLSelectElement>('#event-voice')?.value, position: fixture.doc.querySelector<HTMLSelectElement>('#insert-position')?.value },
-      pointerStatus: fixture.doc.querySelector('#pointer-status')?.textContent,
-      headerFeedback: fixture.doc.querySelector('#workspace-feedback-label')?.textContent,
-      selection: { location: fixture.doc.querySelector('#selection-context')?.textContent,
-        event: fixture.doc.querySelector('#edit-selected-event')?.textContent,
-        eventIds: fixture.doc.querySelector<HTMLElement>('#selection-controls')?.dataset.eventIds,
-        navigator: [...fixture.doc.querySelectorAll<HTMLElement>('#event-navigator [data-source-id][aria-pressed="true"]')].map(element => element.dataset.sourceId),
+        gesture: fixture.doc.body.dataset.pointerGesture ?? null, entry: queryAuthorControl(fixture.doc, '#toggle-entry')?.getAttribute('aria-pressed'),
+        voice: queryAuthorControl<HTMLSelectElement>(fixture.doc, '#event-voice')?.value, position: queryAuthorControl<HTMLSelectElement>(fixture.doc, '#insert-position')?.value },
+      pointerStatus: queryAuthorControl(fixture.doc, '#pointer-status')?.textContent,
+      headerFeedback: queryAuthorControl(fixture.doc, '#workspace-feedback-label')?.textContent,
+      selection: { location: queryAuthorControl(fixture.doc, '#selection-context')?.textContent,
+        event: queryAuthorControl(fixture.doc, '#edit-selected-event')?.textContent,
+        eventIds: queryAuthorControl<HTMLElement>(fixture.doc, '#selection-controls')?.dataset.eventIds,
+        navigator: [...queryAuthorControl(fixture.doc, '#event-navigator')?.shadowRoot?.querySelectorAll<HTMLElement>('[data-source-id][aria-pressed="true"]') ?? []].map(element => element.dataset.sourceId),
         outlines: [...host?.shadowRoot?.querySelectorAll<HTMLElement>('.author-selection[data-source-id]') ?? []].map(element => element.dataset.sourceId) },
-      feedback: { header: fixture.doc.querySelector('#workspace-feedback-label')?.textContent,
-        accessibleHeader: fixture.doc.querySelector('#workspace-feedback-label')?.getAttribute('aria-label'),
-        kind: fixture.doc.querySelector<HTMLElement>('#workspace-feedback-label')?.dataset.feedbackKind,
-        headerBounds: boundsOf(fixture.doc.querySelector('#workspace-feedback-label')),
+      feedback: { header: queryAuthorControl(fixture.doc, '#workspace-feedback-label')?.textContent,
+        accessibleHeader: queryAuthorControl(fixture.doc, '#workspace-feedback-label')?.getAttribute('aria-label'),
+        kind: queryAuthorControl<HTMLElement>(fixture.doc, '#workspace-feedback-label')?.dataset.feedbackKind,
+        headerBounds: boundsOf(queryAuthorControl(fixture.doc, '#workspace-feedback-label')),
         local: host?.shadowRoot?.querySelector('.pointer-target-label')?.textContent,
         localBounds: boundsOf(host?.shadowRoot?.querySelector('.pointer-target-label')) },
-      authorErrors: { text: fixture.doc.querySelector('#author-errors')?.textContent, hidden: fixture.doc.querySelector<HTMLElement>('#author-errors')?.hidden },
+      authorErrors: { text: queryAuthorControl(fixture.doc, '#author-errors')?.textContent, hidden: queryAuthorControl<HTMLElement>(fixture.doc, '#author-errors')?.hidden },
       confirmations: fixture.confirmations,
-      pointer: trace, activeElement: describeTarget(fixture.doc.activeElement),
-      host: boundsOf(host), palette: boundsOf(fixture.doc.querySelector('#workspace-dock')), editor: boundsOf(fixture.doc.querySelector('#score-editor')),
+      pointer: trace, activeElement: describeTarget(authorActiveElement(fixture.doc)),
+      host: boundsOf(host), palette: boundsOf(queryAuthorControl(fixture.doc, '#workspace-dock')), editor: boundsOf(queryAuthorControl(fixture.doc, '#score-editor')),
       scoreViewport: (() => {
-        const viewport = fixture.doc.querySelector<HTMLElement>('#score-scroll');
+        const viewport = queryAuthorControl<HTMLElement>(fixture.doc, '#score-scroll');
         return viewport ? { bounds: boundsOf(viewport), scrollTop: viewport.scrollTop, scrollLeft: viewport.scrollLeft,
           scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight, clientWidth: viewport.clientWidth } : null;
       })(),
@@ -149,13 +150,17 @@ async function frames(fixture: Fixture): Promise<void> {
     'Deliver rendering and viewport observations');
 }
 function field<T extends HTMLElement = HTMLElement>(fixture: Fixture, selector: string): T {
-  const element = fixture.doc.querySelector<T>(selector);
+  const element = queryAuthorControl<T>(fixture.doc, selector);
   assert(element, `The actual Author route is missing ${selector}.`);
   return element;
 }
 function visible(fixture: Fixture, element: Element): boolean {
   const style = fixture.view.getComputedStyle(element);
   return element.getClientRects().length > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+}
+function closestControl(element: HTMLElement, selector: string): HTMLElement | null {
+  for (let current: HTMLElement | null = element; current; current = authorControlParent(current)) if (current.matches(selector)) return current;
+  return null;
 }
 
 /** Follow the actual public pane/popover controls; never reveal a hidden field by mutation. */
@@ -171,7 +176,7 @@ function enterAtSelection(fixture: Fixture): void {
 function revealControl(fixture: Fixture, selector: string): HTMLElement {
   const target = field<HTMLElement>(fixture, selector);
   if (visible(fixture, target)) return target;
-  const inspector = target.closest<HTMLElement>('#selection-inspector, #passage-inspector, #annotation-inspector, #measure-inspector');
+  const inspector = closestControl(target, '#selection-inspector, #passage-inspector, #annotation-inspector, #measure-inspector');
   if (inspector) {
     const tools = field<HTMLElement>(fixture, '#workspace-tools');
     if (!visible(fixture, tools)) click(fixture, visible(fixture, field(fixture, '#edit-selected-event')) ? '#edit-selected-event' : '#tools-toggle');
@@ -184,7 +189,7 @@ function revealControl(fixture: Fixture, selector: string): HTMLElement {
       if (field<HTMLElement>(fixture, tab).getAttribute('aria-selected') !== 'true') click(fixture, tab);
     }
   }
-  const popover = target.closest<HTMLElement>('[popover]');
+  const popover = closestControl(target, '[popover]');
   if (popover && !popover.matches(':popover-open')) {
     const invokers = [...fixture.doc.querySelectorAll<HTMLButtonElement>(
       '[popovertarget="' + popover.id + '"]:not([popovertargetaction="hide"])')];
@@ -203,7 +208,7 @@ function revealControl(fixture: Fixture, selector: string): HTMLElement {
     if (['insert-event', 'entry-value-trigger'].includes(target.id) && visible(fixture, field(fixture, '#cancel-entry-drag'))) click(fixture, '#cancel-entry-drag');
   }
   const disclosures: HTMLDetailsElement[] = [];
-  for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+  for (let parent = authorControlParent(target); parent; parent = authorControlParent(parent)) {
     if (parent.localName === 'details') disclosures.unshift(parent as HTMLDetailsElement);
   }
   for (const details of disclosures) if (!details.open) {
@@ -676,7 +681,7 @@ async function selectNoteForDrag(fixture: Fixture, id: string): Promise<void> {
     `The actual painted notehead for ${id} must hit the rendered notation, not a covering control.`);
   await tap(fixture, { element: hit, point: target.point });
   await waitFor(fixture, () => {
-    const chosen = [...fixture.doc.querySelectorAll<HTMLElement>('#event-navigator [data-source-id][aria-pressed="true"]')];
+    const chosen = [...field(fixture, '#event-navigator').shadowRoot?.querySelectorAll<HTMLElement>('[data-source-id][aria-pressed="true"]') ?? []];
     return chosen.length === 1 && chosen[0].dataset.sourceId === id;
   }, `Select the exact ${id} event through its actual rendered notehead`);
   equal(JSON.parse(field(fixture, '#selection-controls').dataset.eventIds ?? '[]'), [id],
@@ -1178,7 +1183,7 @@ const tests: Test[] = [
       click(fixture, '#toggle-entry');
       await frames(fixture);
       equal(field(fixture, '#toggle-entry').getAttribute('aria-pressed'), 'true', 'Activating already chosen Write only returns focus, even with a Source draft');
-      assert(fixture.doc.activeElement === field(fixture, '#score-editor'), 'Active Write returns actual score focus.');
+      assert(authorActiveElement(fixture.doc) === field(fixture, '#score-editor'), 'Active Write returns actual score focus.');
       assert(field(fixture, '#author-errors').hidden, 'Returning focus through active Write must not fabricate an insertion error.');
       equal([source(fixture), revision(fixture), music(fixture)], beforeGate, 'Active Write changes neither Source buffer nor accepted music');
       field(fixture, '#score-editor').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true, cancelable: true }));
@@ -1242,7 +1247,7 @@ const tests: Test[] = [
         const gesture = begin(fixture, head(fixture, 'first')); const end = head(fixture, 'first', 2).point;
         move(gesture, end); await preview(gesture, 'pitch');
         if (reason === 'Escape') {
-          fixture.doc.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true, cancelable: true }));
+          authorActiveElement(fixture.doc)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true, cancelable: true }));
         } else if (reason === 'pointercancel') {
           pointer(fixture, gesture.target.element, 'pointercancel', end, gesture.pointerId);
         } else if (reason === 'outside') {

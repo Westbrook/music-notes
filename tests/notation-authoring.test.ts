@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { NoteEditor } from '../src/authoring/note-editor.js';
 import { InspectorForms } from '../src/authoring/inspector-forms.js';
@@ -400,7 +400,6 @@ describe('quarter-tone note commands', () => {
 
 // Mount the real controls without main, stylesheets, or remote resources. The
 // ordinary-flow fallback exercises state and transactions, not browser top-layer behavior.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const uiCleanups: (() => void)[] = [];
 const accidentalIds = ['note-double-flat', 'note-flat', 'note-natural', 'note-sharp', 'note-double-sharp'];
 
@@ -411,7 +410,7 @@ function control<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 function noteEditorFixture(source: string, selectionId = 'note') {
-  document.body.innerHTML = shellMarkup;
+  mountAuthorFixture();
   const panel = control('note-editor');
   Object.defineProperties(panel, {
     showPopover: { configurable: true, value: undefined }, hidePopover: { configurable: true, value: undefined },
@@ -556,7 +555,7 @@ describe('microtonal and rhythm controls in the real author shell', () => {
   });
 
   it('declares native notation and event selects with explicit values in the unenhanced shell', () => {
-    document.body.innerHTML = shellMarkup;
+    mountAuthorFixture();
     const notation = control<HTMLSelectElement>('staff-notation');
     expect(notation.tagName).toBe('SELECT');
     expect(notation.name).toBe('staff-notation');

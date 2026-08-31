@@ -2,6 +2,7 @@ import type { LayoutGeometry, MusicSurface } from '../components/music-surface.j
 import type { EventGeometry, MeasureGeometry, SystemGeometry } from '../engraving/render.js';
 import { transformInk, unionInk } from '../engraving/geometry.js';
 import type { InkBox } from '../engraving/geometry.js';
+import { composedContains, composedParent } from '../ui/composed-dom.js';
 
 export interface MusicalViewportTarget {
   /** Exact source identity, including an attached marking's own child ID. */
@@ -110,13 +111,12 @@ function matrixFor(svg: SVGSVGElement): DOMMatrix | undefined {
     && Math.abs(matrix.a * matrix.d - matrix.b * matrix.c) > 1e-10 ? matrix : undefined;
 }
 
-/** Cross open shadow boundaries without relying on private engraving objects. */
+/** Follow visible ancestry through slots and shadow hosts. */
 function ancestorsOf(start: Element, viewport: HTMLElement): readonly HTMLElement[] {
   const result: HTMLElement[] = [];
   let element: Element | null = start;
   while (element && element !== viewport) {
-    const root: Node = element.getRootNode();
-    element = element.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+    element = composedParent(element);
     if (element instanceof HTMLElement) result.push(element);
   }
   return element === viewport ? result : [];
@@ -220,10 +220,12 @@ class MusicalViewport implements ViewportAnchor {
           const elements = event.composedPath().filter((node): node is Element => node instanceof Element);
           if (elements.some(element => element.matches('input,textarea,select,[contenteditable="true"]'))) return;
           const target = elements[0];
-          if (target && (target === viewport || ancestorsOf(target, viewport).length > 0 || target.contains(viewport))) this.cancel();
+          if (target && (composedContains(viewport, target) || composedContains(target, viewport))) this.cancel();
         };
         viewport.ownerDocument.addEventListener('keydown', navigate, true);
         this.removals.push(() => viewport.ownerDocument.removeEventListener('keydown', navigate, true));
+        viewport.addEventListener('notation-viewport-change', this.onScroll, { passive: true, capture: true });
+        this.removals.push(() => viewport.removeEventListener('notation-viewport-change', this.onScroll, true));
       }
     }
     const targets = new Set<EventTarget>(viewport ? [viewport] : []);
@@ -232,40 +234,37 @@ class MusicalViewport implements ViewportAnchor {
     if (this.pending && viewport === this.viewport && !frames.length) {
       for (const target of this.scrollListeners.keys()) targets.add(target);
     }
-    for (const frame of frames) for (const ancestor of frame.ancestors) {
-      targets.add(ancestor);
-      const root = ancestor.getRootNode();
-      if (root instanceof ShadowRoot) targets.add(root);
-    }
+    for (const frame of frames) for (const ancestor of frame.ancestors) targets.add(ancestor);
     for (const [target, remove] of this.scrollListeners) if (!targets.has(target)) { remove(); this.scrollListeners.delete(target); }
     for (const target of targets) if (!this.scrollListeners.has(target)) {
-      const listener = (event: Event) => {
-        if (this.applyingScroll || !this.pending || !(event.target instanceof HTMLElement)) return;
-        const element = event.target;
-        const expected = this.expectedScrolls.get(element);
-        if (expected && near(expected.left, element.scrollLeft) && near(expected.top, element.scrollTop)) return;
-        if (this.layoutClamp(element, this.pending)) return;
-        this.cancel();
-      };
-      target.addEventListener('scroll', listener, { passive: true, capture: true });
-      this.scrollListeners.set(target, () => target.removeEventListener('scroll', listener, true));
+      target.addEventListener('scroll', this.onScroll, { passive: true, capture: true });
+      this.scrollListeners.set(target, () => target.removeEventListener('scroll', this.onScroll, true));
     }
   }
+
+  private readonly onScroll = (event: Event): void => {
+    const element: unknown = event.type === 'notation-viewport-change'
+      ? (event as CustomEvent<{ scroller: HTMLElement }>).detail?.scroller : event.target;
+    if (this.applyingScroll || !this.pending || !(element instanceof HTMLElement)) return;
+    const expected = this.expectedScrolls.get(element);
+    if (expected && near(expected.left, element.scrollLeft) && near(expected.top, element.scrollTop)) return;
+    if (this.layoutClamp(element, this.pending)) return;
+    this.cancel();
+  };
 
   private state(): State | undefined {
     if (this.disposed) return undefined;
     const viewport = this.options.getViewport();
     const surface = this.options.getSurface();
     if (!viewport?.isConnected || !surface?.isConnected) { this.bind(viewport, []); return undefined; }
-    const layout = surface.getLayoutGeometry();
-    if (!layout || layout.revision !== surface.renderRevision) { this.bind(viewport, []); return undefined; }
+    const projection = surface.getRenderedProjection();
+    if (!projection || projection.layout.revision !== surface.renderRevision) { this.bind(viewport, []); return undefined; }
+    const { layout } = projection;
     const rect = clientRect(viewport, this.options.getInsets?.());
     if (rect.right <= rect.left || rect.bottom <= rect.top) return undefined;
-    const svgs = [...surface.shadowRoot!.querySelectorAll<SVGSVGElement>(`.${layout.projection} svg.notation-svg`)];
     const frames: Frame[] = [];
-    for (const system of layout.systems) {
-      const svg = svgs[system.index];
-      if (!svg || !matrixFor(svg)) continue;
+    for (const { system, svg } of projection.frames) {
+      if (!matrixFor(svg)) continue;
       const ancestors = ancestorsOf(svg, viewport);
       if (ancestors.length) frames.push({ system, svg, ancestors });
     }
@@ -275,7 +274,7 @@ class MusicalViewport implements ViewportAnchor {
 
   private current(state: State, generation: number): boolean {
     return !this.disposed && generation === this.generation && this.options.getViewport() === state.viewport
-      && this.options.getSurface() === state.surface && state.surface.getLayoutGeometry() === state.layout
+      && this.options.getSurface() === state.surface && state.surface.getRenderedProjection()?.layout === state.layout
       && state.surface.renderRevision === state.layout.revision
       && (this.options.getContextKey?.() ?? state.layout.scoreId) === state.context;
   }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { NoteEditor } from '../src/authoring/note-editor.js';
 import type { NoteEditorState } from '../src/authoring/note-editor.js';
@@ -10,7 +10,6 @@ import { add, meterTime, rational, subtract } from '../src/model/index.js';
 import type { MusicEvent, Score, StaffNotation } from '../src/model/types.js';
 
 // Real author controls and real accepted-source transactions; no main, SVG, or remote assets.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const cleanups: (() => void)[] = [];
 const targets = {
   note: { notation: 'pitched', tag: 'music-note', attributes: 'pitch="Fqs4"' },
@@ -116,7 +115,7 @@ interface FixtureOptions {
 }
 
 function fixture(html = sourceFor(), options: FixtureOptions = {}) {
-  document.body.innerHTML = shellMarkup;
+  mountAuthorFixture();
   seedRecipe();
   const panel = control('note-editor');
   const popover = options.native ? stubNativePopover(panel) : undefined;

@@ -118,18 +118,20 @@ function fixture() {
     + '<section id="workspace-dock"><button id="drag-entry">Drag</button><button id="drag-pitch">Drag pitch</button><p id="pointer-status"></p></section>';
   document.body.append(workbench);
   const el = <T extends HTMLElement = HTMLElement>(id: string) => workbench.querySelector<T>(`#${id}`)!;
-  const editor = el('score-editor'); const scroller = el('score-scroll'); const host = el('score-host');
+  const scroller = el('score-scroll'); const host = el('score-host'); const dock = el('workspace-dock');
   const shadow = host.attachShadow({ mode: 'open' }); const mount = document.createElement('div'); shadow.append(mount);
+  const overlayMount = document.createElement('div'); shadow.append(overlayMount);
   const surface = document.createElement('music-system') as MusicSurface; surface.id = 'journey-score'; mount.append(surface);
-  const screen = document.createElement('div'); screen.className = 'screen'; surface.attachShadow({ mode: 'open' }).append(screen);
+  const screen = document.createElement('div'); const surfaceShadow = surface.attachShadow({ mode: 'open' }); surfaceShadow.append(screen);
   const viewport = new DOMRect(40, 80, 720, 640);
   vi.spyOn(host, 'getBoundingClientRect').mockReturnValue(viewport);
   vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(viewport);
-  vi.spyOn(el('workspace-dock'), 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 730, 720, 48));
+  vi.spyOn(dock, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 730, 720, 48));
   for (const [key, value] of Object.entries({ clientWidth: 720, offsetWidth: 720, clientHeight: 640, offsetHeight: 640, clientLeft: 0, clientTop: 0 })) {
     Object.defineProperty(scroller, key, { configurable: true, value });
   }
   let projected: ReturnType<typeof readScore>; let layout: LayoutGeometry; let revision = 0;
+  let projection: ReturnType<MusicSurface['getRenderedProjection']>;
   const render = () => {
     // New projected elements deliberately acquire new implicit voice aliases.
     // No accepted Source node or ID is rewritten by this rendering double.
@@ -138,17 +140,25 @@ function fixture() {
     projected = readScore(surface);
     const systems = geometry(projected.score); revision++;
     layout = { projection: 'screen', projectionId: `journey-screen-${revision}`, revision, scoreId: projected.score.id, systems };
-    screen.replaceChildren(...systems.map(system => {
-      const row = document.createElement('div'); row.className = 'system-row';
-      const svg = document.createElementNS(NS, 'svg'); svg.classList.add('notation-svg');
+    const frames = systems.map(system => {
+      const row = document.createElement('div');
+      const svg = document.createElementNS(NS, 'svg');
       Object.defineProperty(svg, 'getScreenCTM', { configurable: true, value: () => new Matrix(40, 80 + system.index * 160) });
-      row.append(svg); return row;
-    }));
+      row.append(svg); return { system, svg, row };
+    });
+    screen.replaceChildren(...frames.map(frame => frame.row));
+    projection = { surface, renderRevision: revision, layout, frames };
   };
   Object.defineProperties(surface, {
     score: { get: () => projected.score }, getSource: { value: (id: string) => projected.sources.get(id) },
     getLayoutGeometry: { value: () => layout }, renderRevision: { get: () => revision },
+    getRenderedProjection: { value: () => projection }, getNativeControlBounds: { value: () => [] },
   });
+  surfaceShadow.addEventListener('scroll', event => {
+    surface.dispatchEvent(new CustomEvent('notation-viewport-change', {
+      bubbles: true, composed: true, detail: { scroller: event.target, layout },
+    }));
+  }, { capture: true, passive: true });
   render();
   const entry: EventInput = { kind: 'note', pitch: 'C4', pitches: '', duration: 'quarter', dots: 0,
     rhythmic: false, measureRest: false, accidentalDisplay: 'auto', stem: 'auto', beam: 'auto' };
@@ -166,7 +176,8 @@ function fixture() {
     if (pitch !== undefined) entry.pitch = pitch;
   });
   const rejected = vi.fn<NonNullable<Options['rejected']>>(() => false); const error = vi.fn<Options['error']>();
-  const interaction = new StaffInteraction({ session, host, editor, entryHandle: el<HTMLButtonElement>('drag-entry'),
+  const interaction = new StaffInteraction({ session, host, overlayMount, getViewport: () => scroller,
+    getChromeBounds: () => [dock.getBoundingClientRect()], entryHandle: el<HTMLButtonElement>('drag-entry'),
     pitchHandle: el<HTMLButtonElement>('drag-pitch'), status: el('pointer-status'), state: () => state, readEntry: () => entry,
     selection: () => ({ fingerprint: JSON.stringify([session.documentEpoch, session.selectionVersion, session.selection]),
       eventIds: session.selection.ids, selectMore: false }), commit, completed, rejected, error });

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { WorkspaceTools } from '../src/authoring/workspace-tools.js';
 import type { WorkspaceTool, WorkspaceToolsOptions, WorkspaceToolsTransition } from '../src/authoring/workspace-tools.js';
 
@@ -1056,7 +1056,7 @@ describe('WorkspaceTools retained scroll, mode and lifecycle', () => {
   });
 
   it('connects the actual Author shell without requiring a fictional Edit tab', () => {
-    document.body.innerHTML = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1].replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    mountAuthorFixture();
     const controller = new WorkspaceTools(); cleanup.push(() => controller.dispose());
     controller.setEntryContext({ entryMode: false, hasPropertiesTarget: true });
     controller.open('edit');

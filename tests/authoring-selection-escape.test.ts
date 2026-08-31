@@ -5,14 +5,12 @@
  * focus to #score-editor before Escape would conceal these regressions.
  * Synthetic key/click delivery tests routing, not a browser's native defaults.
  */
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const source = '<music-staff id="staff" label="Keyboard study"><music-measure id="bar">'
   + '<music-note id="note" pitch="F4" duration="quarter"></music-note>'
   + '<music-note id="other" pitch="G4" duration="quarter"></music-note>'
@@ -70,7 +68,7 @@ beforeEach(() => {
   viewportDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
 });

@@ -1,6 +1,7 @@
 import type { MusicSurface } from '../src/components/index.js';
 import { add, meterTime, rational } from '../src/model/index.js';
 import type { MusicEvent, Score } from '../src/model/types.js';
+import { authorActiveElement, authorControlParent, queryAuthorControl } from './author-fixture.js';
 
 interface Fixture {
   frame: HTMLIFrameElement;
@@ -86,7 +87,7 @@ async function waitFor(check: () => boolean, label: string, doc: Document): Prom
 }
 
 function field<T extends HTMLElement>(fixture: Fixture, selector: string): T {
-  const element = fixture.doc.querySelector<T>(selector);
+  const element = queryAuthorControl<T>(fixture.doc, selector);
   assert(element, `The actual Author page is missing ${selector}.`);
   return element;
 }
@@ -110,7 +111,9 @@ function enterAtSelection(fixture: Fixture): void {
 function revealControl(fixture: Fixture, selector: string): HTMLElement {
   const target = field<HTMLElement>(fixture, selector);
   if (visible(fixture, target)) return target;
-  const inspector = target.closest<HTMLElement>('#selection-inspector, #passage-inspector, #annotation-inspector, #measure-inspector');
+  const ancestors: HTMLElement[] = [];
+  for (let element: HTMLElement | null = target; element; element = authorControlParent(element)) ancestors.push(element);
+  const inspector = ancestors.find(element => element.matches('#selection-inspector, #passage-inspector, #annotation-inspector, #measure-inspector'));
   if (inspector) {
     if (inspector.id === 'selection-inspector') {
       if (!visible(fixture, inspector)) {
@@ -130,7 +133,7 @@ function revealControl(fixture: Fixture, selector: string): HTMLElement {
       if (field<HTMLElement>(fixture, tab).getAttribute('aria-selected') !== 'true') click(fixture, tab);
     }
   }
-  const popover = target.closest<HTMLElement>('[popover]');
+  const popover = ancestors.find(element => element.hasAttribute('popover'));
   if (popover && !popover.matches(':popover-open')) {
     const invokers = [...fixture.doc.querySelectorAll<HTMLButtonElement>(
       '[popovertarget="' + popover.id + '"]:not([popovertargetaction="hide"])')];
@@ -147,7 +150,7 @@ function revealControl(fixture: Fixture, selector: string): HTMLElement {
     enterAtSelection(fixture);
   }
   const disclosures: HTMLDetailsElement[] = [];
-  for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+  for (const parent of ancestors.slice(1)) {
     if (parent.localName === 'details') disclosures.unshift(parent as HTMLDetailsElement);
   }
   for (const details of disclosures) if (!details.open) {
@@ -338,6 +341,11 @@ function noErrors(fixture: Fixture): void {
   const failures = root.diagnostics.filter(diagnostic => diagnostic.severity === 'error');
   assert(failures.length === 0, `The live notation has errors:\n${failures.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join('\n')}`);
   assert(root.shadowRoot?.querySelector('.screen svg'), 'The accepted score must have actual engraved SVG.');
+  if (root.diagnostics.some(diagnostic => diagnostic.severity === 'warning')) {
+    const panel = root.shadowRoot?.querySelector<HTMLDetailsElement>('.diagnostics');
+    assert(panel?.hidden && fixture.view.getComputedStyle(panel).display === 'none',
+      'Author must hide the surface warning panel while delivering its warnings through Review.');
+  }
 }
 
 function publicGeometry(fixture: Fixture): number {
@@ -515,7 +523,7 @@ async function changeProjection(fixture: Fixture, action: () => void, expected: 
 }
 
 function press(fixture: Fixture, key: string): void {
-  const target = fixture.doc.activeElement;
+  const target = authorActiveElement(fixture.doc);
   assert(target && target !== fixture.doc.body, 'Keyboard checks need an actually focused control or score editor.');
   target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true }));
 }
@@ -715,13 +723,13 @@ const tests: Test[] = [
           assert(close.getBoundingClientRect().top >= bounds.top && close.getBoundingClientRect().bottom <= bounds.bottom,
             'The Document Close action must remain reachable outside the scrolling content.');
         }
-        assert(fixture.doc.activeElement === trigger || menu.contains(fixture.doc.activeElement),
+        assert(authorActiveElement(fixture.doc) === trigger || menu.contains(authorActiveElement(fixture.doc)),
           'Opening Document must leave focus at its native invoker or a control inside the popover.');
         choose(fixture, '#new-template', 'piano');
         assert(menu.matches(':popover-open') && visible(fixture, menu), 'Focusing and changing the nested native select must not dismiss the parent Document popover.');
         equal(field<HTMLSelectElement>(fixture, '#new-template').value, 'piano', 'The nested customizable select must retain its chosen native value');
         await closeDocumentMenu(fixture);
-        await waitFor(() => fixture.doc.activeElement === trigger, 'Restore focus to the native Document invoker', fixture.doc);
+        await waitFor(() => authorActiveElement(fixture.doc) === trigger, 'Restore focus to the native Document invoker', fixture.doc);
         unchangedLayout('closed');
         await openDocumentMenu(fixture);
         click(fixture, '#document-menu-trigger');
@@ -820,7 +828,7 @@ const tests: Test[] = [
     async run() {
       const fixture = await mount('Focused note entry and an explicit way to stop');
       await insertNote(fixture, 'D4', 'eighth');
-      equal(fixture.doc.activeElement?.id, 'score-editor', 'Insert must move focus from its button to the score for the advertised pitch shortcuts');
+      equal(authorActiveElement(fixture.doc)?.id, 'score-editor', 'Insert must move focus from its button to the score for the advertised pitch shortcuts');
       equal(field(fixture, '#toggle-entry').getAttribute('aria-pressed'), 'true', 'Successful insertion must expose the active entry state');
       await changeMusic(fixture, () => press(fixture, 'g'),
         () => events(fixture).filter(item => item.kind === 'note').length === 2, 'Type a second pitch with the score focused');
@@ -875,7 +883,7 @@ const tests: Test[] = [
         const accepted = snapshot(fixture);
         const acceptedSource = field<HTMLTextAreaElement>(fixture, '#source-input').value;
         const revision = Number(fixture.doc.body.dataset.authorRevision);
-        const selectedIds = () => [...fixture.doc.querySelectorAll<HTMLElement>('#event-navigator [data-source-id][aria-pressed="true"]')]
+        const selectedIds = () => [...field(fixture, '#event-navigator').shadowRoot!.querySelectorAll<HTMLElement>('[data-source-id][aria-pressed="true"]')]
           .map(button => button.dataset.sourceId);
 
         click(fixture, '#select-mode');
@@ -885,7 +893,7 @@ const tests: Test[] = [
         // Focus a visible control, never the score: the glyph click must supply
         // the focus needed for Delete instead of inheriting it from Insert.
         field<HTMLButtonElement>(fixture, '#location-trigger').focus();
-        equal(fixture.doc.activeElement?.id, 'location-trigger', 'Rest selection begins with focus outside the score');
+        equal(authorActiveElement(fixture.doc)?.id, 'location-trigger', 'Rest selection begins with focus outside the score');
         const root = surface(fixture);
         const group = root.shadowRoot?.querySelector<SVGGraphicsElement>(`.screen g[data-source-id="${rest.id}"]`);
         assert(group, 'The written rest needs a rendered group with its exact source ID.');
@@ -908,7 +916,7 @@ const tests: Test[] = [
         }));
         await waitFor(() => selectedIds().length === 1 && selectedIds()[0] === rest.id,
           'The rendered rest click must select the rest rather than its measure', fixture.doc);
-        equal(fixture.doc.activeElement?.id, 'score-editor', 'Fresh rest selection must focus the score without a test-supplied focus call');
+        equal(authorActiveElement(fixture.doc)?.id, 'score-editor', 'Fresh rest selection must focus the score without a test-supplied focus call');
         equal(snapshot(fixture), accepted, 'Selecting a rest must not change accepted music');
         equal(Number(fixture.doc.body.dataset.authorRevision), revision, 'Selecting a rest must not create history');
 

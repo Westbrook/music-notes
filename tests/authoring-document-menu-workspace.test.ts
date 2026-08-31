@@ -5,9 +5,9 @@
  * These tests prove registration, invoker/lifecycle ownership and retained
  * editing state; they do not qualify native top-layer geometry or dismissal.
  */
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
@@ -26,8 +26,6 @@ const positioning = vi.hoisted(() => ({
 }));
 vi.mock('../src/authoring/popover-position.js', () => ({ createPopoverPositioner: positioning.create }));
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const authorCss = readFileSync('src/authoring/author.css', 'utf8');
 const source = '<music-staff id="staff" label="Document study">'
   + '<music-measure id="bar-a"><music-voice id="voice-a">'
@@ -43,9 +41,15 @@ let native: ReturnType<typeof nativeLifecycle> | undefined;
 let sequence = 0;
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+  const element = findAuthorControl<T>(document, id);
   if (!element) throw new Error(`Missing actual Author control #${id}.`);
-  return element as T;
+  return element;
+}
+function unavailableAncestor(element: HTMLElement): HTMLElement | null {
+  for (let ancestor: HTMLElement | null = element; ancestor; ancestor = authorControlParent(ancestor)) {
+    if (ancestor.matches('[hidden],[inert],[aria-hidden="true"]')) return ancestor;
+  }
+  return null;
 }
 async function flush(): Promise<void> { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
 function declarationsFor(selector: string): string {
@@ -99,7 +103,7 @@ function documentPosition(): PositionRecord {
 }
 async function click(id: string): Promise<MouseEvent> {
   const button = el<HTMLButtonElement>(id);
-  expect(button.closest('[hidden],[inert],[aria-hidden="true"]')).toBeNull(); expect(button.disabled).toBe(false);
+  expect(unavailableAncestor(button)).toBeNull(); expect(button.disabled).toBe(false);
   button.focus({ preventScroll: true });
   const target = button.getAttribute('popovertarget');
   const action = button.getAttribute('popovertargetaction');
@@ -115,10 +119,10 @@ async function click(id: string): Promise<MouseEvent> {
 }
 async function field(id: string, value: string): Promise<void> {
   const control = el<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(id);
-  for (let ancestor = control.parentElement; ancestor; ancestor = ancestor.parentElement) {
+  for (let ancestor = authorControlParent(control); ancestor; ancestor = authorControlParent(ancestor)) {
     if (ancestor instanceof HTMLDetailsElement && !ancestor.open) ancestor.querySelector<HTMLElement>(':scope > summary')!.click();
   }
-  expect(control.closest('[hidden],[inert],[aria-hidden="true"]')).toBeNull();
+  expect(unavailableAncestor(control)).toBeNull();
   control.value = value; control.dispatchEvent(new Event('input', { bubbles: true }));
   control.dispatchEvent(new Event('change', { bubbles: true })); await flush();
 }
@@ -165,7 +169,7 @@ async function holdEditingContext(holdSource = true): Promise<void> {
 
 beforeEach(() => {
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   Object.defineProperty(el('author-workbench'), 'clientWidth', { configurable: true, value: 1440 });
   positioning.records.length = 0;
   positioning.create.mockReset().mockImplementation(options => {
@@ -253,7 +257,7 @@ describe('Document remains usable without native popovers', () => {
     const before = accepted(); await click('document-menu-trigger');
     expect(panel.hidden).toBe(false); expect(panel.dataset.surfaceState).toBe('open'); expect(panel.style.position).toBe('');
     expect(close.dataset.surfaceTarget).toBe('document-menu'); expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    await click('close-document-menu'); expect(panel.hidden).toBe(true); expect(document.activeElement).toBe(trigger);
+    await click('close-document-menu'); expect(panel.hidden).toBe(true); expect(authorActiveElement(document)).toBe(trigger);
     await click('document-menu-trigger'); await click('document-menu-trigger');
     expect(panel.hidden).toBe(true); expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(positioning.records).toHaveLength(0); expect(accepted()).toEqual(before);
@@ -273,7 +277,7 @@ describe('Document remains usable without native popovers', () => {
     await click('new-project'); expect(el('document-menu').hidden).toBe(true);
     expect(el<HTMLDialogElement>('author-confirmation').open).toBe(true);
     await click('author-confirmation-cancel');
-    expect(el<HTMLDialogElement>('author-confirmation').open).toBe(false); expect(document.activeElement).toBe(el('document-menu-trigger'));
+    expect(el<HTMLDialogElement>('author-confirmation').open).toBe(false); expect(authorActiveElement(document)).toBe(el('document-menu-trigger'));
     expect(accepted()).toEqual(before);
   });
 });

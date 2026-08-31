@@ -1,9 +1,13 @@
+import { nothing, render } from 'lit/html.js';
+import type { RootPart, TemplateResult } from 'lit/html.js';
 import type { Diagnostic } from '../model/types.js';
 import { unionInk, visibleInk } from '../engraving/geometry.js';
 import { buildProjection, publicationPreflight, turnFingerprint } from './projection.js';
 import { CSS_PIXELS_PER_MM, DEFAULT_PAGE_RESERVATIONS, pageDimensions, planPages } from './pages.js';
 import type { PageReservations } from './pages.js';
 import type { AuthorProject, LayoutProfile, MeasuredSystem, PagePlan, ProjectionResult } from './types.js';
+import { pageMeasurementTemplate, pagePreflightTemplate, physicalPagesTemplate } from './page-view-templates.js';
+import type { PageViewTemplateData } from './page-view-templates.js';
 
 export interface PageViewResult {
   projection: ProjectionResult;
@@ -15,36 +19,31 @@ export interface PageViewResult {
   containmentIssues?: readonly string[];
 }
 
-const DRAFT_LABEL = 'DRAFT - not ready for performance';
 // CSS layout rounds fractional physical pixels; this is not a musical tolerance.
 const DOM_TOLERANCE = 0.75;
 
-function textElement<K extends keyof HTMLElementTagNameMap>(tag: K, text: string, className = ''): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-  element.textContent = text;
-  element.className = className;
-  return element;
+interface TemplateMount { boundary: Comment; part: RootPart }
+const templateMounts = new WeakMap<HTMLElement, TemplateMount>();
+const mountedPages = new WeakMap<HTMLElement, { data: PageViewTemplateData; view: PageViewResult }>();
+
+function currentMount(host: HTMLElement): TemplateMount | undefined {
+  const mount = templateMounts.get(host);
+  return mount?.boundary.parentNode === host && mount.part.startNode?.parentNode === host ? mount : undefined;
 }
 
-function titleBlock(project: AuthorProject, label: string): HTMLDivElement {
-  const title = textElement('div', '', 'page-title');
-  title.append(textElement('h1', project.metadata.title || 'Untitled composition'));
-  if (project.metadata.composer) title.append(textElement('p', project.metadata.composer, 'page-composer'));
-  if (project.metadata.subtitle) title.append(textElement('p', project.metadata.subtitle, 'page-subtitle'));
-  title.append(textElement('p', label, 'page-part-label'));
-  return title;
-}
-
-function headerBlock(project: AuthorProject, label: string): HTMLDivElement {
-  const header = textElement('div', '', 'page-heading');
-  header.append(textElement('span', project.metadata.title || 'Untitled composition'), textElement('span', label));
-  return header;
-}
-
-function footerBlock(pageLabel: string, draft = false): HTMLDivElement {
-  const footer = textElement('div', '', 'page-footer');
-  footer.append(textElement('span', draft ? DRAFT_LABEL : '', 'draft-stamp'), textElement('span', pageLabel, 'page-number'));
-  return footer;
+/** Own one synchronous Lit range, including when a caller has cleared the host. */
+function renderTemplate(host: HTMLElement, template: TemplateResult): void {
+  const mount = currentMount(host);
+  if (mount) {
+    render(template, host, { renderBefore: mount.boundary });
+    return;
+  }
+  templateMounts.get(host)?.part.setConnected(false);
+  host.replaceChildren();
+  const boundary = document.createComment('page-view');
+  host.append(boundary);
+  const part = render(template, host, { renderBefore: boundary });
+  templateMounts.set(host, { boundary, part });
 }
 
 function measuredHeight(element: HTMLElement, minimum: number, description: string): number {
@@ -187,28 +186,30 @@ export async function renderPageView(
   staging.style.width = `${dimensions.contentWidthPx}px`;
   staging.setAttribute('aria-hidden', 'true');
   document.body.append(staging);
+  let measurement: RootPart | undefined;
   try {
     const engraving = await import('../engraving/render.js');
     await engraving.engravingReady();
     if (document.fonts) await document.fonts.ready;
     if (!isCurrent()) throw new DOMException('A newer layout replaced this request.', 'AbortError');
-    const title = titleBlock(project, projection.label);
-    const header = headerBlock(project, projection.label);
     // There cannot be more pages than measures: no system is split and no
     // title-only page is invented. Reserve for the widest number of that length.
     const pageDigits = String(Math.max(1, projection.score.staves[0].measures.length)).length;
     const widestNumber = '8'.repeat(pageDigits);
-    const footer = footerBlock(`${widestNumber} / ${widestNumber}`, true);
-    staging.append(title, header, footer);
+    const metadata = { ...project.metadata };
+    measurement = render(pageMeasurementTemplate(metadata, projection.label, `${widestNumber} / ${widestNumber}`), staging);
     if (document.fonts) await document.fonts.ready;
     if (!isCurrent()) throw new DOMException('A newer layout replaced this request.', 'AbortError');
+    const title = staging.querySelector<HTMLElement>('.page-title')!;
+    const header = staging.querySelector<HTMLElement>('.page-heading')!;
+    const footer = staging.querySelector<HTMLElement>('.page-footer')!;
     const titleHeightPx = measuredHeight(title, DEFAULT_PAGE_RESERVATIONS.titleHeightPx, 'page title');
     const reservations = {
       ...DEFAULT_PAGE_RESERVATIONS, titleHeightPx,
       headerHeightPx: measuredHeight(header, DEFAULT_PAGE_RESERVATIONS.headerHeightPx, 'running header'),
       footerHeightPx: measuredHeight(footer, DEFAULT_PAGE_RESERVATIONS.footerHeightPx, 'draft footer'),
     };
-    title.remove(); header.remove(); footer.remove();
+    render(nothing, staging);
     const rendered = engraving.renderScore(staging, projection.score, {
       width: dimensions.engravingWidthPx,
       maxMeasures: projection.profile.maxMeasures ?? undefined,
@@ -226,57 +227,33 @@ export async function renderPageView(
     if (diagnostics.some(item => item.severity === 'error')) throw new Error(diagnostics.filter(item => item.severity === 'error').map(item => item.message).join('\n'));
     const svgSystems = [...staging.querySelectorAll<SVGSVGElement>('svg.notation-svg')];
     if (svgSystems.length !== systems.length) throw new Error('The engraved systems and page plan disagree. Refresh before printing.');
-    const fragment = document.createDocumentFragment();
-    for (const page of plan.pages) {
-      const sheet = textElement('section', '', 'score-page');
-      sheet.dataset.pageIndex = String(page.index);
-      sheet.setAttribute('aria-label', `Page ${page.index + 1} of ${plan.pages.length}`);
-      sheet.style.setProperty('--paper-width', `${plan.widthMm}mm`);
-      sheet.style.setProperty('--paper-height', `${plan.heightMm}mm`);
-      sheet.style.setProperty('--page-margin', `${projection.profile.marginMm}mm`);
-      const content = textElement('div', '', 'page-content');
-      content.style.width = `${dimensions.contentWidthPx}px`;
-      content.style.height = `${dimensions.contentHeightPx}px`;
-      const header = headerBlock(project, projection.label);
-      header.style.height = `${reservations.headerHeightPx}px`;
-      content.append(header);
-      if (page.index === 0) {
-        const firstTitle = titleBlock(project, projection.label);
-        firstTitle.style.height = `${titleHeightPx}px`;
-        content.append(firstTitle);
-      }
-      const music = textElement('div', '', 'page-systems');
-      for (const [index, system] of page.systems.entries()) {
-        const row = textElement('div', '', 'page-system');
-        row.dataset.systemIndex = String(system.index);
-        row.dataset.start = String(system.start);
-        row.dataset.end = String(system.end);
-        row.setAttribute('aria-label', `Measures ${projection.score.staves[0].measures[system.start].number} through ${projection.score.staves[0].measures[system.end - 1].number}`);
-        row.style.width = `${system.width * projection.profile.staffScale}px`;
-        row.style.height = `${system.height * projection.profile.staffScale}px`;
-        row.style.marginBottom = `${index < page.systems.length - 1 ? reservations.systemGapPx : 0}px`;
-        const svg = svgSystems[system.index];
-        svg.querySelectorAll('rect[opacity="0"][pointer-events]').forEach(target => target.remove());
-        svg.style.width = row.style.width;
-        svg.style.height = row.style.height;
-        row.append(svg);
-        music.append(row);
-      }
-      content.append(music);
-      const footer = footerBlock(`${page.index + 1} / ${plan.pages.length}`);
-      footer.style.height = `${reservations.footerHeightPx}px`;
-      content.append(footer);
-      sheet.append(content);
-      fragment.append(sheet);
+    // Only the engraving adapter mutates SVG. Lit owns the surrounding page DOM
+    // and mounts each measured vector node without serializing or cloning it.
+    for (const system of systems) {
+      const svg = svgSystems[system.index];
+      if (!svg) throw new Error('The engraved systems and page plan disagree. Refresh before printing.');
+      svg.querySelectorAll('rect[opacity="0"][pointer-events]').forEach(target => target.remove());
+      svg.style.width = `${system.width * projection.profile.staffScale}px`;
+      svg.style.height = `${system.height * projection.profile.staffScale}px`;
     }
     if (!isCurrent()) throw new DOMException('A newer layout replaced this request.', 'AbortError');
-    host.replaceChildren(fragment);
+    const data: PageViewTemplateData = {
+      metadata, label: projection.label, plan, profile: projection.profile, reservations, svgSystems,
+      measureNumbers: projection.score.staves[0].measures.map(measure => measure.number),
+    };
+    // A completed engraving replaces the complete page snapshot, repairing any
+    // removed page DOM. Only preflight changes reuse this snapshot's Lit parts.
+    templateMounts.get(host)?.part.setConnected(false);
+    templateMounts.delete(host);
+    renderTemplate(host, physicalPagesTemplate(data));
     let pageStyle = document.getElementById('author-page-size');
     if (!pageStyle) { pageStyle = document.createElement('style'); pageStyle.id = 'author-page-size'; document.head.append(pageStyle); }
     pageStyle.textContent = `@page { size: ${plan.widthMm}mm ${plan.heightMm}mm; margin: 0; }`;
-    return { projection, plan, diagnostics, reservations, fingerprint: turnFingerprint(project, partId, plan),
+    const view = { projection, plan, diagnostics, reservations, fingerprint: turnFingerprint(project, partId, plan),
       containmentIssues: inspectPageContainment(host, plan, projection.profile, reservations) };
-  } finally { staging.remove(); }
+    mountedPages.set(host, { data, view });
+    return view;
+  } finally { measurement?.setConnected(false); staging.remove(); }
 }
 
 export function updatePagePreflight(
@@ -285,9 +262,14 @@ export function updatePagePreflight(
 ): boolean {
   // Both footer states were budgeted before pagination. Apply the chosen state
   // before checking real bounds, so switching to Draft cannot bypass fit checks.
-  for (const stamp of host.querySelectorAll<HTMLElement>('.draft-stamp')) stamp.textContent = draft ? DRAFT_LABEL : '';
+  const mounted = mountedPages.get(host);
+  const isMounted = mounted?.view === view && currentMount(host) !== undefined;
+  if (isMounted) renderTemplate(host, physicalPagesTemplate(mounted.data, draft));
   host.classList.toggle('draft-pages', draft);
-  view.containmentIssues = inspectPageContainment(host, view.plan, view.projection.profile, view.reservations);
+  view.containmentIssues = [
+    ...(!isMounted ? ['The physical page preview is incomplete. Rebuild Pages before printing.'] : []),
+    ...inspectPageContainment(host, view.plan, view.projection.profile, view.reservations),
+  ];
   const hardLayoutErrors = [...view.plan.issues, ...view.containmentIssues];
   const preflight = publicationPreflight(project, view.projection.score, view.diagnostics, {
     draft, acknowledgeLayoutWarnings, layoutIssues: hardLayoutErrors,
@@ -296,17 +278,19 @@ export function updatePagePreflight(
   // acknowledging a warning. Preserve the preview so its cause can be fixed.
   const errors = [...new Set([...preflight.errors, ...hardLayoutErrors])];
   const canPublish = preflight.canPublish && hardLayoutErrors.length === 0 && view.plan.pages.length > 0;
-  const summary = textElement('p', canPublish
+  const summary = canPublish
     ? draft ? 'Draft pages prepared. Every page will be marked as unfinished.' : `${view.plan.pages.length} page${view.plan.pages.length === 1 ? '' : 's'} prepared. Inspect the music and intended turns before printing.`
-    : 'Resolve these checks before printing:');
-  output.replaceChildren(summary);
+    : 'Resolve these checks before printing:';
   const notices = [...errors, ...preflight.warnings.filter(warning => !errors.includes(warning))];
-  if (notices.length) {
-    const list = document.createElement('ul');
-    for (const notice of notices) list.append(textElement('li', notice));
-    output.append(list);
-  }
+  renderTemplate(output, pagePreflightTemplate(summary, notices));
   output.dataset.ready = String(canPublish);
   document.body.dataset.authorPrintReady = String(canPublish);
   return canPublish;
+}
+
+/** Pending composition metadata invalidates publication without replacing Lit's mount. */
+export function setPagePreflightMessage(output: HTMLElement, message: string): void {
+  renderTemplate(output, pagePreflightTemplate(message, []));
+  output.dataset.ready = 'false';
+  document.body.dataset.authorPrintReady = 'false';
 }

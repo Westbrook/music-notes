@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EntryPitch } from '../src/authoring/entry-pitch.js';
 import { EditorSession } from '../src/authoring/editor.js';
 import { createProject } from '../src/authoring/project.js';
 
 const alterations = ['-2', '-1.5', '-1', '-0.5', '0', '0.5', '1', '1.5', '2'];
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const cleanups: (() => void)[] = [];
 const simpleMarkup = `<label for="event-pitch">Pitch and octave</label>
   <input id="event-pitch" type="text" value="C4" aria-describedby="pitch-help event-alteration-status">
@@ -24,8 +23,9 @@ function element<T extends HTMLElement = HTMLElement>(id: string): T {
   return result as T;
 }
 
-function fixture(options: { pitch?: string; enabled?: boolean; markup?: string; onChanged?: () => void } = {}) {
-  document.body.innerHTML = options.markup ?? simpleMarkup;
+function fixture(options: { pitch?: string; enabled?: boolean; markup?: string; authorShell?: boolean; onChanged?: () => void } = {}) {
+  if (options.authorShell) mountAuthorFixture();
+  else document.body.innerHTML = options.markup ?? simpleMarkup;
   const state = { enabled: options.enabled ?? true };
   const pitch = element<HTMLInputElement>('event-pitch');
   pitch.value = options.pitch ?? 'C4';
@@ -47,7 +47,7 @@ afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); document.bod
 
 describe('next-note accidental controls', () => {
   it('uses the real authoring input and all nine customizable native choices', () => {
-    const f = fixture({ markup: shellMarkup, pitch: 'Fqs4' });
+    const f = fixture({ authorShell: true, pitch: 'Fqs4' });
     expect(f.pitch.type).toBe('text');
     expect(f.alteration.localName).toBe('select');
     expect([...f.alteration.options].map(option => option.value)).toEqual(alterations);
@@ -308,6 +308,54 @@ describe('entry pitch isolation and lifecycle', () => {
     choice.value = '-1'; choice.dispatchEvent(new Event('change', { bubbles: true }));
     expect((alternate.getElementById('event-pitch') as HTMLInputElement).value).toBe('Cb4');
     expect(f.pitch.value).toBe('F#4'); expect(f.alteration.value).toBe('1');
+  });
+
+  it.each(['element', 'shadow'] as const)('isolates %s controls and disposal from duplicate control and musical source IDs', kind => {
+    const global = fixture({ pitch: 'G4' });
+    const score = document.createElement('music-staff');
+    score.innerHTML = '<music-measure><music-note id="event-pitch" pitch="D4" duration="whole"></music-note><music-direction id="event-alteration">Accepted music</music-direction><music-direction id="event-alteration-status">Keep this text</music-direction></music-measure>';
+    document.body.prepend(score);
+    const accepted = score.innerHTML;
+    const create = (raw: string) => {
+      const host = document.createElement('section');
+      document.body.append(host);
+      const root = kind === 'shadow' ? host.attachShadow({ mode: 'open' }) : host;
+      root.innerHTML = simpleMarkup;
+      const pitch = root.querySelector<HTMLInputElement>('#event-pitch')!;
+      const alteration = root.querySelector<HTMLSelectElement>('#event-alteration')!;
+      const status = root.querySelector<HTMLElement>('#event-alteration-status')!;
+      pitch.value = raw;
+      const changed = vi.fn();
+      const controller = new EntryPitch({ isEnabled: () => true, changed }, root);
+      cleanups.push(() => controller.dispose());
+      const choose = (value: string) => {
+        alteration.value = value;
+        alteration.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      };
+      return { controller, pitch, alteration, status, changed, choose };
+    };
+    const first = create('F#4');
+    const second = create('Bqf5');
+
+    first.choose('0.5');
+    expect(first.pitch.value).toBe('Fqs4');
+    expect(first.changed).toHaveBeenCalledTimes(1);
+    expect(second.pitch.value).toBe('Bqf5');
+    expect(second.alteration.value).toBe('-0.5');
+    expect(second.changed).not.toHaveBeenCalled();
+    expect(first.pitch.getRootNode()).toBe(first.status.getRootNode());
+
+    first.controller.dispose();
+    first.choose('-1');
+    second.choose('2');
+    expect(first.pitch.value).toBe('Fqs4');
+    expect(first.changed).toHaveBeenCalledTimes(1);
+    expect(second.pitch.value).toBe('B##5');
+    expect(second.changed).toHaveBeenCalledTimes(1);
+    expect(global.pitch.value).toBe('G4');
+    expect(global.alteration.value).toBe('0');
+    expect(global.changed).not.toHaveBeenCalled();
+    expect(score.innerHTML).toBe(accepted);
   });
 
   it('keeps an ordinary native select usable when enhancement must add its button', () => {

@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render } from 'lit';
 import { initializeWorkbookControls } from '../src/demo/workbook-controls.js';
+import { workbookToolbarTemplate } from '../src/demo/workbook-toolbar.js';
 import { readScore } from '../src/dom/index.js';
 import type { Diagnostic } from '../src/model/types.js';
 import galleryHtml from '../index.html?raw';
@@ -36,6 +38,16 @@ function fixture({ checked = false, disabled = false } = {}) {
   const template = document.createElement('template');
   template.innerHTML = galleryHtml;
   const root = template.content.querySelector<HTMLElement>('main')!;
+  // Exercise the compatibility adapter with the same template as the component,
+  // without installing a second controller on the component's live view.
+  const toolbar = root.querySelector('music-workbook-toolbar')!;
+  const controls = document.createElement('div');
+  render(workbookToolbarTemplate(
+    { preview: checked, disabled, preparing: false, status: '' },
+    { preview: () => {}, print: () => {} },
+    { idPrefix: '', printWidth: Number(toolbar.getAttribute('print-width')), scoreCount: Number(toolbar.getAttribute('score-count')) },
+  ), controls);
+  toolbar.replaceWith(controls);
   document.body.append(root);
   const preview = root.querySelector<HTMLInputElement>('#print-preview')!;
   const printButton = root.querySelector<HTMLButtonElement>('#print-scores')!;

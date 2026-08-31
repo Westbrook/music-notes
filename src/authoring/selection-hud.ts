@@ -4,6 +4,7 @@ import { transformInk, unionInk } from '../engraving/geometry.js';
 import type { InkBox } from '../engraving/geometry.js';
 import type { MusicEvent } from '../model/types.js';
 import type { ViewMode } from './types.js';
+import { composedParent } from '../ui/composed-dom.js';
 
 interface TargetScope {
   readonly sourceId: string;
@@ -129,11 +130,6 @@ function clientBox(element: HTMLElement): InkBox {
     width: element.clientWidth * scaleX, height: element.clientHeight * scaleY };
 }
 
-function parentOf(element: Element): Element | null {
-  const root = element.getRootNode();
-  return element.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
-}
-
 function clippedBy(element: HTMLElement, box: InkBox): InkBox | undefined {
   const style = element.ownerDocument.defaultView!.getComputedStyle(element);
   const clipsX = ['auto', 'scroll', 'hidden', 'clip'].includes(style.overflowX || style.overflow);
@@ -150,18 +146,18 @@ function visibleViewport(element: HTMLElement): InkBox | undefined {
   let box = intersection(clientBox(element), { x: 0, y: 0, width: view.innerWidth, height: view.innerHeight });
   const visual = view.visualViewport;
   if (box && visual) box = intersection(box, { x: visual.offsetLeft, y: visual.offsetTop, width: visual.width, height: visual.height });
-  for (let parent = parentOf(element); parent && box; parent = parentOf(parent)) {
+  for (let parent = composedParent(element); parent && box; parent = composedParent(parent)) {
     if (parent instanceof HTMLElement) box = clippedBy(parent, box);
   }
   return box;
 }
 
-/** Account for horizontal pan and clipping inside MusicSurface's open shadow tree. */
+/** Account for horizontal pan and clipping through slots and shadow hosts. */
 function frameClip(svg: SVGSVGElement, viewport: HTMLElement, available: InkBox): InkBox | undefined {
   let clip: InkBox | undefined = available;
   let element: Element | null = svg;
   while (element && element !== viewport) {
-    element = parentOf(element);
+    element = composedParent(element);
     if (!(element instanceof HTMLElement) || element === viewport) continue;
     clip = clippedBy(element, clip);
     if (!clip) return undefined;
@@ -267,19 +263,19 @@ class MusicalSelectionHud implements SelectionHud {
     if (!context.target) return 'missing-target';
     const surface = this.options.getSurface(); const viewport = this.options.getViewport();
     if (!surface?.isConnected || !viewport?.isConnected || !this.options.element.isConnected) return 'stale-geometry';
-    const layout = surface.getLayoutGeometry();
-    if (!layout || layout.projection !== 'screen' || layout.revision !== surface.renderRevision) return 'stale-geometry';
+    const projection = surface.getRenderedProjection();
+    if (!projection || projection.layout.projection !== 'screen' || projection.layout.revision !== surface.renderRevision) return 'stale-geometry';
+    const { layout } = projection;
     const clip = visibleViewport(viewport);
     if (!clip) return 'offscreen';
     const available = grow(clip, -CLEARANCE);
     if (!valid(available)) return 'no-space';
     const bounds = this.options.element.getBoundingClientRect();
     if (this.options.element.hidden || !valid(bounds)) return 'invalid-size';
-    const svgs = [...(surface.shadowRoot?.querySelectorAll<SVGSVGElement>('.screen svg.notation-svg') ?? [])];
     const frames: Frame[] = []; const obstacles: InkBox[] = [];
     let anchor: Anchor | undefined; let foundTarget = false;
-    for (const system of layout.systems) {
-      const svg = svgs[system.index]; const matrix = svg?.getScreenCTM();
+    for (const { system, svg } of projection.frames) {
+      const matrix = svg.getScreenCTM();
       if (!svg?.isConnected || !matrix || ![matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f].every(finite)
         || Math.abs(matrix.a * matrix.d - matrix.b * matrix.c) < 1e-10 || !valid(system.ink)) return 'stale-geometry';
       const ink = transformInk(system.ink, matrix);
@@ -307,7 +303,7 @@ class MusicalSelectionHud implements SelectionHud {
 
   private current(snapshot: Snapshot): boolean {
     return !this.disposed && contextKey(this.options.getContext()) === snapshot.key && this.options.getSurface() === snapshot.surface
-      && this.options.getViewport() === snapshot.viewport && snapshot.surface.getLayoutGeometry() === snapshot.layout
+      && this.options.getViewport() === snapshot.viewport && snapshot.surface.getRenderedProjection()?.layout === snapshot.layout
       && snapshot.surface.renderRevision === snapshot.layout.revision;
   }
 

@@ -1,3 +1,8 @@
+import { activeElement, composedAncestors, composedContains } from '../ui/composed-dom.js';
+import { asControlScope } from './control-scope.js';
+import type { ControlRoot, ControlScope } from './control-scope.js';
+import { canRestoreConfirmationFocus } from './confirmation-focus.js';
+
 export interface ActionConfirmationOptions {
   readonly dialogId?: string;
 }
@@ -20,20 +25,9 @@ interface PendingDecision {
   stale: boolean;
 }
 
-function canFocus(element: HTMLElement | null | undefined): element is HTMLElement {
-  if (!element?.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]')
-    || element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true') return false;
-  for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
-    if (ancestor.tagName === 'DIALOG' && !ancestor.hasAttribute('open')) return false;
-    if (ancestor.hasAttribute('popover') && typeof ancestor.hidePopover === 'function') {
-      try { if (!ancestor.matches(':popover-open')) return false; } catch { /* Explicit hidden state covers older engines. */ }
-    }
-  }
-  return true;
-}
-
 /** Collects one explicit decision. It never executes a musical or project mutation. */
 export class ActionConfirmation {
+  private readonly scope: ControlScope;
   private readonly document: Document;
   private readonly dialog: HTMLDialogElement;
   private readonly title: HTMLElement;
@@ -46,11 +40,12 @@ export class ActionConfirmation {
   private pending?: PendingDecision;
   private disposed = false;
 
-  constructor(options: ActionConfirmationOptions = {}, root: Document = document) {
-    this.document = root;
+  constructor(options: ActionConfirmationOptions = {}, root: ControlRoot = document) {
+    this.scope = asControlScope(root);
+    this.document = this.scope.document;
     const id = options.dialogId ?? 'author-confirmation';
     const element = <T extends HTMLElement>(controlId: string): T => {
-      const control = root.getElementById(controlId);
+      const control = this.scope.getElementById(controlId);
       if (!control) throw new Error(`Missing action confirmation control: ${controlId}`);
       return control as T;
     };
@@ -94,8 +89,9 @@ export class ActionConfirmation {
 
   ask(request: ActionConfirmationRequest): Promise<boolean> {
     if (this.disposed || this.pending || this.dialog.open || !this.dialog.isConnected) return Promise.resolve(false);
-    const active = this.document.activeElement as HTMLElement | null;
-    const previousFocus = active && active !== this.document.body && !this.dialog.contains(active) ? active : null;
+    const active = this.scope.activeElement;
+    const HTMLElementClass = this.document.defaultView?.HTMLElement ?? HTMLElement;
+    const previousFocus = active instanceof HTMLElementClass && active !== this.document.body && !composedContains(this.dialog, active) ? active : null;
     let resolve!: (accepted: boolean) => void;
     const result = new Promise<boolean>(complete => { resolve = complete; });
     // Copy the function and focus references; a later mutation of the request
@@ -165,7 +161,8 @@ export class ActionConfirmation {
   private revealStatus(): void {
     // Long messages can scroll, but showing the local explanation must not move
     // the notation or the document behind this decision.
-    for (let container = this.status.parentElement; container && this.dialog.contains(container); container = container.parentElement) {
+    for (const container of composedAncestors(this.status)) {
+      if (!composedContains(this.dialog, container)) break;
       if (container.clientHeight > 0 && container.scrollHeight > container.clientHeight) {
         const top = container.getBoundingClientRect().top + container.clientTop;
         const target = this.status.getBoundingClientRect();
@@ -183,11 +180,13 @@ export class ActionConfirmation {
     this.confirmButton.disabled = true;
     const closed = this.closeDialog(accepted);
     if (restoreFocus) {
-      const target = canFocus(decision.returnFocus) ? decision.returnFocus
-        : canFocus(decision.previousFocus) ? decision.previousFocus : undefined;
+      const target = canRestoreConfirmationFocus(decision.returnFocus, this.document) ? decision.returnFocus
+        : canRestoreConfirmationFocus(decision.previousFocus, this.document) ? decision.previousFocus : undefined;
       target?.focus({ preventScroll: true });
     }
-    if (this.dialog.contains(this.document.activeElement)) (this.document.activeElement as HTMLElement | null)?.blur();
+    const active = activeElement(this.document);
+    const HTMLElementClass = this.document.defaultView?.HTMLElement ?? HTMLElement;
+    if (active instanceof HTMLElementClass && composedContains(this.dialog, active)) active.blur();
     decision.resolve(accepted && closed);
   }
 

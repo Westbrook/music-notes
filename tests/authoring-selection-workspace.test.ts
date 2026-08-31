@@ -5,8 +5,8 @@
  * input instead of Happy DOM's zero layout. These tests do not qualify engraving geometry,
  * native popover/picker behavior, browser text highlighting, touch, or printing.
  */
+import { authorActiveElement, authorControlParent, authorControlRoot, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
@@ -14,8 +14,6 @@ import { reduceSelection } from '../src/authoring/selection.js';
 import { pitchText } from '../src/model/index.js';
 import type { MusicEvent } from '../src/model/types.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const selectionSource = `<music-system id="selection-score">
   <music-staff id="lead" label="Lead">
     <music-measure id="bar-12" number="12">
@@ -57,13 +55,14 @@ let sequence = 0;
 let viewportDescriptor: PropertyDescriptor | undefined;
 const actions: string[] = [];
 function control<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+  const element = findAuthorControl(document, id);
   if (!element) throw new Error(`The current Author shell is missing #${id}.`);
   return element as T;
 }
 function available(element: HTMLElement): boolean {
   if (element.closest('[hidden],[inert],[aria-hidden="true"]') || element.matches(':disabled')) return false;
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) {
+    if (parent.matches('[hidden],[inert],[aria-hidden="true"]')) return false;
     if (parent instanceof HTMLDetailsElement && !parent.open && !parent.querySelector(':scope > summary')?.contains(element)) return false;
   }
   return true;
@@ -71,7 +70,7 @@ function available(element: HTMLElement): boolean {
 async function flush(): Promise<void> { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
 async function disclose(element: HTMLElement): Promise<void> {
   const ancestors: HTMLDetailsElement[] = [];
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) ancestors.unshift(parent);
+  for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) if (parent instanceof HTMLDetailsElement) ancestors.unshift(parent);
   for (const details of ancestors) if (!details.open) {
     const summary = details.querySelector<HTMLElement>(':scope > summary'); expect(summary).not.toBeNull(); expect(available(summary!)).toBe(true);
     actions.push(`disclose:${details.id || summary!.textContent?.trim()}`); summary!.click(); await flush(); expect(details.open).toBe(true);
@@ -158,7 +157,7 @@ function noEdit(before: ReturnType<typeof accepted>, preserveWritingCursor = tru
 }
 function feedback(): string {
   return ['selection-controls-error', 'selection-controls-feedback', 'author-errors', 'author-status', 'pointer-status']
-    .map(id => document.getElementById(id)?.textContent ?? '').join(' ');
+    .map(id => findAuthorControl(document, id)?.textContent ?? '').join(' ');
 }
 function expectMembers(ids: string[], primaryId?: string, anchorId?: string): void {
   expect(selectedIds()).toEqual(ids);
@@ -192,7 +191,7 @@ beforeEach(() => {
   viewportDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell; actions.length = 0;
+  mountAuthorFixture(); actions.length = 0;
   vi.spyOn(control('author-workbench'), 'clientWidth', 'get').mockImplementation(() => window.innerWidth);
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
@@ -207,7 +206,7 @@ describe('exact selection routed through the actual workspace', () => {
     mount(); const before = accepted(), recipe = entryRecipe(); await chooseSource('a');
     expectMembers(['a'], 'a', 'a'); expect(exactSelection()).toMatchObject({ staffId: 'lead', voiceIndex: 0, focusId: 'a' });
     expect(control('workspace-tools').hidden).toBe(true); expect(control('selection-controls').hidden).toBe(false);
-    expect(document.activeElement).not.toBe(control('selection-sharp')); expect(entryRecipe()).toEqual(recipe); noEdit(before);
+    expect(authorActiveElement(document)).not.toBe(control('selection-sharp')); expect(entryRecipe()).toEqual(recipe); noEdit(before);
   });
   it('Shift replaces membership with the fixed-anchor range across a barline, then shrinks it without filling a second range', async () => {
     mount(); const before = accepted(); await chooseSource('b'); await chooseSource('f', { shiftKey: true });
@@ -307,7 +306,7 @@ describe('direct common actions use accepted music, never the next-entry recipe'
   });
   it('ordinary radio arrows move focus without editing; Space applies the focused value exactly once', async () => {
     mount(); await chooseSource('a'); const before = accepted(); control('selection-natural').focus();
-    await key('ArrowRight', 'selection-natural'); expect(document.activeElement).toBe(control('selection-sharp')); noEdit(before);
+    await key('ArrowRight', 'selection-natural'); expect(authorActiveElement(document)).toBe(control('selection-sharp')); noEdit(before);
     await key(' ', 'selection-sharp'); expect(pitchText(eventById('a').pitches[0])).toBe('F#4'); expect(app!.session.revision).toBe(before.revision + 1);
   });
   it('a repeated accepted value does not consume redo or create history', async () => {
@@ -318,7 +317,7 @@ describe('direct common actions use accepted music, never the next-entry recipe'
     mount(selectionSource.replace('<music-note id="b" pitch="F4" duration="quarter"></music-note>', '<music-chord id="b" pitches="C4 Eqs4 G4" duration="quarter"></music-chord>'));
     await chooseSource('b'); const before = accepted(); expectMembers(['b'], 'b', 'b');
     expect(control('selection-controls').dataset.selectionState).toBe('chord'); expect(control('selection-pitch').textContent).toMatch(/pitches/i);
-    await click('selection-pitch'); expect(control('selection-inspector').hidden).toBe(false); expect(document.activeElement).toBe(control('selected-pitches'));
+    await click('selection-pitch'); expect(control('selection-inspector').hidden).toBe(false); expect(authorActiveElement(document)).toBe(control('selected-pitches'));
     expect(control<HTMLInputElement>('selected-pitches').value).toBe('C4 Eqs4 G4'); noEdit(before);
   });
   it('the road toolbar changes direction without inventing pitches and refuses a held continuation direction', async () => {
@@ -356,7 +355,7 @@ describe('direct common actions use accepted music, never the next-entry recipe'
   it('double-clicking a child uses its exact row rather than a broad owner editor', async () => {
     mount(); const before = accepted(); await chooseSource('e-turn'); await chooseSource('e-turn', { clickCount: 2 });
     expect(control('score-editor').dataset.activeMarkingId).toBe('e-turn'); expect(control('event-markings-editor').dataset.activeMarkingId).toBe('e-turn');
-    expect(markingRow('e-turn').contains(document.activeElement)).toBe(true); expect(control('tools-tablist').hidden).toBe(true); noEdit(before);
+    expect(markingRow('e-turn').contains(authorActiveElement(document))).toBe(true); expect(control('tools-tablist').hidden).toBe(true); noEdit(before);
   });
 });
 
@@ -549,7 +548,7 @@ describe('selection modes, native ownership, and drag admission policy', () => {
     mount('<music-staff id="staff" label="Lead"><music-measure id="bar"><music-note id="a" pitch="F4" duration="half"></music-note><music-harmony id="harmony" text="Dm9"></music-harmony><music-note id="b" pitch="G4" duration="half"></music-note></music-measure></music-staff>');
     const before = accepted(); await chooseSource('harmony'); expect(exactSelection().sourceId).toBe('harmony'); expectMembers([]); expect(control('workspace-tools').hidden).toBe(true);
     await chooseSource('harmony', { clickCount: 2 }); expect(control('workspace-tools').hidden).toBe(true); noEdit(before);
-    await key('Enter'); expect(control('annotation-inspector').hidden).toBe(false); expect(document.activeElement).toBe(control('annotation-text'));
+    await key('Enter'); expect(control('annotation-inspector').hidden).toBe(false); expect(authorActiveElement(document)).toBe(control('annotation-text'));
     expect(app!.session.source.querySelector('#harmony')?.hasAttribute('at')).toBe(false); noEdit(before);
   });
 });
@@ -605,7 +604,7 @@ describe('shared value accuracy and exact visible membership', () => {
   });
   it('one successful shared duration edit preserves the holes, source IDs and writing cursor through Undo and Redo', async () => {
     mount(); const recipe = await configureFutureRecipe(); await chooseSource('a'); await chooseSource('c', { ctrlKey: true }); const before = accepted(), original = exactSelection();
-    const pressed = [...document.querySelectorAll<HTMLElement>('#event-navigator [data-source-id][aria-pressed="true"]')].map(button => button.dataset.sourceId);
+    const pressed = [...authorControlRoot(document, 'event-navigator')!.querySelectorAll<HTMLElement>('[data-source-id][aria-pressed="true"]')].map(button => button.dataset.sourceId);
     expect(pressed).toEqual(['a', 'c']); await shared(); await setField('selection-shared-duration', 'eighth');
     expect(['a', 'b', 'c', 'd'].map(id => eventById(id).duration)).toEqual(['eighth', 'quarter', 'eighth', 'quarter']);
     expect(app!.session.revision).toBe(before.revision + 1); expectMembers(['a', 'c'], original.primaryId, original.anchorId); expect(entryRecipe()).toEqual(recipe); expect(app!.session.cursor).toEqual(before.cursor);
@@ -852,7 +851,7 @@ describe('open-slash nominal span has an honest reachable Properties route', () 
     expect(control('workspace-tools').dataset.toolsView).toBe('properties'); expect(control('selection-inspector').hidden).toBe(false);
     expect(control('selection-inspector').dataset.draftTarget).toBe('open-span'); expect(control<HTMLDetailsElement>('event-details').open).toBe(true);
     expect(available(control('selected-nominal-span'))).toBe(true); expect(control('selected-nominal-span').querySelector('legend')?.textContent).toMatch(/nominal span.*open slash/i);
-    expect(control('selected-nominal-help').textContent).toMatch(/rhythm stays unwritten/i); expect(document.activeElement).toBe(control('selected-duration'));
+    expect(control('selected-nominal-help').textContent).toMatch(/rhythm stays unwritten/i); expect(authorActiveElement(document)).toBe(control('selected-duration'));
     expect(control<HTMLSelectElement>('selected-kind').value).toBe('slash'); expect(control<HTMLSelectElement>('selected-duration').value).toBe('whole');
     expect(control<HTMLSelectElement>('selected-dots').value).toBe('0'); noEdit(before);
     await setField('selected-duration', 'half'); await setField('selected-dots', '1'); noEdit(before);

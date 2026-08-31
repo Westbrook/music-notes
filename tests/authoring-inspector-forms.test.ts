@@ -55,8 +55,9 @@ function pickStaff(id: string, checked: boolean): void {
 }
 function chosenStaves(): string[] { return [...el('part-staves').querySelectorAll<HTMLInputElement>('input:checked')].map(input => input.value); }
 
-function fixture(source = music) {
-  document.body.innerHTML = markup();
+function fixture(source = music, root: Document | HTMLElement | ShadowRoot = document) {
+  const mount = root.nodeType === 9 ? (root as Document).body : root as HTMLElement | ShadowRoot;
+  mount.innerHTML = markup();
   const project = createProject(source, 'Form fixture', [
     { id: 'flute-part', label: 'Flute part', staffIds: ['upper'] },
     ...(source.includes('id="lower"') ? [{ id: 'bass-part', label: 'Bass part', staffIds: ['lower'] }] : []),
@@ -83,11 +84,29 @@ function fixture(source = music) {
     if (targetContext.sourceId) selectSource(targetContext.sourceId);
     forms.refresh();
   });
-  forms = new InspectorForms({ session, context: () => context, select: selectSource, returnTarget, onDraftChange: changed, report });
+  forms = new InspectorForms({ session, context: () => context, select: selectSource, returnTarget, onDraftChange: changed, report }, root);
   const listener = () => forms.refresh();
   session.addEventListener('change', listener);
   cleanups.push(() => { session.removeEventListener('change', listener); forms.dispose(); });
   return { forms, session, context, selectSource, returnTarget, report, changed };
+}
+
+function scopedFixture(kind: 'element' | 'shadow', source = music) {
+  const host = document.createElement('section');
+  document.body.append(host);
+  const root = kind === 'shadow' ? host.attachShadow({ mode: 'open' }) : host;
+  const h = fixture(source, root);
+  const control = <T extends HTMLElement = HTMLInputElement>(id: string): T => {
+    const element = root.querySelector<T>(`[id="${id}"]`);
+    if (!element) throw new Error(`Missing scoped inspector control ${id}`);
+    return element;
+  };
+  const edit = (id: string, value: string | boolean) => {
+    const field = control<HTMLInputElement>(id);
+    if (typeof value === 'boolean') field.checked = value; else field.value = value;
+    field.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  };
+  return { ...h, host, root, control, edit };
 }
 
 const entered: EventInput = { kind: 'note', pitch: 'C5', pitches: 'C5 E5 G5', duration: 'eighth', dots: 0, rhythmic: false, measureRest: false, accidentalDisplay: 'auto', stem: 'auto', beam: 'auto' };
@@ -442,6 +461,76 @@ describe('inspector DOM drafts', () => {
     document.body.replaceChildren();
     const empty = new InspectorForms({ session: h.session, context: () => h.context, select: h.selectSource });
     expect(empty.dirtyCount).toBe(0); empty.refresh(); empty.dispose();
+  });
+
+  it.each(['element', 'shadow'] as const)('edits and commits only the owning %s form despite duplicate IDs in other editors', kind => {
+    const outer = fixture();
+    const outerRegion = el('selection-inspector').outerHTML;
+    const first = scopedFixture(kind);
+    const second = scopedFixture(kind, music.replace(note('n1'), note('n1', 'D4')));
+
+    first.edit('selected-pitch', 'F#4');
+    expect(first.forms.snapshot('selected').dirtyFields).toEqual(['pitch']);
+    expect(first.forms.resolve('selected').patch).toEqual({ pitch: 'F#4' });
+    expect(first.session.source.querySelector('#n1')?.getAttribute('pitch')).toBe('F4');
+    expect(first.control('selected-draft-status').textContent).toContain('Unapplied changes');
+    expect(first.control('selected-draft-status').getAttribute('role')).toBe('status');
+    expect(first.control('selected-pitch').getAttribute('aria-describedby')).toContain('selected-draft-status');
+    expect(first.control('part-staves').querySelectorAll('input')).toHaveLength(2);
+
+    second.edit('staff-label', 'Second editor flute');
+    applySelected(first);
+    expect(first.session.source.querySelector('#n1')?.getAttribute('pitch')).toBe('F#4');
+    expect(first.forms.dirtyCount).toBe(0);
+    expect(second.control('selected-pitch').value).toBe('D4');
+    expect(second.forms.snapshot('selected').dirty).toBe(false);
+    expect(second.forms.resolve('staff').patch).toEqual({ label: 'Second editor flute' });
+    expect(second.session.revision).toBe(0);
+    expect(outer.forms.dirtyCount).toBe(0);
+    expect(outer.changed).not.toHaveBeenCalled();
+    expect(el('selection-inspector').outerHTML).toBe(outerRegion);
+    expect(value('staff-label')).toBe('Flute');
+    expect(value('event-pitch')).toBe('Bb5');
+  });
+
+  it.each(['element', 'shadow'] as const)('stops %s draft fields and recovery actions after disposal while another editor remains active', kind => {
+    const outer = fixture();
+    const h = scopedFixture(kind);
+    h.edit('measure-end-bar', 'double');
+    const before = h.forms.snapshot('measure');
+    h.forms.dispose();
+    h.changed.mockClear();
+
+    h.edit('measure-end-bar', 'final');
+    h.control('measure-end-bar').dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    h.control('discard-measure-draft').click();
+    h.forms.refresh();
+    expect(h.forms.snapshot('measure')).toEqual(before);
+    expect(h.control('measure-end-bar').value).toBe('final');
+    expect(h.changed).not.toHaveBeenCalled();
+    expect(h.session.revision).toBe(0);
+
+    edit('measure-end-bar', 'double');
+    expect(outer.forms.resolve('measure').patch).toEqual({ endBar: 'double' });
+    expect(outer.changed).toHaveBeenCalledTimes(1);
+    expect(h.forms.snapshot('measure')).toEqual(before);
+  });
+
+  it('recovers focus within a shadow form after its focused Apply becomes unavailable', () => {
+    fixture();
+    const h = scopedFixture('shadow');
+    const root = h.root as ShadowRoot;
+    h.edit('selected-pitch', 'F#4');
+    const apply = h.control<HTMLButtonElement>('update-event');
+    apply.focus();
+    expect(root.activeElement).toBe(apply);
+    expect(document.activeElement).toBe(h.host);
+
+    applySelected(h);
+    expect(apply.disabled).toBe(true);
+    expect(h.forms.dirtyCount).toBe(0);
+    expect(root.activeElement).toBe(h.control('selected-kind'));
+    expect(document.activeElement).toBe(h.host);
   });
 
   it('does not invoke the parent change callback before construction has returned', () => {

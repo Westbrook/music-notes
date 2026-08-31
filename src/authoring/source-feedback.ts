@@ -1,3 +1,6 @@
+import { composedAncestors } from '../ui/composed-dom.js';
+import { asControlScope, type ControlRoot } from './control-scope.js';
+
 interface SourceFailure { documentId: string; draft: string; message: string }
 
 /** Local, session-only feedback for the exact Source draft that failed validation. */
@@ -6,9 +9,10 @@ export class SourceFeedback {
   private readonly error: HTMLElement;
   private failure: SourceFailure | null = null;
 
-  constructor(root: Document = document) {
-    const input = root.getElementById('source-input');
-    const error = root.getElementById('source-error');
+  constructor(root: ControlRoot = document) {
+    const scope = asControlScope(root);
+    const input = scope.getElementById('source-input');
+    const error = scope.getElementById('source-error');
     if (input?.localName !== 'textarea' || input.namespaceURI !== 'http://www.w3.org/1999/xhtml') {
       throw new Error('SourceFeedback requires the #source-input textarea.');
     }
@@ -44,7 +48,8 @@ export class SourceFeedback {
   }
 
   private reveal(): void {
-    const body = this.error.closest<HTMLElement>('.popover-body');
+    const body = [this.error, ...composedAncestors(this.error)]
+      .find(element => element.matches('.popover-body')) as HTMLElement | undefined;
     if (!body) return;
     const bounds = body.getBoundingClientRect();
     const error = this.error.getBoundingClientRect();

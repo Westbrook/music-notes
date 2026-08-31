@@ -7,7 +7,7 @@ import { unionInk, visibleInk } from '../src/engraving/geometry.js';
 import { alignmentScore, automaticEnsembleScore, breakScore, durationCases, durationMatrixBar, improvScore, meterRestScore, nestedScore, tieScore, turningEnsembleScore } from './browser-fixtures.js';
 
 interface Fixture { article: HTMLElement; container: HTMLElement; root: MusicSurface }
-interface WorkbookFixture { frame: HTMLIFrameElement; doc: Document; view: Window; scores: MusicSurface[] }
+interface WorkbookFixture { frame: HTMLIFrameElement; doc: Document; view: Window; scores: MusicSurface[]; toolbarRoot: ShadowRoot }
 interface Result { name: string; passed: boolean; detail: string }
 interface Metrics { boundingBoxes: number; svgSystems: number; matrixCases: number }
 interface Test { name: string; run: () => Promise<string> }
@@ -104,9 +104,11 @@ async function mountWorkbook(label: string, width = 390): Promise<WorkbookFixtur
   equal(scores.length, 12, 'The workbook must include all twelve actual score roots');
   await waitForRender(Promise.all(scores.map(score => score.renderComplete)).then(() => {}), 'Render all twelve workbook scores');
   scores.forEach(score => noErrors(score, score.id));
-  assert(doc.querySelector('#workbook-status')!.textContent!.includes('Responsive score layout'),
+  const toolbarRoot = doc.querySelector('music-workbook-toolbar')?.shadowRoot;
+  assert(toolbarRoot, 'The production workbook toolbar must own a shadow root.');
+  assert(toolbarRoot.querySelector('#workbook-status')!.textContent!.includes('Responsive score layout'),
     'The production workbook controller did not initialize.');
-  return { frame, doc, view, scores };
+  return { frame, doc, view, scores, toolbarRoot };
 }
 
 async function waitForWorkbookStatus(status: HTMLElement, expected: RegExp, action: () => void): Promise<void> {
@@ -335,10 +337,10 @@ const tests: Test[] = [
   {
     name: 'The real workbook toolbar switches all twelve scores and requests the same print layout in either mode',
     async run() {
-      const { frame, doc, view, scores } = await mountWorkbook('Actual workbook controls: all twelve examples');
-      const preview = doc.querySelector<HTMLInputElement>('#print-preview')!;
-      const printButton = doc.querySelector<HTMLButtonElement>('#print-scores')!;
-      const status = doc.querySelector<HTMLElement>('#workbook-status')!;
+      const { frame, view, scores, toolbarRoot } = await mountWorkbook('Actual workbook controls: all twelve examples');
+      const preview = toolbarRoot.querySelector<HTMLInputElement>('#print-preview')!;
+      const printButton = toolbarRoot.querySelector<HTMLButtonElement>('#print-scores')!;
+      const status = toolbarRoot.querySelector<HTMLElement>('#workbook-status')!;
       const automatic = scores.find(score => score.id === 'ensemble-auto-study')!;
       const models = scores.map(score => score.toJSON());
       const markup = scores.map(score => score.innerHTML);
@@ -401,13 +403,13 @@ const tests: Test[] = [
   {
     name: 'The real workbook print button waits for an immediate source edit and blocks errors until repaired',
     async run() {
-      const { doc, view, scores } = await mountWorkbook('Actual workbook print readiness: errors and repair', 960);
+      const { doc, view, scores, toolbarRoot } = await mountWorkbook('Actual workbook print readiness: errors and repair', 960);
       const root = scores.find(score => score.id === 'pitch-study')!;
       const note = doc.querySelector('#editable-note')!;
       const pitch = note.getAttribute('pitch')!;
       const model = root.toJSON();
-      const printButton = doc.querySelector<HTMLButtonElement>('#print-scores')!;
-      const status = doc.querySelector<HTMLElement>('#workbook-status')!;
+      const printButton = toolbarRoot.querySelector<HTMLButtonElement>('#print-scores')!;
+      const status = toolbarRoot.querySelector<HTMLElement>('#workbook-status')!;
       const originalPrint = view.print;
       let requests = 0;
       view.print = () => { requests++; };

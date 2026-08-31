@@ -1,3 +1,8 @@
+import { Signal } from 'signal-polyfill';
+import { SignalMap } from 'signal-utils/map';
+import { readonlySignal } from '../state/readonly-signal.js';
+import type { DeepReadonly, ReadonlySignal } from '../state/readonly-signal.js';
+
 /** Session-only form state. Accepted source and musical history remain the caller's responsibility. */
 export type DraftFields = Record<string, string | boolean | string[]>;
 export type DraftField<F extends object> = Extract<keyof F, string>;
@@ -55,6 +60,9 @@ export interface DraftSnapshot<F extends object> {
   matchesSelection: boolean;
   revision: number | null;
 }
+
+/** Cached reactive views are immutable; snapshot() returns an independent editable copy. */
+export type ReadonlyDraftSnapshot<F extends object> = DeepReadonly<DraftSnapshot<F>>;
 
 export type DraftResolution<F extends object> = {
   ok: true;
@@ -158,14 +166,26 @@ function copyTarget<F extends object>(value: DraftTarget<F>): Target {
 }
 
 function copyStored(value: StoredDraft): StoredDraft {
-  return {
-    target: value.target ? copyTarget(value.target) : null,
-    selected: value.selected ? { ...value.selected } : null,
-    revision: value.revision,
-    fields: new Map([...value.fields].map(([key, field]) => [key, copyData(field)])),
-    unavailable: value.unavailable,
-    error: value.error,
-  };
+  // All accepted data was copied at the boundary. Transitions replace field
+  // records and targets, so only the draft record and its editable map need copying.
+  return { ...value, fields: new Map(value.fields) };
+}
+
+function sameDraft(left: StoredDraft, right: StoredDraft): boolean {
+  if (left.revision !== right.revision || left.unavailable !== right.unavailable || left.error !== right.error
+    || !equal(left.target, right.target) || !equal(left.selected, right.selected)
+    || left.fields.size !== right.fields.size) return false;
+  const previous = [...left.fields];
+  return [...right.fields].every(([key, field], index) =>
+    key === previous[index][0] && equal(field, previous[index][1]));
+}
+
+function freezeData<T>(value: T): DeepReadonly<T> {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) freezeData(child);
+    Object.freeze(value);
+  }
+  return value as DeepReadonly<T>;
 }
 
 function validateContext<F extends object>(context: DraftContext<F>): void {
@@ -267,22 +287,59 @@ function snapshot<F extends object>(form: string, state: StoredDraft): DraftSnap
  * their original identity and field baselines. This class never edits a project.
  */
 export class DraftStore<Forms extends { [Name in keyof Forms]: object } = Record<string, DraftFields>> {
-  private readonly drafts = new Map<string, StoredDraft>();
+  // SignalMap tracks each form separately. A transition is staged privately and
+  // published once, so observers never see partly validated fields or targets.
+  private readonly drafts = new SignalMap<string, StoredDraft>();
+  private readonly views = new Map<string, ReadonlySignal<ReadonlyDraftSnapshot<Values>>>();
 
-  get dirtyCount(): number { return [...this.drafts.values()].filter(state => state.fields.size > 0).length; }
+  readonly signals = Object.freeze({
+    dirtyCount: readonlySignal(new Signal.Computed(() => {
+      let count = 0;
+      for (const state of this.drafts.values()) if (state.fields.size) count++;
+      return count;
+    })),
+    dirtyDrafts: readonlySignal(new Signal.Computed(() => {
+      const summaries: DraftSummary[] = [];
+      for (const [formId, state] of this.drafts) {
+        if (!state.fields.size) continue;
+        const view = this.view(formId).get();
+        summaries.push({
+          formId, documentId: view.documentId!, targetId: view.targetId!, label: view.label!,
+          dirtyFields: view.dirtyFields, status: view.status, message: view.message,
+        });
+      }
+      return freezeData(summaries);
+    }, { equals: equal })),
+  });
+
+  get dirtyCount(): number { return this.signals.dirtyCount.get(); }
 
   get dirtyDrafts(): readonly DraftSummary[] {
-    return [...this.drafts].filter(([, state]) => state.fields.size > 0).map(([formId, state]) => {
-      const view = snapshot<Values>(formId, state);
-      return {
-        formId, documentId: view.documentId!, targetId: view.targetId!, label: view.label!,
-        dirtyFields: [...view.dirtyFields], status: view.status, message: view.message,
-      };
-    });
+    return copyData(this.signals.dirtyDrafts.get());
+  }
+
+  /** Read this selector in a reactive UI; unrelated forms keep their cached views. */
+  select<Name extends Extract<keyof Forms, string>>(form: Name): ReadonlySignal<ReadonlyDraftSnapshot<Forms[Name]>> {
+    return this.view(form) as unknown as ReadonlySignal<ReadonlyDraftSnapshot<Forms[Name]>>;
   }
 
   snapshot<Name extends Extract<keyof Forms, string>>(form: Name): DraftSnapshot<Forms[Name]> {
-    return snapshot(form, this.drafts.get(form) ?? emptyDraft());
+    return copyData(this.select(form).get()) as DraftSnapshot<Forms[Name]>;
+  }
+
+  private view(form: string): ReadonlySignal<ReadonlyDraftSnapshot<Values>> {
+    let view = this.views.get(form);
+    if (!view) {
+      view = readonlySignal(new Signal.Computed(() =>
+        freezeData(snapshot<Values>(form, this.drafts.get(form) ?? emptyDraft()))));
+      this.views.set(form, view);
+    }
+    return view;
+  }
+
+  private publish(form: string, state: StoredDraft): void {
+    const previous = this.drafts.get(form);
+    if (!previous || !sameDraft(previous, state)) this.drafts.set(form, state);
   }
 
   sync<Name extends Extract<keyof Forms, string>>(form: Name, context: DraftSyncContext<Forms[Name]>): DraftSnapshot<Forms[Name]> {
@@ -294,8 +351,8 @@ export class DraftStore<Forms extends { [Name in keyof Forms]: object } = Record
     state.revision = context.revision;
     if (!state.fields.size) bind(state, selected);
     else refresh(state, context);
-    this.drafts.set(form, state);
-    return snapshot(form, state);
+    this.publish(form, state);
+    return this.snapshot(form);
   }
 
   patch<Name extends Extract<keyof Forms, string>>(form: Name, fields: Partial<Forms[Name]>): DraftSnapshot<Forms[Name]> {
@@ -316,16 +373,16 @@ export class DraftStore<Forms extends { [Name in keyof Forms]: object } = Record
       }
     }
     state.error = null;
-    this.drafts.set(form, state);
-    return snapshot(form, state);
+    this.publish(form, state);
+    return this.snapshot(form);
   }
 
   resolve<Name extends Extract<keyof Forms, string>>(form: Name, context: DraftContext<Forms[Name]>): DraftResolution<Forms[Name]> {
     validateContext(context);
     const state = copyStored(this.drafts.get(form) ?? emptyDraft());
     refresh(state, context);
-    this.drafts.set(form, state);
-    const view = snapshot<Forms[Name]>(form, state);
+    this.publish(form, state);
+    const view = this.snapshot(form);
     if (view.status !== 'clean' && view.status !== 'dirty') {
       return { ok: false, status: view.status, message: view.message, conflicts: view.conflicts };
     }
@@ -349,8 +406,8 @@ export class DraftStore<Forms extends { [Name in keyof Forms]: object } = Record
       });
       state.error = null;
     }
-    this.drafts.set(form, state);
-    return snapshot(form, state);
+    this.publish(form, state);
+    return this.snapshot(form);
   }
 
   /** Call only after the corresponding source transaction succeeds. */
@@ -361,8 +418,8 @@ export class DraftStore<Forms extends { [Name in keyof Forms]: object } = Record
       throw new Error('The accepted target does not match this form draft.');
     }
     bind(state, target);
-    this.drafts.set(form, state);
-    return snapshot(form, state);
+    this.publish(form, state);
+    return this.snapshot(form);
   }
 
   /** Explicit discard/rebind, also used after successful creation or Apply and next. */
@@ -371,18 +428,18 @@ export class DraftStore<Forms extends { [Name in keyof Forms]: object } = Record
     const state = copyStored(this.drafts.get(form) ?? emptyDraft());
     bind(state, target);
     state.selected = target ? { documentId: target.documentId, id: target.id } : null;
-    this.drafts.set(form, state);
-    return snapshot(form, state);
+    this.publish(form, state);
+    return this.snapshot(form);
   }
 
   /** Keep source validation failures local without losing any user-entered field. */
   fail<Name extends Extract<keyof Forms, string>>(form: Name, message: string): DraftSnapshot<Forms[Name]> {
     const state = copyStored(this.drafts.get(form) ?? emptyDraft());
     state.error = message;
-    this.drafts.set(form, state);
-    return snapshot(form, state);
+    this.publish(form, state);
+    return this.snapshot(form);
   }
 
   /** The caller must confirm loss of any listed dirty drafts before using this. */
-  discardAll(): void { this.drafts.clear(); }
+  discardAll(): void { if (this.drafts.size) this.drafts.clear(); }
 }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { EventMarkingsEditor } from '../src/authoring/event-markings-editor.js';
 import type { EventMarkingsContext } from '../src/authoring/event-markings-editor.js';
@@ -9,7 +9,6 @@ import type { InspectorContext } from '../src/authoring/inspector-forms.js';
 import { createProject } from '../src/authoring/project.js';
 import type { EventInput } from '../src/authoring/types.js';
 
-const shell = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const source = `<music-staff id="staff" label="Flute"><music-measure id="bar1" number="1" incomplete>
   <music-note id="a" pitch="C4" duration="quarter"><music-articulation id="a-mark" type="accent" placement="below" data-keep="old-side"><!-- preserve --></music-articulation></music-note>
   <music-note id="b" pitch="D4" duration="quarter"><music-ornament id="b-mark" type="trill" placement="below" data-keep="old-side"></music-ornament></music-note>
@@ -31,7 +30,7 @@ function changeMark(id: string, value: string): void {
 function accepted(session: EditorSession) { return { project: session.project, revision: session.revision, cursor: session.cursor, selection: session.selectionId, undo: session.canUndo, redo: session.canRedo }; }
 
 function fixture() {
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   el('workspace-tools').hidden = false; el('selection-inspector').hidden = false;
   const session = new EditorSession(createProject(source, 'Inspection study')); session.select('a');
   const propertiesContext: Inspection<InspectorContext> = {

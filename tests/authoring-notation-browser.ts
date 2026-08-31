@@ -5,6 +5,7 @@ import type { ArticulationType, EventMarking, MusicEvent, OrnamentType, PitchAlt
 import type { AuthorProject } from '../src/authoring/types.js';
 import type { TemplateId } from '../src/authoring/templates.js';
 import type { SystemGeometry } from '../src/engraving/render.js';
+import { authorActiveElement, authorControlParent, findAuthorControl, queryAuthorControl } from './author-fixture.js';
 
 interface Action { kind: 'click' | 'choice' | 'text' | 'key' | 'scroll' | 'file'; target: string; value?: string }
 interface Download { name: string; blob: Blob; type: string }
@@ -37,7 +38,11 @@ let runId = crypto.randomUUID(); let sequence = 0; let busy = false; let latest:
 
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function equal(actual: unknown, expected: unknown, message: string): void { assert(JSON.stringify(actual) === JSON.stringify(expected), `${message}\nExpected: ${JSON.stringify(expected)}\nReceived: ${JSON.stringify(actual)}`); }
-function field<T extends HTMLElement = HTMLElement>(f: Fixture, selector: string): T { const element = f.doc.querySelector<T>(selector); assert(element, `Missing actual Author control ${selector}.`); return element; }
+function field<T extends HTMLElement = HTMLElement>(f: Fixture, selector: string): T { const element = queryAuthorControl<T>(f.doc, selector); assert(element, `Missing actual Author control ${selector}.`); return element; }
+function closestControl(element: HTMLElement, selector: string): HTMLElement | null {
+  for (let current: HTMLElement | null = element; current; current = authorControlParent(current)) if (current.matches(selector)) return current;
+  return null;
+}
 function value(f: Fixture, selector: string): string { return field<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(f, selector).value; }
 function visible(f: Fixture, element: Element): boolean { const css = f.view.getComputedStyle(element); return !!element.getClientRects().length && css.display !== 'none' && css.visibility !== 'hidden'; }
 function box(element: Element): Box { const { left, top, right, bottom, width, height } = element.getBoundingClientRect(); return { left, top, right, bottom, width, height }; }
@@ -81,7 +86,7 @@ function canonical(f: Fixture, html: string): string { const template = f.doc.cr
 function explicitVoiceIds(f: Fixture): Set<string> { return new Set([...sourceElement(f).querySelectorAll('music-voice[id]')].map(element => element.id)); }
 function meaning(model: Score, stableVoices: ReadonlySet<string>): string { return JSON.stringify(model.staves.map(staff => ({ ...staff, notation: staff.notation ?? 'pitched', measures: staff.measures.map(measure => ({ ...measure, voices: measure.voices.map((voice, index) => ({ ...voice, id: stableVoices.has(voice.id) ? voice.id : { implicitOf: measure.id, index } })) })) }))); }
 function music(f: Fixture): string { return meaning(score(f), explicitVoiceIds(f)); }
-function cursor(f: Fixture): object { return { staff: value(f, '#staff-select'), measure: value(f, '#measure-select'), voice: value(f, '#event-voice'), event: f.doc.querySelector<HTMLElement>('#event-navigator [data-source-id][aria-pressed="true"]')?.dataset.sourceId ?? null }; }
+function cursor(f: Fixture): object { return { staff: value(f, '#staff-select'), measure: value(f, '#measure-select'), voice: value(f, '#event-voice'), event: queryAuthorControl<HTMLElement>(f.doc, '#event-navigator [data-source-id][aria-pressed="true"]')?.dataset.sourceId ?? null }; }
 function recipe(f: Fixture): object { return { ...Object.fromEntries(['event-kind', 'event-pitch', 'event-pitches', 'event-alteration', 'event-direction', 'event-duration', 'event-dots', 'event-accidental-display', 'event-stem', 'event-beam', 'insert-position'].map(id => [id, value(f, `#${id}`)])), measureRest: field<HTMLInputElement>(f, '#event-measure-rest').checked, rhythmic: field<HTMLInputElement>(f, '#event-rhythmic').checked }; }
 function snapshot(f: Fixture): Snapshot { return { source: source(f), music: music(f), revision: revision(f), cursor: cursor(f), recipe: recipe(f), undo: !field<HTMLButtonElement>(f, '#undo').disabled, redo: !field<HTMLButtonElement>(f, '#redo').disabled }; }
 function unchanged(f: Fixture, before: Snapshot, label: string, selection = true): void { equal(source(f), before.source, `${label}: Source stays unchanged`); equal(music(f), before.music, `${label}: canonical music and real child IDs stay unchanged`); equal(revision(f), before.revision, `${label}: no authored revision`); equal([!field<HTMLButtonElement>(f, '#undo').disabled, !field<HTMLButtonElement>(f, '#redo').disabled], [before.undo, before.redo], `${label}: preserve Undo/Redo`); if (selection) equal(cursor(f), before.cursor, `${label}: preserve source cursor`); }
@@ -92,8 +97,8 @@ async function popup(f: Fixture, trigger: string, panel: string, open = true): P
 async function closePopovers(f: Fixture): Promise<void> { for (const panel of f.doc.querySelectorAll<HTMLElement>('[popover]:popover-open')) { if (!panel.matches(':popover-open')) continue; const close = panel.querySelector<HTMLButtonElement>(`button[popovertarget="${panel.id}"][popovertargetaction="hide"]`); assert(close, `${panel.id} needs its actual Close button.`); clickElement(f, close); } await frames(f); }
 async function tools(f: Fixture, open: boolean): Promise<void> { if (visible(f, field(f, '#workspace-tools')) !== open) click(f, open ? '#tools-toggle' : '#tools-hide'); await frames(f); await settle(f); equal(visible(f, field(f, '#workspace-tools')), open, 'Tools keep their requested visibility'); }
 async function tab(f: Fixture, name: keyof typeof panels): Promise<void> { await tools(f, true); click(f, `#tool-tab-${name}`); await waitFor(f, () => field(f, `#tool-tab-${name}`).getAttribute('aria-selected') === 'true' && visible(f, field(f, `#${panels[name]}`)), `Open ${name} tools`); await frames(f); await settle(f); }
-async function inlineDetails(f: Fixture, element: HTMLElement): Promise<void> { const chain: HTMLDetailsElement[] = []; for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent.localName === 'details') chain.unshift(parent as HTMLDetailsElement); for (const details of chain) if (!details.open) { const summary = details.querySelector<HTMLElement>(':scope > summary'); assert(summary, 'An inline detail needs a summary.'); clickElement(f, summary); } await frames(f); }
-async function expose(f: Fixture, selector: string): Promise<void> { const element = field(f, selector); const pane = element.closest<HTMLElement>('[role="tabpanel"]'); if (pane) { const name = (Object.keys(panels) as (keyof typeof panels)[]).find(name => panels[name] === pane.id); if (name) await tab(f, name); } const panel = element.closest<HTMLElement>('[popover]'); if (panel && !panel.matches(':popover-open')) { const trigger = f.doc.querySelector<HTMLButtonElement>(`button[popovertarget="${panel.id}"]:not([popovertargetaction="hide"])`); assert(trigger?.id, `${panel.id} needs a visible invoker.`); if (trigger.closest('[popover]')) await expose(f, `#${trigger.id}`); await popup(f, `#${trigger.id}`, `#${panel.id}`); } await inlineDetails(f, element); }
+async function inlineDetails(f: Fixture, element: HTMLElement): Promise<void> { const chain: HTMLDetailsElement[] = []; for (let parent = authorControlParent(element); parent; parent = authorControlParent(parent)) if (parent.localName === 'details') chain.unshift(parent as HTMLDetailsElement); for (const details of chain) if (!details.open) { const summary = details.querySelector<HTMLElement>(':scope > summary'); assert(summary, 'An inline detail needs a summary.'); clickElement(f, summary); } await frames(f); }
+async function expose(f: Fixture, selector: string): Promise<void> { const element = field(f, selector); const pane = closestControl(element, '[role="tabpanel"]'); if (pane) { const name = (Object.keys(panels) as (keyof typeof panels)[]).find(name => panels[name] === pane.id); if (name) await tab(f, name); } const panel = closestControl(element, '[popover]'); if (panel && !panel.matches(':popover-open')) { const trigger = f.doc.querySelector<HTMLButtonElement>(`button[popovertarget="${panel.id}"]:not([popovertargetaction="hide"])`); assert(trigger?.id, `${panel.id} needs a visible invoker.`); if (closestControl(trigger, '[popover]')) await expose(f, `#${trigger.id}`); await popup(f, `#${trigger.id}`, `#${panel.id}`); } await inlineDetails(f, element); }
 async function location(f: Fixture, staffId: string, measureId: string, voice = '0'): Promise<void> { await popup(f, '#location-trigger', '#location-panel'); choose(f, '#staff-select', staffId); choose(f, '#measure-select', measureId); choose(f, '#event-voice', voice); await closePopovers(f); await settle(f); }
 async function choosePart(f: Fixture, id: string): Promise<void> { await popup(f, '#location-trigger', '#location-panel'); choose(f, '#part-select', id); await closePopovers(f); await settle(f); }
 async function enter(f: Fixture, here = false): Promise<void> { await tools(f, false); if (here || !visible(f, field(f, '#toggle-entry'))) { await popup(f, '#location-trigger', '#location-panel'); click(f, '#start-entry-here'); } else if (field(f, '#toggle-entry').getAttribute('aria-pressed') !== 'true') click(f, '#toggle-entry'); await frames(f); await settle(f); }
@@ -184,12 +189,12 @@ function notationGeometry(f: Fixture, expected: StaffNotation): number {
   return staves;
 }
 function focusIn(f: Fixture, container: HTMLElement, label: string): void {
-  const active = f.doc.activeElement as HTMLElement | null;
+  const active = authorActiveElement(f.doc) as HTMLElement | null;
   assert(active && container.contains(active) && visible(f, active) && !active.matches(':disabled'), `${label}: focus remains on a visible, enabled control or status in this editor.`);
 }
 function focusInToolViewport(f: Fixture, label: string): void {
   const pane = field(f, '#selection-inspector'); focusIn(f, pane, label);
-  const active = f.doc.activeElement!; const bounds = box(pane); const activeBox = box(active);
+  const active = authorActiveElement(f.doc)!; const bounds = box(pane); const activeBox = box(active);
   assert(activeBox.height <= bounds.height ? inside(activeBox, bounds, 1) : activeBox.top >= bounds.top - 1 && activeBox.top < bounds.bottom,
     `${label}: the focused field must be revealed inside the tool pane, not clipped below it.`);
 }
@@ -489,7 +494,7 @@ tests.push(
         assert(!field(f, '#edit-selected-event').hasAttribute('popovertarget'), 'An exact attached-mark edit routes directly to its row, not the owner’s scalar quick editor.');
         click(f, '#edit-selected-event'); await waitFor(f, () => visible(f, field(f, '#event-markings-editor')), 'Open the explicitly selected child’s existing Edit tool'); await frames(f);
         equal(field(f, '#event-markings-editor').dataset.activeMarkingId, child, 'The attached editor retains the exact route identity');
-        const row = rowFor(f, child); assert(row.contains(f.doc.activeElement), 'The exact clicked mark’s own field receives focus.'); focusInToolViewport(f, 'Open the exact printed marking');
+        const row = rowFor(f, child); assert(row.contains(authorActiveElement(f.doc)), 'The exact clicked mark’s own field receives focus.'); focusInToolViewport(f, 'Open the exact printed marking');
         unchanged(f, baseline, 'Opening a child row', false); await tools(f, false);
       }
       assert(JSON.stringify(childBoxes[0]) !== JSON.stringify(childBoxes[1]), 'Separate children have distinct actual geometry.');
@@ -501,7 +506,7 @@ tests.push(
       await quick(f, chord); assert(!visible(f, field(f, '#note-microtone')), 'Chord corrections must not silently choose one pitch for scalar accidental edits.');
       assert(/chord pitches/i.test(field(f, '#note-advanced-edit').textContent ?? ''), 'The quick route names the actual chord task.');
       const future = recipe(f); click(f, '#note-advanced-edit'); await frames(f); await expose(f, '#selected-pitches');
-      equal(f.doc.activeElement?.id, 'selected-pitches', 'Advanced chord route focuses the accepted chord’s pitch field');
+      equal(authorActiveElement(f.doc)?.id, 'selected-pitches', 'Advanced chord route focuses the accepted chord’s pitch field');
       write(f, '#selected-pitches', 'C4 Eqs4 G4'); const beforeChord = await mutate(f, () => click(f, '#update-event'), () => event(f, chord).pitches.some(pitch => pitch.alter === 0.5), 'Apply the explicit advanced chord correction');
       equal(event(f, chord).pitches.map(pitchText), ['C4', 'Eqs4', 'G4'], 'The actual chord route writes quarter-tone spelling without changing other pitches'); equal(recipe(f), future, 'Advanced accepted-event correction preserves the independent writing recipe');
       await tools(f, false); await history(f, beforeChord);
@@ -610,7 +615,7 @@ function pitchCaseQuickVisible(f: Fixture, selector: string, label: string): voi
   assert(inside(box(panel), viewport(f), 1), `${label}: the complete popover fits the actual viewport.`);
   assert(f.doc.documentElement.scrollWidth <= f.view.innerWidth + 1, `${label}: the popover creates no horizontal document overflow.`);
   const target = field(f, selector);
-  assert(f.doc.activeElement === target, `${label}: initial focus belongs to the accepted ${selector} field.`);
+  assert(authorActiveElement(f.doc) === target, `${label}: initial focus belongs to the accepted ${selector} field.`);
   focusIn(f, panel, label);
   const body = field(f, '.note-editor-body'); const bodyBox = box(body);
   const footer = box(field(f, '.note-editor-footer'));
@@ -649,9 +654,9 @@ async function pitchCaseReopen(f: Fixture, id: string, initial: string, label: s
   const close = field(f, '#close-note-editor'); close.focus();
   const width = f.view.innerWidth; const height = f.view.innerHeight;
   await resize(f, width, height + 1);
-  assert(f.doc.activeElement === close, `${label}: passive layout refresh must not steal focus.`);
+  assert(authorActiveElement(f.doc) === close, `${label}: passive layout refresh must not steal focus.`);
   await resize(f, width, height);
-  assert(f.doc.activeElement === close, `${label}: restoring viewport size must not steal focus.`);
+  assert(authorActiveElement(f.doc) === close, `${label}: restoring viewport size must not steal focus.`);
   unchanged(f, before, `${label}: passive resize does not change accepted music`);
   await closePopovers(f);
   return { width, height, overflow };
@@ -1112,8 +1117,8 @@ function safeDiagnostic(f: Fixture | undefined): object {
   return { workspace: f.workspace, url: `/author.html?workspace=${f.workspace}`, viewport: [f.view.innerWidth, f.view.innerHeight],
     state: read(() => ({ ...f.doc.body.dataset })), sourceCursor: read(() => cursor(f)), nextRecipe: read(() => recipe(f)),
     status: read(() => Object.fromEntries(['author-errors', 'author-status', 'source-error', 'event-alteration-status', 'event-markings-target', 'event-markings-draft-status', 'note-editor-error', 'page-preflight']
-      .map(id => [id, f.doc.getElementById(id)?.textContent?.trim().slice(0, 1800) ?? '']))),
-    focus: read(() => ({ id: f.doc.activeElement?.id, row: (f.doc.activeElement as Element | null)?.closest<HTMLElement>('[data-marking-row]')?.dataset.markingId })),
+      .map(id => [id, findAuthorControl(f.doc, id)?.textContent?.trim().slice(0, 1800) ?? '']))),
+    focus: read(() => ({ id: authorActiveElement(f.doc)?.id, row: authorActiveElement(f.doc)?.closest<HTMLElement>('[data-marking-row]')?.dataset.markingId })),
     notationViewport: read(() => scoreClip(f)), score: read(() => ({ staves: score(f).staves.map(staff => ({ id: staff.id, notation: staff.notation ?? 'pitched', bars: staff.measures.length })), events: events(f).length, childMarks: marks(f).length })),
     recentActions: f.actions.slice(-18), confirmations: f.confirmations.slice(-3), acceptedTransactions: f.commits, sourceSupplements: f.sourceSetups, boundaryErrors: f.boundaryErrors };
 }

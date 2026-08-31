@@ -1,5 +1,7 @@
 import { ARTICULATION_TYPES, ORNAMENT_TYPES, harmonyIntervalText, pitchDescription } from '../model/index.js';
 import type { ArticulationType, EventMarking, MusicEvent, OrnamentType, Score, Staff } from '../model/types.js';
+import { asControlScope } from './control-scope.js';
+import type { ControlRoot, ControlScope } from './control-scope.js';
 import type { EditorSession } from './editor.js';
 import { inspectRoadTieChain } from './event-markings-commands.js';
 import type { RoadTieChainInspection } from './event-markings-commands.js';
@@ -131,6 +133,7 @@ function dependencyDescription(value: unknown): string {
 /** A selected-event draft, independent of scalar note fields and measure-level instructions. */
 export class EventMarkingsEditor {
   private readonly options: EventMarkingsEditorOptions;
+  private readonly scope: ControlScope;
   private readonly doc: Document;
   private readonly abort = new AbortController();
   private readonly store = new DraftStore<{ markings: EventMarkingsDraft }>();
@@ -152,8 +155,8 @@ export class EventMarkingsEditor {
   private initialized = false;
   private disposed = false;
 
-  constructor(options: EventMarkingsEditorOptions, doc: Document = document) {
-    this.options = options; this.doc = doc;
+  constructor(options: EventMarkingsEditorOptions, root: ControlRoot = document) {
+    this.options = options; this.scope = asControlScope(root); this.doc = this.scope.document;
     const host = this.el('event-markings-rows');
     for (const eventType of ['input', 'change']) host.addEventListener(eventType, event => this.run(() => {
       const element = event.target as Element | null;
@@ -549,7 +552,7 @@ export class EventMarkingsEditor {
     const chain = place ? roadChain(score, place) : null;
     const blocked = !!view.blockedReason;
     const panel = this.el('event-markings-editor');
-    const focused = this.doc.activeElement as HTMLElement | null, hadFocus = !!focused && panel.contains(focused);
+    const focused = this.scope.activeElement as HTMLElement | null, hadFocus = !!focused && panel.contains(focused);
     const context = this.options.context();
     const unavailableInspection = typeof context.inspectionSelectionId === 'string' && !view.targetId;
     const caption = this.el('event-markings-target');
@@ -639,7 +642,7 @@ export class EventMarkingsEditor {
     this.displayed = { documentId: view.documentId, eventId: view.targetId, event: place?.event, blockedReason: view.blockedReason, chain };
     this.discardKey = inspectionDiscardKey(context, this.options.session.project.id, view);
     this.visibleReviewSignature = this.reviewSignature(view);
-    syncInspectionCaptions(this.doc);
+    syncInspectionCaptions(this.scope);
     if (hadFocus && (!focused!.isConnected || (focused as HTMLButtonElement).disabled || focused!.closest('[hidden], [inert]'))) this.focusStatus();
   }
 
@@ -662,7 +665,7 @@ export class EventMarkingsEditor {
     const status = this.el('event-markings-draft-status');
     const caption = this.el('event-markings-target');
     const target = !status.closest('[hidden], [inert]') ? status
-      : this.doc.getElementById(caption.dataset.captionId ?? caption.id) ?? caption;
+      : this.scope.getElementById(caption.dataset.captionId ?? caption.id) ?? caption;
     target.tabIndex = -1; this.focusInPane(target);
   }
   private notify(): void {
@@ -680,7 +683,7 @@ export class EventMarkingsEditor {
   }
   private listen(id: string, action: () => void): void { this.el(id).addEventListener('click', () => this.run(action), { signal: this.abort.signal }); }
   private el<T extends HTMLElement = HTMLElement>(id: string): T {
-    const element = this.doc.getElementById(id);
+    const element = this.scope.getElementById(id);
     if (!element) throw new Error(`Missing attached-markings control: ${id}`);
     return element as T;
   }

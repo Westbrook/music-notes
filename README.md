@@ -91,9 +91,13 @@ DOM reader → typed score + source map + diagnostics
 Exact musical validation → system planning → VexFlow SVG
 ```
 
-`src/model` owns pitch, meter, rational durations, and validation without depending on a browser or renderer. `src/dom` reads and serializes the authoring grammar. `src/engraving` handles notation and system layout. `src/components` observes source changes and manages rendering, accessibility, and browser lifecycle.
+`src/model` owns pitch, meter, rational durations, and validation without depending on a browser or renderer. `src/dom` reads and serializes the authoring grammar. `src/engraving` handles notation and system layout. `src/components` observes source changes and manages rendering, accessibility, and browser lifecycle, with Lit templates for score presentation and stable mounts for engraved SVG.
 
 `src/authoring` adds commands, session history, portable projects, local recovery, part projections, and page composition. Its accepted light DOM remains the editable musical source; model snapshots, SVG, and page previews are projections. Visual commands and **Apply source** validate changes before committing them.
+
+Author's Lit components live in `src/authoring/ui`; its entry point is `src/authoring/bootstrap.ts`. The workbook toolbar, view switch, Source editor, navigator, and score viewport own shadow roots with explicit properties and events. Workspace and panel frames arrange complete caller-owned regions through named slots. The top-level shell, Properties/shared selection controls, musical source, and physical pages retain their native logical boundaries.
+
+Editor transactions, workspace choices, form drafts, and workbook controls use independent `signal-polyfill` and `signal-utils` stores with readonly selectors. `SignalController` connects views and releases subscriptions on disconnect. `ControlScope` registers only owned control roots; composed focus/geometry helpers and public score projection snapshots preserve interaction across slots and shadow roots. Native controls and measured score nodes retain their identities across updates. See [UI and state architecture](docs/ui-state-architecture.md) for component APIs and reuse. Initial delivery is about **48.3 kB gzip for the workbook** and **606.5 kB for Author**, within the **50 kB / 630 kB** build budgets.
 
 When embedding the notation library, edit source attributes or component properties to change music. Do not edit the generated SVG. Canonical score serialization keeps musical values and IDs, not the original HTML formatting or all application metadata; download an Author project to retain the complete document.
 
@@ -103,6 +107,7 @@ When embedding the notation library, edit source attributes or component propert
 npm test
 npm run typecheck
 npm run build
+npm run check:bundle
 ```
 
 Tests cover musical semantics, DOM parsing/serialization, layout, authoring commands and history, projects and recovery, part projections, page planning, and native select enhancement. The workbook supplies visual cases to inspect at desktop, narrow, and print widths. Automated checks do not establish that every possible score has ideal engraving or page turns.
@@ -110,6 +115,8 @@ Tests cover musical semantics, DOM parsing/serialization, layout, authoring comm
 With the dev server running, open `/tests/browser.html` on the same origin and select **Run browser regressions**. This checks visible-ink spacing, rests, ties, nested tuplets, ensemble joins, native resize boundaries, source edits, lifecycle behavior, and fixed print preview; it is separate from `npm test`.
 
 Open `/tests/authoring-browser.html` and select **Run Author regressions** for the actual Author controls, recovery, native selects, parts, and physical page composition. Its fixtures use separate recovery slots and intercept print requests; they do not establish that a native dialog appeared, a PDF was saved, fonts were embedded, or paper output matched the preview.
+
+Open `/tests/shadow-dom-browser.html` and select **Run shadow component checks** for independent component state, slots, native labels/descriptions and form behavior, composed focus and scrolling, popover placement, Source return focus, and isolated score IDs. These are DOM/native-API checks, not screen-reader or trusted keyboard/touch qualification.
 
 Open `/tests/notation-browser.html` and select **Run notation expansion checks** for actual quarter-tone glyphs, one-line rhythm engraving, rests, beams, tuplets, ties, mixed-staff alignment, and resize/print projection checks. The fixtures remain visible for review; the [notation expansion record](docs/notation-expansion.md) states the supported scope and performer checks.
 

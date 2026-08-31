@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { EventMarkingsEditor } from '../src/authoring/event-markings-editor.js';
 import type { EventMarkingsContext } from '../src/authoring/event-markings-editor.js';
@@ -464,7 +464,6 @@ describe('marking identity through duplication, backup, and parts', () => {
 });
 
 // Exercise the actual author controls without main, stylesheets, or remote assets.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const uiCleanups: (() => void)[] = [];
 
 function control<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -474,7 +473,7 @@ function control<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 function markingsFixture(source = sourceFor('road'), selectionId = 'n') {
-  document.body.innerHTML = shellMarkup;
+  mountAuthorFixture();
   const editor = session(source);
   editor.select(selectionId);
   const context: EventMarkingsContext = { mode: 'write', selectionId: editor.selectionId, rangeEventIds: [selectionId] };

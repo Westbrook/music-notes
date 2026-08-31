@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { EventMarkingsEditor } from '../src/authoring/event-markings-editor.js';
 import type { EventMarkingsContext } from '../src/authoring/event-markings-editor.js';
@@ -10,7 +10,6 @@ import { MarkingsEditor } from '../src/authoring/markings-editor.js';
 import type { MarkingsContext } from '../src/authoring/markings-editor.js';
 import { createProject } from '../src/authoring/project.js';
 
-const shell = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const source = `<music-staff id="staff" notation="three-roads"><music-measure id="bar"><music-road id="n" direction="higher" duration="whole"><music-articulation id="accent" type="accent"></music-articulation><music-ornament id="ornament" type="trill"></music-ornament><music-interval id="third" value="b3" placement="below"></music-interval></music-road></music-measure></music-staff>`;
 const cleanups: (() => void)[] = [];
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,7 +18,7 @@ function field(id: string): HTMLInputElement | HTMLSelectElement {
 }
 function accepted(editor: EditorSession) { return { project: editor.project, revision: editor.revision, selection: editor.selectionId, cursor: editor.cursor, undo: editor.canUndo, redo: editor.canRedo }; }
 function fixture() {
-  document.body.innerHTML = shell; el('workspace-tools').hidden = false; el('selection-inspector').hidden = false;
+  mountAuthorFixture(); el('workspace-tools').hidden = false; el('selection-inspector').hidden = false;
   const editor = new EditorSession(createProject(source, 'Focus through the tools')); editor.select('n');
   const context: EventMarkingsContext = { mode: 'write', selectionId: 'n', rangeEventIds: ['n'], inspectionSelectionId: 'n', entryMode: false };
   const controller = new EventMarkingsEditor({ session: editor, context: () => context, select: id => editor.select(id),
@@ -168,7 +167,7 @@ function change(id: string, value: string): void {
   input.dispatchEvent(new Event(input.localName === 'select' ? 'change' : 'input', { bubbles: true }));
 }
 function propertyFixture() {
-  document.body.innerHTML = shell; el('workspace-tools').hidden = false; el('selection-inspector').hidden = false;
+  mountAuthorFixture(); el('workspace-tools').hidden = false; el('selection-inspector').hidden = false;
   el<HTMLDetailsElement>('event-details').open = true;
   const editor = new EditorSession(createProject(pitchedSource, 'Property focus')); editor.select('n1');
   const context: InspectorContext = { mode: 'write', partId: 'score', cursor: { staffId: 'staff', measureId: 'm1', voiceIndex: 0, eventId: 'n1' },
@@ -180,7 +179,7 @@ function propertyFixture() {
   return { editor, forms, marks };
 }
 function instructionFixture(annotations = '', selected = 'n1') {
-  document.body.innerHTML = shell; el('workspace-tools').hidden = false; el('selection-inspector').hidden = true; el('annotation-inspector').hidden = false;
+  mountAuthorFixture(); el('workspace-tools').hidden = false; el('selection-inspector').hidden = true; el('annotation-inspector').hidden = false;
   const html = selected === 'h1' ? pitchedSource.replace('</music-note></music-measure>', `</music-note>${annotations}</music-measure>`)
     : pitchedSource.replace('</music-staff>', '').replace(/<\/music-measure>$/, `${annotations}</music-measure></music-staff>`);
   const editor = new EditorSession(createProject(html, 'Instruction focus')); editor.select(selected);

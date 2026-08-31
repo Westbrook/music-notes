@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview"
   },
   "dependencies": {
+    "lit": "3.3.3",
+    "signal-polyfill": "0.2.2",
+    "signal-utils": "0.21.1",
     "vexflow": "5.0.0"
   },
   "devDependencies": {

@@ -56,40 +56,7 @@ h3 { margin: 32px 0 0; font-size: 1.1rem; font-weight: 650; line-height: 1.35; }
 
 .intro { max-width: 62ch; color: #52564d; font-size: 1.05rem; }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 24px;
-  margin-top: 24px;
-  padding: 15px 0;
-  border-top: 1px solid #dedfd5;
-  border-bottom: 1px solid #dedfd5;
-  font-size: 0.9rem;
-}
-
-.toolbar label { display: flex; align-items: center; gap: 9px; cursor: pointer; }
-
-.toolbar input { width: 1.1rem; height: 1.1rem; margin: 0; }
-
-.toolbar button {
-  color: #fffefa;
-  background: #3e493e;
-  border: 1px solid #3e493e;
-  padding: 7px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.toolbar button:hover { background: #293529; }
-
-.toolbar button:disabled { opacity: 0.65; cursor: wait; }
-
-.toolbar .source-link { margin-left: auto; }
-
 .toolbar-help { margin: 10px 0 0; max-width: 90ch; color: #52564d; font-size: 0.85rem; }
-
-.workbook-status { margin: 12px 0 0; color: #52564d; font-size: 0.85rem; }
 
 .study { padding: 28px 0 34px; border-bottom: 1px solid #dedfd5; }
 
@@ -125,8 +92,6 @@ pre {
 
 @media (max-width: 600px) {
   .sheet-music { padding-top: 30px; }
-  .toolbar { gap: 12px 18px; }
-  .toolbar .source-link { margin-left: 0; }
   .study-head { gap: 9px; }
 }
 
@@ -134,7 +99,7 @@ pre {
   :root { color: #000; background: #fff; }
   body { min-width: 0; }
   .sheet-music { max-width: none; padding: 0; background: #fff; }
-  .toolbar, .toolbar-help, .workbook-status, details, .page-footer { display: none; }
+  .toolbar-help, details, .page-footer { display: none; }
   .page-header { margin-bottom: 16px; }
   h1 { font-size: 30pt; }
   h2 { font-size: 17pt; }

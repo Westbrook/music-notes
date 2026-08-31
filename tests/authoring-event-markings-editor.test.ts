@@ -1,33 +1,33 @@
 // @vitest-environment happy-dom
+import { mountAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { EditorSession } from '../src/authoring/editor.js';
 import { EventMarkingsEditor } from '../src/authoring/event-markings-editor.js';
 import type { EventMarkingsContext } from '../src/authoring/event-markings-editor.js';
 import { createProject } from '../src/authoring/project.js';
 import type { EventMarkingField, ViewMode } from '../src/authoring/types.js';
 
-const shell = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 const accent = '<music-articulation id="accent" type="accent" data-keep="accent"></music-articulation>';
 const ornament = '<music-ornament id="ornament" type="trill" data-keep="ornament"></music-ornament>';
 const third = '<music-interval id="third" value="b3" placement="below" data-keep="interval"></music-interval>';
 const road = (children = `${accent}${ornament}${third}`) => `<music-staff id="staff" notation="three-roads" label="Roads"><music-measure id="bar" number="1"><music-road id="n" direction="higher" duration="half">${children}</music-road><music-road id="other" direction="lower" duration="half"><music-articulation id="other-mark" type="tenuto"></music-articulation></music-road></music-measure></music-staff>`;
 const chain = `<music-staff id="staff" notation="three-roads" label="Roads"><music-measure id="bar" number="1"><music-road id="n" direction="higher" duration="whole" tie="start">${accent}${ornament}${third}</music-road></music-measure><music-measure id="bar-two" number="2"><music-road id="continuation" direction="same" duration="whole" tie="end"><music-articulation id="release" type="fermata" data-keep="release"></music-articulation><music-interval id="continued-third" value="♭3" placement="below" data-keep="continuation"></music-interval></music-road></music-measure></music-staff>`;
 const cleanups: (() => void)[] = [];
+type FixtureControlRoot = Document | HTMLElement | ShadowRoot;
 
-function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+function el<T extends HTMLElement = HTMLElement>(id: string, root: FixtureControlRoot = document): T {
+  const element = root.querySelector<HTMLElement>(`#${id}`);
   if (!element) throw new Error(`Missing actual Author element ${id}`);
   return element as T;
 }
-function row(id: string): HTMLElement {
-  const result = [...el('event-markings-rows').querySelectorAll<HTMLElement>('[data-marking-row]')]
+function row(id: string, root: FixtureControlRoot = document): HTMLElement {
+  const result = [...el('event-markings-rows', root).querySelectorAll<HTMLElement>('[data-marking-row]')]
     .find(element => element.dataset.markingId === id || element.dataset.markingRow === id);
   if (!result) throw new Error(`Missing marking row ${id}`);
   return result;
 }
-function field(id: string, name: EventMarkingField): HTMLInputElement | HTMLSelectElement {
-  const result = row(id).querySelector<HTMLInputElement | HTMLSelectElement>(`[data-marking-field="${name}"]`);
+function field(id: string, name: EventMarkingField, root: FixtureControlRoot = document): HTMLInputElement | HTMLSelectElement {
+  const result = row(id, root).querySelector<HTMLInputElement | HTMLSelectElement>(`[data-marking-field="${name}"]`);
   if (!result) throw new Error(`Missing ${name} field for ${id}`);
   return result;
 }
@@ -35,15 +35,15 @@ function change(control: HTMLInputElement | HTMLSelectElement, value: string): v
   control.value = value;
   control.dispatchEvent(new Event(control.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
 }
-function click(id: string): void { el(id).dispatchEvent(new Event('click', { bubbles: true })); }
+function click(id: string, root: FixtureControlRoot = document): void { el(id, root).dispatchEvent(new Event('click', { bubbles: true })); }
 function remove(id: string): void { row(id).querySelector<HTMLButtonElement>('[data-remove-marking]')!.click(); }
 function state(editor: EditorSession) {
   return { project: editor.project, revision: editor.revision, selection: editor.selectionId, cursor: editor.cursor,
     undo: editor.canUndo, redo: editor.canRedo };
 }
-function fixture(source = road(), selection = 'n') {
-  document.body.innerHTML = shell;
-  el('workspace-tools').hidden = false;
+function fixture(source = road(), selection = 'n', root?: HTMLElement, controls: FixtureControlRoot = root ?? document) {
+  mountAuthorFixture(root);
+  el('workspace-tools', controls).hidden = false;
   const editor = new EditorSession(createProject(source, 'Attachment draft regression'));
   editor.select(selection);
   const context: EventMarkingsContext = { mode: 'write', selectionId: selection, rangeEventIds: [selection] };
@@ -54,9 +54,9 @@ function fixture(source = road(), selection = 'n') {
     editor.select(id); context.selectionId = editor.selectionId;
     context.rangeEventIds = editor.selectionId ? [editor.selectionId] : []; refresh();
   });
-  const openTools = vi.fn(() => { el('workspace-tools').hidden = false; el('selection-inspector').hidden = false; });
+  const openTools = vi.fn(() => { el('workspace-tools', controls).hidden = false; el('selection-inspector', controls).hidden = false; });
   const report = vi.fn();
-  controller = new EventMarkingsEditor({ session: editor, context: () => context, select, openTools, report });
+  controller = new EventMarkingsEditor({ session: editor, context: () => context, select, openTools, report }, controls);
   editor.addEventListener('change', refresh);
   const execute = vi.spyOn(editor, 'execute');
   cleanups.push(() => { editor.removeEventListener('change', refresh); controller.dispose(); execute.mockRestore(); });
@@ -67,6 +67,55 @@ function fixture(source = road(), selection = 'n') {
 }
 
 afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); document.body.replaceChildren(); });
+
+describe('isolated attached-markings controls', () => {
+  it.each(['nested element', 'shadow root'] as const)('edits and applies inside a %s with duplicate document controls', kind => {
+    const global = fixture();
+    const globalAccepted = state(global.editor);
+    const globalInput = field('third', 'value');
+    const globalApply = el<HTMLButtonElement>('apply-event-markings');
+    const globalStatus = el('event-markings-draft-status').textContent;
+    const host = document.createElement('section');
+    document.body.append(host);
+    const controls = kind === 'shadow root' ? host.attachShadow({ mode: 'open' }) : host;
+    const mount = document.createElement('section');
+    controls.append(mount);
+    const scoped = fixture(road(), 'n', mount, controls);
+    const input = field('third', 'value', controls);
+    const apply = el<HTMLButtonElement>('apply-event-markings', controls);
+
+    expect(document.getElementById('apply-event-markings')).toBe(globalApply);
+    expect(input).not.toBe(globalInput);
+    expect(apply).not.toBe(globalApply);
+    change(input, '5');
+    expect(scoped.controller.snapshot()).toMatchObject({ status: 'dirty', canApply: true });
+    expect(scoped.editor.source.querySelector('#third')?.getAttribute('value')).toBe('b3');
+    expect(global.controller.hasDirty).toBe(false);
+    expect(globalInput.value).toBe('b3');
+    expect(globalApply.disabled).toBe(true);
+    expect(el('event-markings-draft-status').textContent).toBe(globalStatus);
+
+    click('apply-event-markings', controls);
+    expect(scoped.editor.source.querySelector('#third')?.getAttribute('value')).toBe('5');
+    expect(scoped.editor.revision).toBe(1);
+    expect(scoped.controller.hasDirty).toBe(false);
+    expect(state(global.editor)).toEqual(globalAccepted);
+    expect(global.execute).not.toHaveBeenCalled();
+    expect(field('third', 'value')).toBe(globalInput);
+
+    const accepted = state(scoped.editor);
+    const disposedSnapshot = scoped.controller.snapshot();
+    scoped.execute.mockClear();
+    scoped.controller.dispose();
+    change(input, '#11');
+    click('add-event-interval', controls);
+    click('apply-event-markings', controls);
+    expect(scoped.controller.snapshot()).toEqual(disposedSnapshot);
+    expect(state(scoped.editor)).toEqual(accepted);
+    expect(scoped.execute).not.toHaveBeenCalled();
+    expect(state(global.editor)).toEqual(globalAccepted);
+  });
+});
 
 describe('automatic placement and inactive legacy fields', () => {
   it.each([

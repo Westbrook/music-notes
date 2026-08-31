@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
+import { createAuthorFixtureDocument } from './author-fixture.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { enhanceSelects } from '../src/authoring/select';
-import authorHtml from '../author.html?raw';
 
 const authorCss = readFileSync('src/authoring/author.css', 'utf8');
 // Parse static shell structure without asking the DOM emulator to load assets.
-const shellMarkup = authorHtml.replace(/<link\b[^>]*>/g, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 
 afterEach(() => document.body.replaceChildren());
 
@@ -147,7 +146,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('applies the same native structure to every dropdown in the authoring shell', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     enhanceSelects(shell);
     const selects = [...shell.querySelectorAll('select')];
     expect(selects.length).toBeGreaterThan(25);
@@ -161,7 +160,8 @@ describe('customizable native authoring selects', () => {
     }
   });
 
-  it('uses explicit option values and button types in the authored HTML, too', () => {
+  it('renders explicit option values and button types before enhancement', () => {
+    const authorHtml = createAuthorFixtureDocument().body.innerHTML;
     const optionTags = authorHtml.match(/<option\b[^>]*>/g) ?? [];
     const buttonTags = authorHtml.match(/<button\b[^>]*>/g) ?? [];
     const selectTags = authorHtml.match(/<select\b[^>]*>/g) ?? [];
@@ -181,7 +181,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('uses a labeled native auto popover for the Document overlay', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const trigger = shell.getElementById('document-menu-trigger')!;
     const panel = shell.getElementById('document-menu')!;
     const close = shell.getElementById('close-document-menu')!;
@@ -218,7 +218,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('gives Document one scrolling body and bounded shared surface styles without competing anchor rules', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const panel = shell.getElementById('document-menu')!;
     const body = panel.querySelector('.document-menu-content');
     expect(panel.classList.contains('surface-popover')).toBe(true);
@@ -246,7 +246,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('keeps both editing modes explicit and prepares deliberate drag through native buttons', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const selectMode = shell.getElementById('select-mode')!;
     const entryMode = shell.getElementById('toggle-entry')!;
     const entryLabel = shell.getElementById('entry-mode-label')!;
@@ -306,7 +306,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('provides nonprinting gesture feedback and an alternative to dragging', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const status = shell.getElementById('pointer-status')!;
     expect(status.hasAttribute('role')).toBe(false);
     expect(status.hasAttribute('aria-live')).toBe(false);
@@ -332,7 +332,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('uses named native choosers for common corrections and opens Properties directly through More', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const more = shell.getElementById('edit-selected-event')!;
     expect(more.closest('#selection-controls')).toBeNull();
     expect(more.closest('#pointer-tools')).toBeNull();
@@ -379,7 +379,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('keeps advanced event fields and guarded Apply separate from the next-entry recipe', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     expect(shell.getElementById('update-event')?.closest('#entry-toolbar, #write-tools')).toBeNull();
     expect(shell.getElementById('update-event')?.closest('#event-details')).not.toBeNull();
     expect(shell.getElementById('update-event')?.closest('#selection-inspector')).not.toBeNull();
@@ -427,7 +427,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('reserves score-local controls outside the independently scrolling notation', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const tools = shell.getElementById('pointer-tools')!;
     const viewport = shell.getElementById('score-scroll')!;
     const dock = shell.getElementById('workspace-dock')!;
@@ -453,7 +453,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('uses one Properties pane with three general tool tabs and native location and entry popovers', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const pane = shell.getElementById('workspace-tools')!;
     expect(pane.hasAttribute('popover')).toBe(false);
     expect(pane.hasAttribute('hidden')).toBe(true);
@@ -491,7 +491,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('keeps part navigation outside the Write-only controls for Read and Pages', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const invoker = shell.getElementById('active-part-label')!;
     expect(invoker.localName).toBe('button');
     expect(invoker.getAttribute('type')).toBe('button');
@@ -507,7 +507,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('names the pointer target without changing insertion command values', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     const select = shell.getElementById('insert-position') as HTMLSelectElement;
     expect([...select.options].map(option => [option.value, option.textContent])).toEqual([
       ['after', 'After target'], ['before', 'Before target'], ['replace', 'Replace target'],
@@ -527,7 +527,7 @@ describe('customizable native authoring selects', () => {
   });
 
   it('starts with score-first collapsed tools and separate score and page mounts', () => {
-    const shell = new DOMParser().parseFromString(shellMarkup, 'text/html');
+    const shell = createAuthorFixtureDocument();
     expect(shell.getElementById('workspace-tools')?.hasAttribute('hidden')).toBe(true);
     expect(shell.getElementById('navigator-panel')?.hasAttribute('open')).toBe(false);
     expect(shell.getElementById('source-panel')?.getAttribute('popover')).toBe('auto');

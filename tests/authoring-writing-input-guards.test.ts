@@ -4,14 +4,12 @@
  * Controlled DOM event ordering proves admission and recovery contracts, not
  * native popover light-dismiss timing, pointer geometry, or browser defaults.
  */
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import authorHtml from '../author.html?raw';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
 import { RecoveryStore } from '../src/authoring/storage.js';
 
-const shell = authorHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)![1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const source = '<music-staff id="staff" label="Input study">'
   + '<music-measure id="bar-1" incomplete><music-voice id="voice-1">'
   + '<music-note id="a" pitch="F4" duration="quarter"></music-note>'
@@ -27,14 +25,15 @@ let sequence = 0;
 const cleanups: (() => void)[] = [];
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const target = document.getElementById(id);
+  const target = findAuthorControl(document, id);
   if (!target) throw new Error('Missing actual Author control #' + id);
   return target as T;
 }
 async function flush(): Promise<void> { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
 async function click(id: string): Promise<void> {
   const button = el<HTMLButtonElement>(id);
-  expect(button.closest('[hidden],[inert]')).toBeNull(); expect(button.disabled).toBe(false);
+  for (let parent: HTMLElement | null = button; parent; parent = authorControlParent(parent)) expect(parent.matches('[hidden],[inert]')).toBe(false);
+  expect(button.disabled).toBe(false);
   button.click(); await flush();
 }
 function notation(id: string, ctrlKey = false): void {
@@ -48,9 +47,9 @@ function pointer(type: 'pointerdown' | 'pointerup', ctrlKey = false): PointerEve
   el('score-host').dispatchEvent(event); return event;
 }
 async function key(value: string): Promise<KeyboardEvent> {
-  expect(document.activeElement).toBe(el('score-editor'));
+  expect(authorActiveElement(document)).toBe(el('score-editor'));
   const event = new KeyboardEvent('keydown', { key: value, bubbles: true, composed: true, cancelable: true });
-  document.activeElement!.dispatchEvent(event); await flush(); return event;
+  authorActiveElement(document)!.dispatchEvent(event); await flush(); return event;
 }
 function recipe() {
   return Object.fromEntries(['event-kind', 'event-pitch', 'event-pitches', 'event-direction', 'event-duration',
@@ -76,7 +75,7 @@ async function mountWriting(): Promise<void> {
   await click('close-entry-value'); el('score-editor').focus({ preventScroll: true });
   expect(el('toggle-entry').getAttribute('aria-pressed')).toBe('true');
   expect(app.session.cursor).toMatchObject({ staffId: 'staff', measureId: 'bar-1', voiceIndex: 0, eventId: 'b' });
-  expect(document.activeElement).toBe(el('score-editor'));
+  expect(authorActiveElement(document)).toBe(el('score-editor'));
 }
 async function applySource(html: string): Promise<void> {
   await click('source-trigger');
@@ -92,7 +91,7 @@ async function applySource(html: string): Promise<void> {
 
 beforeEach(() => {
   for (const attribute of [...document.body.attributes]) document.body.removeAttribute(attribute.name);
-  document.body.innerHTML = shell;
+  mountAuthorFixture();
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
 });
@@ -158,7 +157,7 @@ describe('a transient surface suspends score input without changing Writing', ()
     el('score-editor').append(prose); prose.focus();
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true, cancelable: true });
     prose.dispatchEvent(escape); await flush();
-    expect(escape.defaultPrevented).toBe(false); expect(document.activeElement).toBe(prose);
+    expect(escape.defaultPrevented).toBe(false); expect(authorActiveElement(document)).toBe(prose);
     expect(el('entry-value-chooser').hidden).toBe(false); expect(accepted()).toEqual(before);
   });
 
@@ -235,7 +234,7 @@ describe('Writing keeps its own keyboard destination and view intent', () => {
     expect(app!.session.selection.sourceId).toBe('bar-2');
     el('view-pages').focus(); await click('view-pages');
     el('view-write').focus(); await click('view-write');
-    expect(document.activeElement).toBe(el('view-write'));
+    expect(authorActiveElement(document)).toBe(el('view-write'));
     expect(el('toggle-entry').getAttribute('aria-pressed')).toBe('true');
     expect(app!.session.cursor).toEqual(before.cursor); expect(recipe()).toEqual(before.recipe);
     expect(app!.session.project.sourceHtml).toBe(before.source); expect(app!.session.revision).toBe(before.revision);
