@@ -15,6 +15,19 @@ export interface LayoutGeometry {
   readonly systems: readonly SystemGeometry[];
 }
 
+/** One semantic click, including the intent carried through either hit route. */
+export interface NotationSelectionDetail {
+  readonly sourceId: string;
+  readonly sourceElement: Element | undefined;
+  readonly shiftKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+  readonly clickCount: number;
+  /** Empty for an activation whose originating pointer type is unavailable. */
+  readonly pointerType: string;
+}
+
 let surfaceSequence = 0;
 
 function describeScore(score: Score): string {
@@ -44,7 +57,9 @@ function describeScore(score: Score): string {
             + `${markings.length ? `; ${markings.join('; ')}` : ''}`
             + ` (at ${formatRational(event.onset)}, duration ${formatRational(event.time)} whole notes)`;
         });
-        lines.push(`  Voice ${index + 1}: ${events.join('; ')}.`);
+        const content = events.length ? events.join('; ')
+          : `${measure.incomplete && !measure.pickup ? 'empty draft' : 'empty voice'}; rhythm not yet written`;
+        lines.push(`  Voice ${index + 1}: ${content}.`);
       }
       for (const annotation of measure.annotations) {
         lines.push(`  ${annotation.kind} at ${formatRational(annotation.onset)}: ${annotation.text}`
@@ -87,24 +102,41 @@ export class MusicSurface extends MusicDataElement {
   private printedGeometry?: LayoutGeometry;
   private readonly onNotationChange = () => this.scheduleRender();
   private readonly onSelection = (event: Event) => {
-    const target = event.composedPath().find((node) => node instanceof Element && node.hasAttribute('data-source-id'));
+    if (event.defaultPrevented) return;
+    const path = event.composedPath();
+    const boundary = path.indexOf(this);
+    // A workbook may place a whole score inside a disclosure. Only the native
+    // controls/text within this surface own its inner events.
+    const surfacePath = boundary < 0 ? path : path.slice(0, boundary + 1);
+    if (surfacePath.some(node => node instanceof Element
+      && node.matches('details,summary,button,a[href],input,select,textarea,[contenteditable],.transcript,.diagnostics'))) return;
+    const mouse = event instanceof MouseEvent ? event : undefined;
+    if (mouse && (mouse.button !== 0 || (mouse.ctrlKey && /Mac|iPhone|iPad|iPod/i.test(this.ownerDocument.defaultView?.navigator.platform ?? '')))) return;
+    const target = path.find((node) => node instanceof Element && node.hasAttribute('data-source-id'));
     let sourceId = target instanceof Element ? target.getAttribute('data-source-id')! : undefined;
-    if (!sourceId && this.localName === 'music-system' && event instanceof MouseEvent && event.button === 0) {
-      if (event.composedPath().some(node => node instanceof Element && node.matches('details, summary, button, a, input, select, textarea, [contenteditable]'))) return;
-      sourceId = this.sourceAtPoint(event.clientX, event.clientY);
+    if (!sourceId && this.isRoot && mouse) {
+      sourceId = this.getSourceAtPoint(mouse.clientX, mouse.clientY);
       // The semantic selection owns this click. Embedding editors can avoid
       // replacing it with their blank-staff/measure fallback selection.
-      if (sourceId) event.preventDefault();
+      // Printed instructions still allow native text selection and copying.
+      const source = sourceId ? this.sources.get(sourceId) : undefined;
+      if (sourceId && !source?.matches('music-tempo,music-dynamics,music-direction,music-harmony,music-rehearsal')) event.preventDefault();
     }
     if (!sourceId) return;
-    this.dispatchEvent(new CustomEvent('notation-select', {
-      bubbles: true, composed: true, detail: { sourceId, sourceElement: this.sources.get(sourceId) },
+    this.dispatchEvent(new CustomEvent<NotationSelectionDetail>('notation-select', {
+      bubbles: true, composed: true, detail: {
+        sourceId, sourceElement: this.sources.get(sourceId), shiftKey: mouse?.shiftKey ?? false,
+        ctrlKey: mouse?.ctrlKey ?? false, metaKey: mouse?.metaKey ?? false, altKey: mouse?.altKey ?? false,
+        clickCount: mouse && Number.isInteger(mouse.detail) && mouse.detail >= 0 ? mouse.detail : 0,
+        pointerType: 'pointerType' in event && typeof event.pointerType === 'string' ? event.pointerType : '',
+      },
     }));
   };
   private readonly onHostSelection = (event: Event) => {
-    // Fitting systems have no pointer-active shadow content beneath the score.
-    // Overflow rows and disclosures still route through the shadow listener.
-    if (this.localName === 'music-system' && event.composedPath()[0] === this) this.onSelection(event);
+    // A host hit can bypass the shadow listener on any rendered root. Restrict
+    // this route to host-originated clicks so shadow hits dispatch only once;
+    // nested staff/measure elements remain source data, never another renderer.
+    if (this.isRoot && event.composedPath()[0] === this) this.onSelection(event);
   };
 
   constructor() {
@@ -116,7 +148,7 @@ export class MusicSurface extends MusicDataElement {
   }
 
   /** Resolve inert drawings through their current, measured projection. */
-  private sourceAtPoint(clientX: number, clientY: number): string | undefined {
+  getSourceAtPoint(clientX: number, clientY: number): string | undefined {
     if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return undefined;
     const layout = this.getLayoutGeometry();
     if (!layout) return undefined;

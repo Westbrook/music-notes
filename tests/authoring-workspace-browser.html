@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Notes — workspace task journeys</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { max-width: 1280px; margin: 0 auto; padding: 28px; }
+      h1 { margin-bottom: 8px; font-size: 28px; }
+      h2 { margin: 0 0 10px; font-size: 19px; }
+      h3 { margin: 0 0 8px; font-size: 16px; }
+      p { max-width: 92ch; }
+      a { color: #215e77; }
+      button { padding: 10px 16px; border: 1px solid #215e77; border-radius: 6px; background: #215e77; color: white; font: inherit; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      #summary { padding: 14px; border: 1px solid #b7c4c9; border-radius: 6px; background: white; }
+      [data-state="passed"] { border-color: #528269 !important; }
+      [data-state="failed"] { border-color: #aa4848 !important; }
+      #results { padding-left: 28px; }
+      #results li { padding: 7px 0; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      #results pre, #visual-status { white-space: pre-wrap; overflow-wrap: anywhere; }
+      #results pre { margin: 5px 0; padding: 10px; border-left: 3px solid #aa4848; background: #fff3f2; font: 12px/1.5 ui-monospace, monospace; }
+      .fixture { margin: 18px 0; padding: 14px; border: 1px solid #cbd5da; background: white; }
+      .fixture-note, #environment { color: #52656f; font-size: 12px; }
+      .viewport { max-width: 100%; overflow: auto; }
+      iframe { display: block; border: 1px solid #cbd5da; }
+      .visual-controls { display: flex; flex-wrap: wrap; gap: 10px; }
+      .metrics { margin: 6px 0; padding: 8px 10px; border-left: 3px solid #b7c4c9; background: #f7fafb; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
+      @media (max-width: 600px) { body { padding: 14px; } }
+    </style>
+    <script type="module" src="/tests/authoring-workspace-browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Workspace task journeys</h1>
+      <p>These scripted journeys use the actual Author application, complete musical tasks through visible controls, and inspect accepted musical source, exact timing, working state, real notation geometry, and physical page composition. Each fixture has its own recovery workspace.</p>
+      <p><strong>Qualification limits:</strong> synthetic DOM clicks, key/pointer/wheel events, and form changes exercise application routing, not trusted native input. Pointer taps use unmodified native capture; there is no capture shim in this harness. Explicit stale-event cases deliberately deliver events to disabled or modal-inert controls to test application guards; they do not claim that native users can activate those controls. File cases use only in-memory files: the identity case sends no change event; the asynchronous case defers one fixture File’s own <code>text()</code> and delivers synthetic change events, then cancels the import decision. Neither case uses a picker or accepts an imported project. Confirmations use the app’s actual dialog and visible buttons. Passing these checks does not establish software-keyboard behavior, native picker dismissal, hardware capture, confirmation fallback behavior, a twenty-minute human walkthrough, or saved PDF/printed output.</p>
+      <p><button id="run" type="button">Run scripted workspace journeys</button> <a href="/author.html">Open Author</a> · <a href="/docs/author-layout-review.md">Approved task criteria</a> · <a href="/tests/authoring-browser.html">Author regressions</a></p>
+    </header>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready to run the scripted workspace journeys.</p>
+    <p id="environment"></p>
+    <section aria-labelledby="visual-heading">
+      <h2 id="visual-heading">Actual workspace visual fixtures</h2>
+      <p class="fixture-note">Open the real workspace with meaningful lead-sheet, piano, or ensemble music. These are live application fixtures, not screenshot mockups.</p>
+      <div class="visual-controls"><button id="show-desktop" type="button">Show desktop workspace</button><button id="show-phone" type="button">Show phone workspace</button><button id="show-short" type="button">Show short phone workspace</button><button id="show-piano" type="button">Show piano with tools</button></div>
+      <p id="visual-status" role="status" aria-live="polite">Choose a workspace for visual inspection.</p>
+      <div id="visual-fixtures"></div>
+    </section>
+    <ol id="results" aria-label="Workspace journey results"></ol>
+    <section aria-labelledby="fixtures-heading">
+      <h2 id="fixtures-heading">Isolated application fixtures</h2>
+      <p class="fixture-note">Only unique <code>test-workspace-…</code> recovery records are created or removed. Public notation APIs, visible DOM, and each fixture’s own saved project are inspected; no production controller globals are accessed. Print requests are intercepted inside the fixture and never open a native dialog.</p>
+      <div id="fixtures"></div>
+    </section>
+  </body>
+</html>

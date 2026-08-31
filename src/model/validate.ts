@@ -370,7 +370,13 @@ class ScoreValidator {
       const info = this.event(event, eventIndex, id, measureId);
       return info ? [info] : [];
     });
-    if (events.length === 0) this.issue('empty-voice', 'A voice must contain notes, rhythm notes, rests, or slashes; use a measure rest for a silent bar.', id, measureId);
+    if (events.length === 0) {
+      const draft = measure.incomplete === true && measure.pickup === false;
+      this.issue('empty-voice', draft
+        ? 'This voice is empty in an incomplete draft. Write its events or an explicit rest before publication; a blank voice does not specify silence.'
+        : 'A voice must contain notes, rhythm notes, rests, or slashes; use a measure rest for a silent bar.',
+      id, measureId, draft ? 'warning' : 'error');
+    }
     const tuplets = this.tuplets(voice, events, id, measureId);
     let total: Rational | undefined = ZERO;
     for (const info of events) {
@@ -469,8 +475,11 @@ class ScoreValidator {
     const pending = new Map<number, { event: EventInfo; measureId: string }>();
     for (const measure of measures) {
       for (const [voiceIndex, previous] of pending) {
-        if (!measure.voices[voiceIndex]) {
-          this.issue('unclosed-tie', 'A tied voice cannot disappear before the tie ends.', previous.event.id, previous.measureId);
+        const voice = measure.voices[voiceIndex];
+        if (!voice || voice.events.length === 0) {
+          this.issue('unclosed-tie', voice
+            ? 'A tie cannot cross an empty voice. Write the missing tied event, or remove the unfinished tie.'
+            : 'A tied voice cannot disappear before the tie ends.', previous.event.id, previous.measureId);
           pending.delete(voiceIndex);
         }
       }

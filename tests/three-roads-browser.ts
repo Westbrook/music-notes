@@ -5,6 +5,8 @@ import { formatRational } from '../src/model/index.js';
 import type { MusicEvent, Score } from '../src/model/types.js';
 import { unionInk, visibleInk } from '../src/engraving/geometry.js';
 import type { InkBox } from '../src/engraving/geometry.js';
+import { createProject } from '../src/authoring/project.js';
+import { buildProjection } from '../src/authoring/projection.js';
 
 interface Fixture { container: HTMLElement; root: MusicSurface }
 interface Test { name: string; run: () => Promise<string> }
@@ -397,7 +399,7 @@ const tests: Test[] = [
     },
   },
   {
-    name: 'Mixed-staff layout retains road meaning and instructions',
+    name: 'Mixed-staff layout and extracted parts retain road meaning and instructions',
     run: async () => {
       const { root: source } = await demoFixture();
       // Canonical serialization may wrap a standalone staff in music-system.
@@ -422,8 +424,22 @@ const tests: Test[] = [
         close(Number(road.dataset.x), Number(pitched.dataset.x), 'Shared measure-start onset alignment', 0.01);
         assert(road.closest('.system-row') === pitched.closest('.system-row'), 'Parallel staves broke independently.');
       }
+      const project = createProject(fixture.root.toHTML(), '3 roads music', [{ id: 'roads-part', label: '3 roads', staffIds: [roadStaff.id] }]);
+      const projected = buildProjection(project, 'roads-part');
+      equal(projected.diagnostics.filter(diagnostic => diagnostic.severity === 'error'), [], 'Road part projection remains valid');
+      equal(projected.score.staves.length, 1, 'The extracted part contains only its selected staff');
+      const partStaff = projected.score.staves[0];
+      equal(partStaff.notation, 'three-roads', 'The extracted part retains its notation');
+      equal(partStaff.measures.flatMap(measure => measure.annotations), roadStaff.measures.flatMap(measure => measure.annotations), 'Every local legend/reference instruction survives extraction');
+      equal(partStaff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)),
+        roadStaff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)), 'Directions, exact events, and source IDs survive extraction');
+      const part = await mount('Extracted 3 roads part with its own legend', projected.source.outerHTML, 680);
+      noErrors(part.root);
+      checkRoads(part.root);
+      sourceCoverage(part.root);
       checkBounds(fixture.root);
-      return 'Roads ignore inherited pitched context and align with another staff without exceeding the system bounds.';
+      checkBounds(part.root);
+      return 'Roads ignore inherited pitched context, align with another staff, and retain their exact events and all local performance instructions in the extracted part.';
     },
   },
   {

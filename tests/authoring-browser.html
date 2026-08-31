@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Notes — Author browser regressions</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { margin: 0 auto; max-width: 1280px; padding: 28px; }
+      h1 { margin-bottom: 8px; font-size: 28px; }
+      h2 { margin: 0 0 10px; font-size: 19px; }
+      h3 { margin: 0 0 8px; font-size: 16px; }
+      p { max-width: 85ch; }
+      button { font: inherit; padding: 10px 16px; border: 1px solid #215e77; border-radius: 6px; color: white; background: #215e77; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      a { color: #215e77; }
+      #summary { padding: 14px; border: 1px solid #b7c4c9; border-radius: 6px; background: white; }
+      [data-state="passed"] { border-color: #528269 !important; }
+      [data-state="failed"] { border-color: #aa4848 !important; }
+      #results { padding-left: 28px; }
+      #results li { padding: 6px 0; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      #results pre { padding: 10px; margin: 5px 0; border-left: 3px solid #aa4848; background: #fff3f2; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, monospace; }
+      .fixture { margin: 18px 0; padding: 14px; border: 1px solid #cbd5da; background: white; }
+      .fixture-note { margin: 0 0 10px; color: #52656f; font-size: 13px; }
+      .viewport { max-width: 100%; overflow: auto; }
+      iframe { display: block; height: 760px; border: 1px solid #cbd5da; }
+      #environment { color: #52656f; font-size: 12px; }
+      @media (max-width: 600px) { body { padding: 14px; } }
+    </style>
+    <script type="module" src="/tests/authoring-browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Music Notes Author browser regressions</h1>
+      <p>These checks open the actual Author application in independent workspaces, operate its visible controls, and await its completed notation. They cover editing, recovery, native customizable selects, parts, and physical page composition without accessing private application state.</p>
+      <p>Each fixture uses its own <code>test-…</code> recovery key. The normal workspace is never cleared or replaced. Only the fixtures’ confirmation and print functions are intercepted; no files are downloaded.</p>
+      <p><button id="run" type="button">Run Author regressions</button> <a href="/author.html">Open Author</a> · <a href="/tests/browser.html">Notation browser regressions</a></p>
+    </header>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready to run Author browser regressions.</p>
+    <p id="environment"></p>
+    <ol id="results" aria-label="Author browser regression results"></ol>
+    <section aria-labelledby="fixtures-heading">
+      <h2 id="fixtures-heading">Actual application fixtures</h2>
+      <p class="fixture-note">The page checks inspect complete systems in the physical preview and the print request boundary. They do not confirm a native print dialog, a saved PDF, embedded fonts, or a printer’s physical output; those require separate inspection.</p>
+      <div id="fixtures"></div>
+    </section>
+  </body>
+</html>

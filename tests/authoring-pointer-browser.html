@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Notes — staff interaction browser regressions</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { margin: 0 auto; max-width: 1280px; padding: 28px; }
+      h1 { margin-bottom: 8px; font-size: 28px; }
+      h2 { margin: 0 0 10px; font-size: 19px; }
+      h3 { margin: 0 0 8px; font-size: 16px; }
+      p { max-width: 88ch; }
+      button { font: inherit; padding: 10px 16px; border: 1px solid #215e77; border-radius: 6px; color: white; background: #215e77; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      a { color: #215e77; }
+      #summary { padding: 14px; border: 1px solid #b7c4c9; border-radius: 6px; background: white; }
+      [data-state="passed"] { border-color: #528269 !important; }
+      [data-state="failed"] { border-color: #aa4848 !important; }
+      #results { padding-left: 28px; }
+      #results li { padding: 6px 0; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      #results pre { padding: 10px; margin: 5px 0; border-left: 3px solid #aa4848; background: #fff3f2; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, monospace; }
+      .fixture { margin: 18px 0; padding: 14px; border: 1px solid #cbd5da; background: white; }
+      .fixture-note, #environment { color: #52656f; font-size: 12px; }
+      .visual-controls { display: flex; flex-wrap: wrap; gap: 10px; }
+      #visual-preview-status { white-space: pre-wrap; overflow-wrap: anywhere; }
+      #visual-fixtures .fixture { scroll-margin-top: 12px; }
+      .viewport { max-width: 100%; overflow: auto; }
+      iframe { display: block; height: 760px; border: 1px solid #cbd5da; }
+      @media (max-width: 600px) { body { padding: 14px; } }
+    </style>
+    <script type="module" src="/tests/authoring-pointer-browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Direct staff interaction regressions</h1>
+      <p>These checks open the actual Author application in independent workspaces. They locate real staff lines and noteheads through the public geometry API, route pointer events through the rendered DOM and visible handles, and inspect accepted musical source and history.</p>
+      <p><strong>Input limitation:</strong> the runner dispatches synthetic PointerEvents and compatibility clicks. Most fixtures replace capture bookkeeping only on their own score host and two drag handles, because synthetic pointers cannot acquire native browser capture. A separate fixture retains native capture and verifies rejection without editing; one error-injection check gives only the detached preview SVG an unavailable transform. These checks cover application routing, previews, transactions, and cancellation; they do not certify trusted capture, native touch scrolling, hardware pens, or operating-system gestures.</p>
+      <p><button id="run" type="button">Run staff interaction checks</button> <a href="/author.html">Open Author</a> · <a href="/tests/authoring-browser.html">Author browser regressions</a></p>
+    </header>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready to run staff interaction checks.</p>
+    <p id="environment"></p>
+    <section aria-labelledby="visual-preview-heading">
+      <h2 id="visual-preview-heading">Synthetic visual previews</h2>
+      <p class="fixture-note">Create an isolated eight-bar score, use the actual measure selector to reach a later system, then show the app’s normal Enter-notes hover preview through a synthetic pointer move. The sticky tile remains visible, but no pointerdown, drag capture, or source edit occurs. These fixtures are for visual inspection, not trusted mouse or touch qualification.</p>
+      <div class="visual-controls"><button id="show-desktop-preview" type="button">Show desktop preview</button><button id="show-phone-preview" type="button">Show phone preview</button></div>
+      <p id="visual-preview-status" role="status" aria-live="polite">Choose a desktop or phone viewport to inspect the synthetic preview.</p>
+      <div id="visual-fixtures"></div>
+    </section>
+    <ol id="results" aria-label="Staff interaction regression results"></ol>
+    <section aria-labelledby="fixtures-heading">
+      <h2 id="fixtures-heading">Actual application fixtures</h2>
+      <p class="fixture-note">Only unique <code>test-pointer-…</code> recovery keys are used. Capture shims affect only explicitly identified disposable iframe elements, never prototypes, application code, or a separately opened workspace. No production globals, downloads, or native print dialogs are used.</p>
+      <div id="fixtures"></div>
+    </section>
+  </body>
+</html>

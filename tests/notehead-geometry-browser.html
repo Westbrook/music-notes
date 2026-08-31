@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Music Notes — notehead geometry checks</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { max-width: 1000px; margin: 24px auto; padding: 0 20px; }
+      h1 { font-size: 25px; } h2 { font-size: 17px; }
+      button { padding: 10px 16px; font: inherit; cursor: pointer; }
+      #summary { padding: 12px; background: white; border: 1px solid #bcc9ce; }
+      [data-state="passed"] { color: #245c3c; } [data-state="failed"] { color: #9c2e2e; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      article { margin: 20px 0; padding: 14px; background: white; border: 1px solid #bcc9ce; overflow: auto; }
+      .score-container > * { width: 100%; }
+    </style>
+    <script type="module" src="/tests/notehead-geometry-browser.ts"></script>
+  </head>
+  <body>
+    <h1>Notehead geometry in the real engraving adapter</h1>
+    <p>These checks compare public per-pitch bounds against actual SVG glyph ink and the exact source pitch positions. They cover all four clefs, displaced chord seconds, both stem directions, modifiers, multiple staves, and responsive reflow.</p>
+    <p><button id="run" type="button">Run notehead geometry checks</button> <a href="/author.html">Open Author</a></p>
+    <p id="summary" role="status" aria-live="polite" data-state="idle">Ready.</p>
+    <ol id="results" aria-label="Notehead geometry results"></ol>
+    <div id="fixtures"></div>
+  </body>
+</html>

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -14,6 +15,10 @@ export default defineConfig({
   }],
   build: {
     rollupOptions: {
+      input: {
+        workbook: fileURLToPath(new URL('./index.html', import.meta.url)),
+        author: fileURLToPath(new URL('./author.html', import.meta.url)),
+      },
       output: {
         // Embedded fonts are stable, relatively large assets. Cache them apart
         // from the adapter, so editing notation code does not redownload fonts.

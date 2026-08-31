@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Notes — Author notation journeys</title>
+    <style>
+      :root { font: 15px/1.5 system-ui, sans-serif; color: #192b34; background: #f2f5f6; }
+      body { box-sizing: border-box; width: 100%; max-width: 1280px; margin: 0 auto; padding: 28px; }
+      header, main, section, #fixtures, #visual-fixtures { min-width: 0; }
+      h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.2; }
+      h2 { margin: 0 0 10px; font-size: 19px; }
+      h3 { margin: 0 0 8px; font-size: 16px; }
+      p { max-width: 92ch; }
+      a { color: #215e77; text-underline-offset: 2px; overflow-wrap: anywhere; }
+      button { min-height: 44px; padding: 10px 16px; border: 1px solid #215e77; border-radius: 6px; background: #215e77; color: white; font: inherit; line-height: 1.4; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: .65; }
+      button:focus-visible, a:focus-visible { outline: 3px solid #a56924; outline-offset: 3px; }
+      .runner-controls, .visual-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+      #summary { max-width: none; padding: 14px; border: 1px solid #b7c4c9; border-radius: 6px; background: white; }
+      [data-state="passed"] { border-color: #528269 !important; }
+      [data-state="failed"] { border-color: #aa4848 !important; }
+      #results { padding-left: 28px; }
+      #results li { min-width: 0; padding: 7px 0; overflow-wrap: anywhere; }
+      #results li[data-state="passed"] > strong { color: #245c3c; }
+      #results li[data-state="failed"] > strong { color: #9c2e2e; }
+      pre, #visual-status, #environment { white-space: pre-wrap; overflow-wrap: anywhere; }
+      pre { box-sizing: border-box; max-width: 100%; margin: 6px 0; padding: 10px; border-left: 3px solid #b7c4c9; background: #f7fafb; font: 12px/1.5 ui-monospace, monospace; }
+      #results li[data-state="failed"] pre { border-left-color: #aa4848; background: #fff3f2; }
+      .fixture { box-sizing: border-box; min-width: 0; max-width: 100%; margin: 18px 0; padding: 14px; border: 1px solid #cbd5da; background: white; }
+      .fixture-note, #environment { color: #52656f; font-size: 12px; }
+      .viewport { max-width: 100%; overflow: auto; }
+      /* Preserve the iframe's requested inner viewport; contain overflow outside it. */
+      iframe { display: block; box-sizing: content-box; max-width: none; border: 1px solid #cbd5da; }
+      .metrics { margin: 6px 0; padding: 8px 10px; border-left: 3px solid #b7c4c9; background: #f7fafb; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+      main > section { margin-top: 24px; }
+      @media (max-width: 600px) {
+        body { padding: 14px; }
+        h1 { font-size: 25px; }
+        .fixture { padding: 10px; }
+        #results { padding-left: 22px; }
+      }
+    </style>
+    <script type="module" src="/tests/authoring-notation-browser.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Author notation journeys</h1>
+      <p>These scripted journeys load the actual <a href="/author.html">Author application</a> and use visible controls to create and edit notation, attach marks, Undo changes, export and reopen files, and inspect Pages. Source fixtures are used only for supplemental complex cases.</p>
+      <p><strong>Qualification limits:</strong> synthetic DOM events exercise application routing, not trusted pointer, keyboard, or file-picker interaction. File reopening uses in-memory files. Download and print request boundaries are intercepted to inspect actual exported payloads and print requests; no native downloads or print dialogs are opened. These checks do not establish saved PDF or physical-print output.</p>
+      <div class="runner-controls"><button id="run" type="button">Run scripted notation journeys</button><a href="/tests/authoring-workspace-browser.html">Workspace journeys</a><a href="/tests/event-markings-browser.html">Attachment rendering checks</a></div>
+    </header>
+    <main>
+      <p id="summary" role="status" aria-live="polite" data-state="idle">Not run. Choose Run scripted notation journeys to begin.</p>
+      <p id="environment">No browser environment recorded; no checks have run.</p>
+      <section aria-labelledby="visual-heading">
+        <h2 id="visual-heading">Actual workspace visual fixtures</h2>
+        <p class="fixture-note">Open a live Author fixture for visual inspection. Each fixture includes a visible link to its own isolated workspace; these are application views, not screenshot mockups.</p>
+        <div class="visual-controls"><button id="show-mixed-desktop" type="button">Show mixed desktop notation</button><button id="show-road-phone" type="button">Show road notation on phone</button><button id="show-road-short" type="button">Show road notation on short phone</button></div>
+        <p id="visual-status" role="status" aria-live="polite" data-state="idle">No visual fixture opened. Choose a workspace to inspect.</p>
+        <div id="visual-fixtures"></div>
+      </section>
+      <ol id="results" aria-label="Author notation journey results"></ol>
+      <section aria-labelledby="fixtures-heading">
+        <h2 id="fixtures-heading">Isolated application fixtures</h2>
+        <p class="fixture-note">Only unique <code>test-notation-UUID</code> recovery workspaces owned by this runner are created or removed. The journeys inspect visible DOM, public notation APIs, exported payloads, and each fixture’s own saved project without private controller APIs. Fixture links appear below as workspaces are created. Existing compositions and the separate workspace journey contracts are not changed.</p>
+        <div id="fixtures"></div>
+      </section>
+    </main>
+  </body>
+</html>

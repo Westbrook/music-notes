@@ -6,6 +6,8 @@ import { formatRational, harmonyIntervalOffset, harmonyIntervalText } from '../s
 import type { EventMarking, MusicEvent, Score } from '../src/model/types.js';
 import { transformInk, unionInk, visibleInk } from '../src/engraving/geometry.js';
 import type { InkBox } from '../src/engraving/geometry.js';
+import { createProject } from '../src/authoring/project.js';
+import { buildProjection } from '../src/authoring/projection.js';
 
 interface Fixture { container: HTMLElement; root: MusicSurface }
 interface Test { name: string; run: () => Promise<string> }
@@ -551,7 +553,7 @@ const tests: Test[] = [
     },
   },
   {
-    name: 'Canonical source preserves every attached marking',
+    name: 'Canonical source and extracted parts preserve every attached marking',
     run: async () => {
       const { root } = await demoFixture();
       noErrors(root);
@@ -559,7 +561,24 @@ const tests: Test[] = [
       const reread = readScore(doc.body.firstElementChild!);
       equal(reread.diagnostics.filter(diagnostic => diagnostic.severity === 'error'), [], 'Canonical source remains valid');
       equal(reread.score, scoreOf(root), 'Canonical roundtrip retains marking types, interval sets, IDs, and time');
-      return 'Canonical source keeps the original child markings, source IDs, exact durations, interval sets, and local instructions.';
+      const project = createProject(root.toHTML(), 'Mark the attack; add a harmony', [
+        { id: 'marked-road-part', label: '3 roads', staffIds: ['marked-road-part'] },
+        { id: 'marked-pitched-part', label: 'Pitched', staffIds: ['marked-pitched-part'] },
+      ]);
+      for (const id of ['marked-road-part', 'marked-pitched-part']) {
+        const projected = buildProjection(project, id);
+        equal(projected.diagnostics.filter(diagnostic => diagnostic.severity === 'error'), [], 'Part projection remains valid');
+        const original = scoreOf(root).staves.find(staff => staff.id === id)!;
+        equal(projected.score.staves[0].measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)),
+          original.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)), 'Attached child markings remain with their exact events');
+        equal(projected.score.staves[0].measures.flatMap(measure => measure.annotations), original.measures.flatMap(measure => measure.annotations), 'The part retains its own performance legend');
+        const part = await mount(`Extracted ${id === 'marked-road-part' ? 'three-roads harmony' : 'articulated pitched'} part`, projected.source.outerHTML, 680);
+        noErrors(part.root);
+        coverage(part.root);
+        if (id === 'marked-road-part') checkIntervals(part.root);
+        checkBounds(part.root);
+      }
+      return 'Both parts and canonical source keep the original child markings, source IDs, exact durations, interval sets, and relevant local instructions.';
     },
   },
   {

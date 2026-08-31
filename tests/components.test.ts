@@ -13,6 +13,9 @@ vi.mock('../src/engraving/render.js', () => ({ engravingReady: engine.ready, ren
 // Resolve the mocked backend before multiple surfaces import it concurrently.
 import '../src/engraving/render.js';
 import { MusicNote, MusicStaff, MusicSurface, readScore } from '../src/components/index.js';
+import type { LayoutGeometry } from '../src/components/music-surface.js';
+
+const noSelectionModifiers = { shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, clickCount: 0, pointerType: '' };
 
 function draw(container: HTMLElement, score: Score, options: EngravingOptions): EngravingResult {
   const events = score.staves.flatMap(staff => staff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)));
@@ -324,6 +327,23 @@ describe('surface ownership and real DOM observation', () => {
     expect(root.shadowRoot!.querySelector('.transcript pre')!.textContent).toContain('Very freely');
   });
 
+  it.each(['pitched', 'rhythm', 'three-roads'])('describes the empty draft separately from written silence on a %s staff', async notation => {
+    const root = mount(`<music-staff notation="${notation}"><music-measure incomplete><music-voice id="empty"></music-voice><music-voice id="silent"><music-rest measure></music-rest></music-voice></music-measure></music-staff>`);
+    await root.renderComplete;
+    expect(root.diagnostics.filter(item => item.severity === 'error')).toEqual([]);
+    const transcript = root.shadowRoot!.querySelector('.transcript pre')!.textContent!;
+    expect(transcript).toContain('Voice 1: empty draft; rhythm not yet written.');
+    expect(transcript).toContain('Voice 2: full-measure rest');
+    expect(transcript).not.toContain('Voice 1: .');
+  });
+
+  it('describes an invalid empty complete voice without calling it an accepted draft', async () => {
+    const root = mount('<music-staff><music-measure></music-measure></music-staff>');
+    await root.renderComplete;
+    expect(root.diagnostics.some(item => item.code === 'empty-voice' && item.severity === 'error')).toBe(true);
+    expect(root.shadowRoot!.querySelector('.transcript pre')!.textContent).toContain('Voice 1: empty voice; rhythm not yet written.');
+  });
+
   it('describes rhythm events without a fabricated pitch, clef, or key', async () => {
     const root = mount('<music-staff notation="rhythm" label="Claps"><music-measure><music-rhythm></music-rhythm><music-rest></music-rest><music-slash rhythmic></music-slash><music-slash></music-slash></music-measure></music-staff>');
     await root.renderComplete;
@@ -617,7 +637,7 @@ describe('viewport width and stable print geometry', () => {
     expect(root.getHitRegions()).toBe(hits);
     expect(root.getHitRegions()[0].width).toBe(420);
     print!.querySelector('rect')!.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
-    expect(selection.mock.calls[0][0].detail).toEqual({ sourceId: 'note', sourceElement: note(root) });
+    expect(selection.mock.calls[0][0].detail).toEqual({ sourceId: 'note', sourceElement: note(root), ...noSelectionModifiers });
     expect(root.shadowRoot!.querySelector('.print')!.classList.contains('measuring')).toBe(false);
   });
 
@@ -1017,7 +1037,107 @@ describe('export, diagnostics, and selection integration', () => {
     document.body.addEventListener('notation-select', listener, { once: true });
     root.shadowRoot!.querySelector('.screen rect')!.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener.mock.calls[0][0].detail).toEqual({ sourceId: 'note', sourceElement: note(root) });
+    expect(listener.mock.calls[0][0].detail).toEqual({ sourceId: 'note', sourceElement: note(root), ...noSelectionModifiers });
+  });
+
+  it.each(['svg', 'host'] as const)('preserves click count, modifiers and pointer type through the %s selection route', async route => {
+    const root = mount('<music-system><music-staff><music-measure><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure></music-staff></music-system>');
+    await root.renderComplete;
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Win32');
+    const hit = vi.spyOn(root, 'getSourceAtPoint').mockReturnValue('note');
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    const target = route === 'svg' ? root.shadowRoot!.querySelector('.screen rect')! : root;
+    target.dispatchEvent(new PointerEvent('click', { bubbles: true, composed: true, cancelable: true,
+      clientX: 120, clientY: 30, detail: 2, shiftKey: true, ctrlKey: true, metaKey: true, altKey: true, pointerType: 'pen' }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].detail).toEqual({ sourceId: 'note', sourceElement: note(root),
+      clickCount: 2, shiftKey: true, ctrlKey: true, metaKey: true, altKey: true, pointerType: 'pen' });
+    if (route === 'host') expect(hit).toHaveBeenCalledWith(120, 30);
+    else expect(hit).not.toHaveBeenCalled();
+  });
+
+  it('keeps a double-click as two semantic clicks with no second activation event', async () => {
+    const root = mount(); await root.renderComplete;
+    const target = root.shadowRoot!.querySelector('.screen rect')!; const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    for (const [type, detail] of [['click', 1], ['click', 2], ['dblclick', 2]] as const) {
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, composed: true, detail }));
+    }
+    expect(listener.mock.calls.map(call => call[0].detail.clickCount)).toEqual([1, 2]);
+  });
+
+  it.each(['svg', 'host'] as const)('retains an exact child marking identity on the %s route', async route => {
+    const root = mount('<music-system><music-staff><music-measure><music-note id="note" pitch="C4" duration="whole"><music-articulation id="mark" type="staccato"></music-articulation></music-note></music-measure></music-staff></music-system>');
+    await root.renderComplete;
+    vi.spyOn(root, 'getSourceAtPoint').mockReturnValue('mark');
+    const child = document.createElementNS('http://www.w3.org/2000/svg', 'g'); child.setAttribute('data-source-id', 'mark');
+    const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'text'); child.append(glyph);
+    root.shadowRoot!.querySelector('.screen g')!.append(child);
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    (route === 'svg' ? glyph : root).dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 2 }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].detail).toMatchObject({ sourceId: 'mark', sourceElement: root.getSource('mark'), clickCount: 2 });
+  });
+
+  it('does not dispatch notation selection for native controls or transcript text carrying a source-like attribute', async () => {
+    const root = mount(); await root.renderComplete;
+    const transcript = root.shadowRoot!.querySelector('.transcript pre')!; transcript.setAttribute('data-source-id', 'note');
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    transcript.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    const button = document.createElement('button'); button.setAttribute('data-source-id', 'note'); root.shadowRoot!.querySelector('.screen')!.append(button);
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('retains standalone notation selection when a workbook wraps the score in a disclosure', async () => {
+    const root = mount(); const disclosure = document.createElement('details'); disclosure.open = true;
+    document.body.append(disclosure); disclosure.append(root); await root.renderComplete;
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    root.shadowRoot!.querySelector('.screen rect')!.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].detail.sourceId).toBe('note');
+  });
+
+  it('leaves macOS Control-click native without a semantic activation', async () => {
+    const root = mount(); await root.renderComplete;
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    const event = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, ctrlKey: true, detail: 1 });
+    root.shadowRoot!.querySelector('.screen rect')!.dispatchEvent(event);
+    expect(listener).not.toHaveBeenCalled(); expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('does not prevent native instruction text behavior on the inert host route', async () => {
+    const root = mount('<music-system><music-staff><music-measure><music-direction id="text" text="Play freely"></music-direction><music-note id="note" pitch="C4" duration="whole"></music-note></music-measure></music-staff></music-system>');
+    await root.renderComplete; vi.spyOn(root, 'getSourceAtPoint').mockReturnValue('text');
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    const event = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, detail: 1 }); root.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(listener.mock.calls[0][0].detail).toMatchObject({ sourceId: 'text', sourceElement: root.getSource('text') });
+  });
+
+  it('exposes current measured hit testing with child-first identity and clipping checks', async () => {
+    const root = mount('<music-system><music-staff><music-measure><music-note id="note" pitch="C4" duration="whole"><music-articulation id="mark" type="staccato"></music-articulation></music-note></music-measure></music-staff></music-system>');
+    await root.renderComplete;
+    const svg = root.shadowRoot!.querySelector<SVGSVGElement>('.screen svg')!; svg.classList.add('notation-svg');
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 50));
+    Object.defineProperty(svg, 'getScreenCTM', { value: () => ({ inverse: () => ({}) }) });
+    vi.stubGlobal('DOMPoint', class {
+      readonly x: number; readonly y: number;
+      constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+      matrixTransform() { return this; }
+    });
+    const layout: LayoutGeometry = { projection: 'screen', projectionId: 'unit-measured', revision: 1, scoreId: root.score!.id,
+      systems: [{ index: 0, start: 0, end: 1, width: 200, height: 50, viewBox: { x: 0, y: 0, width: 200, height: 50 },
+        ink: { x: 0, y: 0, width: 200, height: 50 }, pageBreak: false, staves: [], measures: [], events: [], annotations: [], tuplets: [], anchors: [],
+        markings: [{ sourceId: 'mark', eventId: 'note', staffId: 'staff', measureId: 'bar', voiceId: 'voice', system: 0,
+          kind: 'articulation', placement: 'above', x: 10, y: 10, width: 4, height: 4 }] }] };
+    vi.spyOn(root, 'getLayoutGeometry').mockReturnValue(layout);
+    expect(root.getSourceAtPoint(11, 11)).toBe('mark');
+    expect(root.getSourceAtPoint(18, 11)).toBe('note');
+    expect(root.getSourceAtPoint(201, 11)).toBeUndefined();
+    expect(root.getSourceAtPoint(Number.NaN, 11)).toBeUndefined();
+    vi.mocked(root.getLayoutGeometry).mockReturnValue(undefined);
+    expect(root.getSourceAtPoint(11, 11)).toBeUndefined();
   });
 
   it('uses print hit regions in print-preview and labels print diagnostics distinctly', async () => {
@@ -1034,5 +1154,120 @@ describe('export, diagnostics, and selection integration', () => {
     root.printPreview = false;
     await root.renderComplete;
     expect(root.getHitRegions()[0].width).toBe(680);
+  });
+});
+
+describe('coordinate selection on every rendered root', () => {
+  const roots = ['music-system', 'music-staff', 'music-measure'] as const;
+
+  async function fixture(kind: typeof roots[number]) {
+    viewport(200);
+    // Supply measured adapter output while retaining the real projection
+    // lifecycle. happy-dom itself cannot measure SVG ink or screen matrices.
+    engine.render.mockImplementation((container, score, options) => {
+      const result = draw(container, score, options);
+      const svg = container.querySelector('svg')!;
+      svg.classList.add('notation-svg');
+      vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 50));
+      Object.defineProperty(svg, 'getScreenCTM', { value: () => ({ inverse: () => ({}) }) });
+      return { ...result, hitRegions: result.hitRegions.map(hit => ({ ...hit, width: 8 })),
+        systemGeometry: [{ index: 0, start: 0, end: 1, width: 200, height: 50,
+          viewBox: { x: 0, y: 0, width: 200, height: 50 }, ink: { x: 0, y: 0, width: 200, height: 50 },
+          pageBreak: false, staves: [], measures: [], events: [], annotations: [], tuplets: [], anchors: [] }] };
+    });
+    vi.stubGlobal('DOMPoint', class {
+      readonly x: number; readonly y: number;
+      constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+      matrixTransform() { return this; }
+    });
+    const measure = '<music-measure incomplete><music-note id="note" pitch="F4" duration="quarter"></music-note><music-rest id="rest" duration="quarter"></music-rest></music-measure>';
+    const staff = `<music-staff>${measure}</music-staff>`;
+    const root = mount(kind === 'music-measure' ? measure : kind === 'music-staff' ? staff : `<music-system>${staff}</music-system>`);
+    await root.renderComplete;
+    expect(root.getLayoutGeometry()).toBeDefined();
+    expect(root.getSourceAtPoint(17, 11)).toBe('rest');
+    return root;
+  }
+
+  const routes = roots.flatMap(kind => (['host', 'background'] as const).map(route => ({ kind, route })));
+  it.each(routes)('selects exact note/rest identities once through the $kind $route', async ({ kind, route }) => {
+    const root = await fixture(kind);
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Win32');
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    const target = route === 'host' ? root : root.shadowRoot!.querySelector('.screen svg')!;
+    for (const [sourceId, clientX, clickCount] of [['note', 5, 1], ['rest', 17, 2]] as const) {
+      const event = new PointerEvent('click', { bubbles: true, composed: true, cancelable: true,
+        clientX, clientY: 11, detail: clickCount, shiftKey: true, ctrlKey: true, metaKey: true, altKey: true, pointerType: 'pen' });
+      target.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(listener).toHaveBeenCalledTimes(clickCount);
+      expect(listener.mock.lastCall![0].detail).toEqual({ sourceId, sourceElement: root.getSource(sourceId),
+        clickCount, shiftKey: true, ctrlKey: true, metaKey: true, altKey: true, pointerType: 'pen' });
+    }
+    target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, detail: 2, clientX: 17, clientY: 11 }));
+    expect(listener).toHaveBeenCalledTimes(2);
+    const miss = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 150, clientY: 11 });
+    target.dispatchEvent(miss);
+    expect(listener).toHaveBeenCalledTimes(2); expect(miss.defaultPrevented).toBe(false);
+  });
+
+  it.each(roots)('rejects coordinate selection while %s geometry is invalidated', async kind => {
+    const root = await fixture(kind);
+    const background = root.shadowRoot!.querySelector('.screen svg')!;
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    root.querySelector('music-rest')!.setAttribute('duration', 'eighth');
+    for (const target of [root, background]) {
+      const event = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 17, clientY: 11 });
+      target.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(listener).not.toHaveBeenCalled();
+    expect(root.getLayoutGeometry()).toBeUndefined();
+    await root.renderComplete;
+    root.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, clientX: 17, clientY: 11 }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.lastCall![0].detail.sourceId).toBe('rest');
+  });
+
+  it.each(roots)('preserves native controls, prose, prevented clicks and secondary clicks on %s', async kind => {
+    const root = await fixture(kind);
+    const measure = root.querySelector('music-measure') ?? root;
+    const direction = document.createElement('music-direction'); direction.id = 'instruction'; direction.text = 'Play freely';
+    measure.prepend(direction); await root.renderComplete;
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    const hit = vi.spyOn(root, 'getSourceAtPoint').mockReturnValue('rest');
+    const transcript = root.shadowRoot!.querySelector('.transcript pre')!;
+    transcript.setAttribute('data-source-id', 'rest');
+    const button = document.createElement('button'); button.setAttribute('data-source-id', 'rest');
+    root.shadowRoot!.querySelector('.screen')!.append(button);
+    for (const target of [transcript, button]) {
+      const event = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 17, clientY: 11 });
+      target.dispatchEvent(event); expect(event.defaultPrevented).toBe(false);
+    }
+    const prevented = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 17, clientY: 11 });
+    prevented.preventDefault(); root.dispatchEvent(prevented);
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    for (const options of [{ button: 2 }, { ctrlKey: true }]) {
+      const event = new MouseEvent('click', { ...options, bubbles: true, composed: true, cancelable: true, clientX: 17, clientY: 11 });
+      root.dispatchEvent(event); expect(event.defaultPrevented).toBe(false);
+    }
+    expect(listener).not.toHaveBeenCalled(); expect(hit).not.toHaveBeenCalled();
+    hit.mockReturnValue('instruction');
+    const prose = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 17, clientY: 11 });
+    root.dispatchEvent(prose);
+    expect(prose.defaultPrevented).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.lastCall![0].detail).toMatchObject({ sourceId: 'instruction', sourceElement: direction });
+  });
+
+  it('does not activate nested source surfaces as if they rendered their own projection', async () => {
+    const root = await fixture('music-system');
+    const listener = vi.fn(); root.addEventListener('notation-select', listener);
+    for (const nested of root.querySelectorAll<MusicSurface>('music-staff,music-measure')) {
+      const hit = vi.spyOn(nested, 'getSourceAtPoint').mockReturnValue('rest');
+      nested.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, clientX: 17, clientY: 11 }));
+      expect(hit).not.toHaveBeenCalled();
+    }
+    expect(listener).not.toHaveBeenCalled();
   });
 });

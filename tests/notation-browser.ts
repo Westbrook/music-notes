@@ -6,6 +6,8 @@ import { formatRational } from '../src/model/index.js';
 import type { MusicEvent, Score } from '../src/model/types.js';
 import { unionInk, visibleInk } from '../src/engraving/geometry.js';
 import type { InkBox } from '../src/engraving/geometry.js';
+import { createProject } from '../src/authoring/project.js';
+import { buildProjection } from '../src/authoring/projection.js';
 
 interface Fixture { container: HTMLElement; root: MusicSurface }
 interface Test { name: string; run: () => Promise<string> }
@@ -487,6 +489,36 @@ const tests: Test[] = [
       sourceCoverage(root);
       checkBounds(root);
       return `${lines} measure staves retain their actual line counts; ${aligned} common onsets align across the original workbook study.`;
+    },
+  },
+  {
+    name: 'Extracted parts preserve notation, source IDs, and their own instructions',
+    run: async () => {
+      const { root } = await demoFixture();
+      const project = createProject(root.toHTML(), 'Quarter-tones and a clapped pulse', [
+        { id: 'melody-part', label: 'Melody', staffIds: ['quarter-tone-melody'] },
+        { id: 'claps-part', label: 'Claps', staffIds: ['clapped-rhythm'] },
+      ]);
+      for (const [partId, staffId, instruction] of [
+        ['melody-part', 'quarter-tone-melody', '24-EDO; quarter-tone signs'],
+        ['claps-part', 'clapped-rhythm', 'Clap'],
+      ] as const) {
+        const projected = buildProjection(project, partId);
+        equal(projected.diagnostics.filter(diagnostic => diagnostic.severity === 'error'), [], `${partId}: projection diagnostics`);
+        const staff = projected.score.staves[0];
+        equal(projected.score.staves.length, 1, `${partId}: only selected staff remains`);
+        equal(staff.id, staffId, `${partId}: original staff identity`);
+        assert(staff.measures[0].annotations.some(annotation => annotation.text === instruction), `${partId}: required instruction was lost.`);
+        const original = scoreOf(root).staves.find(candidate => candidate.id === staffId)!;
+        equal(staff.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)),
+          original.measures.flatMap(measure => measure.voices.flatMap(voice => voice.events)), `${partId}: exact events and source IDs`);
+        const fixture = await mount(`Extracted ${partId === 'claps-part' ? 'Claps' : 'Melody'} part`, projected.source.outerHTML, 680);
+        noErrors(fixture.root);
+        checkLines(fixture.root);
+        sourceCoverage(fixture.root);
+        checkBounds(fixture.root);
+      }
+      return 'Both standalone parts retain their original events, notation mode, and staff-local legend/action instruction.';
     },
   },
   {

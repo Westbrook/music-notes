@@ -530,8 +530,13 @@ function prepareColumn(score: Score, index: number, x: number, width: number, fi
   const staves = score.staves.map((staff) => prepareStaff(staff.measures[index], staff.measures[index - 1], x, width, firstInLine, staff.notation));
   alignHeaders(staves.map(staff => staff.stave), firstInLine && staves.some(staff => startsWithTie(staff.measure)));
   const formatter = new Formatter();
-  staves.forEach((staff) => { if (staff.voices.length) formatter.joinVoices(staff.voices); });
-  const voices = staves.flatMap((staff) => staff.voices);
+  // Empty drafts keep their model voices and anchors. Passing empty engine
+  // voices to the formatter would add spacing to their sounding companions.
+  const voices = staves.flatMap((staff) => {
+    const written = staff.voices.filter(voice => voice.getTickables().length > 0);
+    if (written.length) formatter.joinVoices(written);
+    return written;
+  });
   // Non-initial directions get real trailing space, so text at the final attack
   // cannot be lost beyond the bar/system edge. Initial directions affect minima.
   const tail = Math.max(14, ...staves.flatMap((staff) => staff.measure.annotations

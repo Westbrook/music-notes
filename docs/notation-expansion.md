@@ -19,7 +19,7 @@ The music engraver, composer, and performer reviews shaped the design. The engra
 | Other rhythm-staff events | Rests, rhythmic slashes, open slashes, voices, and nested tuplets retain their separate meanings. Pitched notes and chords are rejected. |
 | Rhythm ties | Consecutive rhythm events in the same voice may tie across bars and systems. The continuation extends duration without requiring another attack. It does not specify an instrument, pitch, or sound-production technique. |
 | Context | Meter and grouping remain musical context. System clef/key defaults do not pitch a rhythm staff; local clef/key attributes on the rhythm staff or its measures are errors. |
-| Projection | Canonical HTML/model output, standalone staff rendering, accessible descriptions, and source mappings preserve notation mode and pitch-free event identity. |
+| Projection | Canonical HTML/model output, parts, accessible descriptions, and source mappings preserve notation mode and pitch-free event identity. |
 
 MusicXML expresses [pitch alteration in semitones, including fractional values](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/alter/), separately from its [notated accidental vocabulary](https://www.w3.org/2021/06/musicxml40/musicxml-reference/data-types/accidental-value/). This project adopts a smaller vocabulary with one explicit interpretation. The four chosen symbols are [SMuFL Stein–Zimmermann accidentals U+E280–U+E283](https://smufl.formats.music/latest/tables/stein-zimmermann-accidentals-24-edo.html). Their font availability does not establish support for other tuning systems.
 
@@ -33,13 +33,13 @@ Two different alterations at the same chord position retain separate heads, with
 
 The score should name its convention. The workbook's pitched part carries the short instruction “24-EDO; quarter-tone signs.” The nearby explanation specifies ±50 and ±150 cents relative to the natural. The rhythm staff is labeled “Claps” and its demonstration is untied; a separate rhythm-reading fixture demonstrates held durations and ties. A single line by itself is not a percussion sound assignment.
 
-Each part must retain its own required instructions. When rendering a staff on its own, retain its local instructions. If a required legend was written on another staff, include it explicitly in the standalone source. A legend appearing only in the full-score heading does not establish that a separately printed part is self-contained.
+Each part must retain its own required instructions. An instruction authored on that staff belongs to it by default in Author. If an instruction is placed on another staff, its explicit instruction scope must include the extracted part. A legend appearing only in the full-score heading does not establish that a separately printed part is self-contained.
 
 Ordinary rhythm notes prescribe attacks and durations. Rhythmic slashes prescribe rhythm with slash heads; open beat slashes leave the attacks to the performer. A tie is a continuation, not a repeated attack or a slur. Rests still mean written silence, with whole-duration rests distinguished from full-measure rests. In 7/8, a full-measure rest lasts exactly 7/8; a whole-duration rest lasts one whole note and overflows a complete bar.
 
 The accessible text should identify a “single-line rhythm staff” and “rhythm note,” not a treble clef or a placeholder B4. Quarter-tone pitches need names in words, while exact onset, elapsed duration, tuplets, and tie status remain available. Pitch controls must not act on rhythm notes. A one-line staff's top and bottom coordinates coincide; geometry consumers must not divide that zero height to infer pitch.
 
-Changing a pitched staff to rhythm notation requires an explicit source edit that keeps every event valid for the resulting staff. A notation-mode change does not silently convert pitches. Tied passages need a complete validated source edit that changes staff/event kinds together without dropping the chain. Model consumers must inspect `Staff.notation`: neutral treble/C compatibility fields on a rhythm staff do not give its events pitch.
+An existing untied pitched staff can be converted explicitly in Author by converting its pitched events to rhythmic slashes, selecting rhythm staff notation, then converting to ordinary rhythm notes if desired. The intermediate slashes preserve prescribed attacks and are valid in both staff modes. Tied passages need a complete validated source edit that changes staff/event kinds together without dropping the chain. See the [authoring conversion instructions](authoring.md#single-line-rhythm-staff). Model consumers must inspect `Staff.notation`: neutral treble/C compatibility fields on a rhythm staff do not give its events pitch.
 
 ## Demonstration and exact time
 
@@ -67,19 +67,21 @@ The tuplet deliberately has two children: the ratio counts written units, not DO
 | Composer: time | Written values/dots survive; mixed-value and nested tuplets retain exact ratios; measure capacity, pickups, and simultaneous voices remain exact. |
 | Composer: ties | Pitch-free tie chains preserve all source identities and voice order, including both halves at a system boundary; incompatible tie endpoints are rejected. |
 | Performer: continuity | Pitched and rhythm staves share system ranges and common onset positions. A line break does not lose a tie, annotation, or measure. |
-| Performer: parts | When rendering selected staves, retain their notation, source order, relevant legend/action instruction, and exact events. Pitch spelling is not transposed. |
-| Performer: accessible score | Transcript names accidentals and rhythm notes without implying pitch on a rhythm event; invalid source produces a diagnostic. |
+| Performer: parts | Extracted parts retain their notation, staff order, relevant legend/action instruction, and exact events. Pitch spelling is not transposed. |
+| Performer: accessible editing | Transcript names accidentals and rhythm notes; controls do not imply pitch on a rhythm event; rejected/stale edits leave accepted source untouched. |
 | Layout and publication | Narrow → wide → narrow rendering is deterministic; screen-only resize does not change cached print geometry or source identities. Final pages still require human review. |
 
 ## Verification workflow and limits
 
-Run `npm test`, `npm run typecheck`, and `npm run build` for the model, grammar, components, and adapter contracts. With the development server running, open `/tests/notation-browser.html` and select **Run notation expansion checks**. Its ten checks use visible fixtures for actual glyphs and SVG geometry, conflicting microtonal voices and same-position chords, source coverage, rests, ties, tuplets, common onsets, source edits, and fixed print projection stability across native container resizes. The page exposes a machine-readable report in `#notation-browser-results`.
+Run `npm test`, `npm run typecheck`, and `npm run build` for the model, grammar, authoring, and adapter contracts. With the development server running, open `/tests/notation-browser.html` and select **Run notation expansion checks**. Its ten checks use visible fixtures for actual glyphs and SVG geometry, conflicting microtonal voices and same-position chords, source coverage, rests, ties, tuplets, common onsets, source edits, and fixed print projection stability across native container resizes. The page exposes a machine-readable report in `#notation-browser-results`.
 
-Inspect the visible fixtures and study 09 at desktop, narrow, and fixed print widths. Check accidental legibility, rest orientation, tie lengths, line/meter alignment, annotation spacing, and the standalone staves' instructions. A passing geometry assertion is evidence for that fixture, not proof of good optical spacing for every score. The browser suite does not open a native print dialog or certify a saved PDF, physical paper, page turns, all browsers, or all dense polyphony.
+Inspect the visible fixtures and study 09 at desktop, narrow, and fixed print widths. Check accidental legibility, rest orientation, tie lengths, line/meter alignment, annotation spacing, and the extracted parts' instructions. A passing geometry assertion is evidence for that fixture, not proof of good optical spacing for every score. The browser suite does not open a native print dialog or certify a saved PDF, physical paper, page turns, all browsers, or all dense polyphony.
 
-### Recorded browser checkpoint — 2026-08-28
+### Recorded verification — 2026-08-28
 
-The in-app Chromium checkpoint included distinct-head assertions for conflicting microtonal voices and a same-position chord, as well as the displaced dotted/plain half-rest case. This is historical browser evidence; rerun the checks above for this snapshot.
+The in-app Chromium runs passed **34/34 foundation browser checks** and **10/10 notation expansion checks**. The final expansion run includes the distinct-head assertions for conflicting microtonal voices and a same-position chord, as well as the displaced dotted/plain half-rest case. A wider focused run passed **575/575 tests across 16 suites**, covering model/DOM/component behavior, engraving semantics, Author notation commands, note properties, projections, templates, pointer targets, and workbook controls.
+
+`npm run build` passed, including TypeScript compilation and both production entry points. Full repository verification was also attempted while separate Author workspace changes were being written in the shared checkout: the recorded run had **1,401 passing and 20 failing tests**, with failures in the annotation-patch, event-patch, and markings-editor suites. Those results are not a clean full-application acceptance. The focused notation results above must not be mistaken for verification of the concurrent Author redesign.
 
 The music engraver visually reviewed the workbook and focused fixtures at 1280 × 720. The four accidental signs, mixed-staff alignment, ordinary rhythm heads, one-line rest orientation, barlines/repeat dots, both halves of a held rhythm tie, mixed tuplets, and separate slash meanings were accepted in those examples. Displaced rectangular rests retain supporting ledgers and their dots sit away from those ledgers.
 
