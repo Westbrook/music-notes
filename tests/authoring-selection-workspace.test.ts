@@ -5,7 +5,7 @@
  * input instead of Happy DOM's zero layout. These tests do not qualify engraving geometry,
  * native popover/picker behavior, browser text highlighting, touch, or printing.
  */
-import { authorActiveElement, authorControlParent, authorControlRoot, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
+import { authorActiveElement, authorControlParent, authorControlRoot, findAuthorControl, mountAuthorFixture, releaseAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
@@ -197,7 +197,10 @@ beforeEach(() => {
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
 });
 afterEach(async () => {
-  app?.dispose(); app = undefined; await flush(); vi.restoreAllMocks(); document.body.replaceChildren();
+  app?.dispose(); app = undefined; await flush();
+  // requestRender call contexts retain the disposed workspace and its control
+  // maps even after the fixture's DOM descendants have been released.
+  vi.clearAllMocks(); vi.restoreAllMocks(); await releaseAuthorFixture();
   if (viewportDescriptor) Object.defineProperty(window, 'innerWidth', viewportDescriptor);
 });
 

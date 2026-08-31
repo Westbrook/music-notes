@@ -1,5 +1,7 @@
+import { phArrowCounterClockwise, phArrowUUpLeft, phCheck, phCheckCircle, phEraser, phMagnifyingGlass, phPrinter } from '../../ui/icons/phosphor.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 
 /** Paper, page layout, and publication review controls. */
 export function pageTools(): TemplateResult {
@@ -10,7 +12,7 @@ export function pageTools(): TemplateResult {
           <p class="panel-kicker">Make room for the performance</p>
           <p class="field-help">Set the paper, inspect every page, then print or save as PDF.</p>
         </div>
-        <button id="print-score" type="button" class="primary-button">Print / Save as PDF</button>
+        <button id="print-score" type="button" class="primary-button">${buttonContent(phPrinter, 'Print / Save as PDF')}</button>
       </div>
       <div class="tool-disclosures page-disclosures">
         <details id="paper-inspector" class="inspector"><summary>Paper &amp; spacing</summary>
@@ -18,9 +20,9 @@ export function pageTools(): TemplateResult {
             <div class="draft-notice">
               <p id="page-draft-status" class="draft-status" role="status" aria-live="polite"></p>
               <div class="draft-actions">
-                <button id="discard-page-draft" type="button" class="quiet-button" hidden="">Discard &amp; reload</button>
-                <button id="return-page-draft" type="button" class="quiet-button" hidden="">Return to target</button>
-                <button id="review-page-draft" type="button" class="quiet-button" hidden="">Review current changes</button>
+                <button id="discard-page-draft" type="button" class="quiet-button" hidden="">${buttonContent(phArrowCounterClockwise, html`<span id="discard-page-draft-label" data-control-label>Discard &amp; reload</span>`)}</button>
+                <button id="return-page-draft" type="button" class="quiet-button" hidden="">${buttonContent(phArrowUUpLeft, html`<span id="return-page-draft-label" data-control-label>Return to target</span>`)}</button>
+                <button id="review-page-draft" type="button" class="quiet-button" hidden="">${buttonContent(phMagnifyingGlass, 'Review current changes')}</button>
               </div>
             </div>
             <div class="field-grid">
@@ -52,7 +54,7 @@ export function pageTools(): TemplateResult {
             </div>
             <label class="check-field" for="page-justify-last">
               <input id="page-justify-last" name="page-justify-last" type="checkbox"> Stretch the final system to the available width</label>
-            <button id="apply-pages" type="button" class="primary-button">Apply page settings</button>
+            <button id="apply-pages" type="button" class="primary-button">${buttonContent(phCheck, 'Apply page settings')}</button>
           </div>
         </details>
         <details id="break-inspector" class="inspector"><summary>Lines &amp; page boundaries</summary>
@@ -60,9 +62,9 @@ export function pageTools(): TemplateResult {
             <div class="draft-notice">
               <p id="boundary-draft-status" class="draft-status" role="status" aria-live="polite"></p>
               <div class="draft-actions">
-                <button id="discard-boundary-draft" type="button" class="quiet-button" hidden="">Discard &amp; reload</button>
-                <button id="return-boundary-draft" type="button" class="quiet-button" hidden="">Return to target</button>
-                <button id="review-boundary-draft" type="button" class="quiet-button" hidden="">Review current changes</button>
+                <button id="discard-boundary-draft" type="button" class="quiet-button" hidden="">${buttonContent(phArrowCounterClockwise, html`<span id="discard-boundary-draft-label" data-control-label>Discard &amp; reload</span>`)}</button>
+                <button id="return-boundary-draft" type="button" class="quiet-button" hidden="">${buttonContent(phArrowUUpLeft, html`<span id="return-boundary-draft-label" data-control-label>Return to target</span>`)}</button>
+                <button id="review-boundary-draft" type="button" class="quiet-button" hidden="">${buttonContent(phMagnifyingGlass, 'Review current changes')}</button>
               </div>
             </div>
             <label class="field" for="page-measure-select">Measure boundary<select id="page-measure-select" name="page-measure-select" class="author-select">
@@ -83,7 +85,7 @@ export function pageTools(): TemplateResult {
                 <input id="layout-keep" name="layout-keep" type="checkbox"> Prefer to keep with the next measure</label>
             </div>
             <p class="field-help">A keep preference can yield to fit or an explicit break. A page break does not certify a safe turn.</p>
-            <button id="apply-break" type="button" class="primary-button">Apply boundary choices</button>
+            <button id="apply-break" type="button" class="primary-button">${buttonContent(phCheck, 'Apply boundary choices')}</button>
           </div>
         </details>
         <details id="turn-inspector" class="inspector"><summary>Review a page turn</summary>
@@ -96,8 +98,8 @@ export function pageTools(): TemplateResult {
             <div id="turn-preview" class="turn-preview"></div>
             <p class="field-help">Check both sides of the turn for the whole part. Open improvisation and one resting voice do not establish time to turn.</p>
             <div class="button-row">
-              <button id="mark-turn-reviewed" type="button">Mark reviewed</button>
-              <button id="clear-turn-review" type="button" class="quiet-button">Clear review</button>
+              <button id="mark-turn-reviewed" type="button">${buttonContent(phCheckCircle, 'Mark reviewed')}</button>
+              <button id="clear-turn-review" type="button" class="quiet-button">${buttonContent(phEraser, 'Clear review')}</button>
             </div>
           </div>
         </details>

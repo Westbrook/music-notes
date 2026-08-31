@@ -1,5 +1,9 @@
+import { phArrowCounterClockwise, phArrowUUpLeft, phArrowsOutCardinal, phCheck, phMagnifyingGlass, phTrash } from '../../ui/icons/phosphor.js';
+import { bravuraAccidentalSharp, bravuraArticAccentAbove, bravuraNote128thUp, bravuraNote16thUp, bravuraNote32ndUp, bravuraNote64thUp, bravuraNote8thUp, bravuraNoteDoubleWhole, bravuraNoteHalfUp, bravuraNoteQuarterUp, bravuraNoteWhole, bravuraNoteheadBlack, bravuraOrnamentTrill } from '../../ui/icons/bravura.js';
+import { nativeOptionTemplate, nativeSelectDefault } from '../../ui/option-content.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 
 /** Event properties retain independent staged form controls. */
 export function eventProperties(): TemplateResult {
@@ -9,14 +13,14 @@ export function eventProperties(): TemplateResult {
       <div class="draft-notice">
         <p id="selected-draft-status" class="draft-status" role="status" aria-live="polite" tabindex="-1"></p>
         <div class="draft-actions">
-          <button id="load-event-values" type="button" class="quiet-button" hidden>Discard &amp; reload</button>
-          <button id="return-selected-draft" type="button" class="quiet-button" hidden>Return to target</button>
-          <button id="review-selected-draft" type="button" class="quiet-button" hidden>Review current changes</button>
+          <button id="load-event-values" type="button" class="quiet-button" hidden>${buttonContent(phArrowCounterClockwise, html`<span id="load-event-values-label" data-control-label>Discard &amp; reload</span>`)}</button>
+          <button id="return-selected-draft" type="button" class="quiet-button" hidden>${buttonContent(phArrowUUpLeft, html`<span id="return-selected-draft-label" data-control-label>Return to target</span>`)}</button>
+          <button id="review-selected-draft" type="button" class="quiet-button" hidden>${buttonContent(phMagnifyingGlass, 'Review current changes')}</button>
         </div>
       </div>
       <div class="properties-actions">
-        <button id="properties-pitch" type="button" popovertarget="selection-pitch-chooser" aria-label="Pitch spelling and quarter-tone alterations" disabled>Spelling…</button>
-        <button id="selection-prepare-drag" type="button" disabled>Prepare pitch drag</button>
+        <button id="properties-pitch" type="button" popovertarget="selection-pitch-chooser" aria-label="Pitch spelling and quarter-tone alterations" disabled>${buttonContent(bravuraAccidentalSharp, 'Spelling…')}</button>
+        <button id="selection-prepare-drag" type="button" disabled>${buttonContent(phArrowsOutCardinal, 'Prepare pitch drag')}</button>
       </div>
       ${eventMarkings()}
       <details id="event-details" class="sub-disclosure event-details"><summary>Event details</summary>
@@ -43,17 +47,18 @@ export function eventProperties(): TemplateResult {
           <fieldset id="selected-nominal-span" aria-describedby="selected-nominal-help" hidden>
             <legend>Nominal span (open slash)</legend>
             <div class="field-grid two-fields">
-              <label class="field" for="selected-duration">Nominal value<select id="selected-duration" name="selected-duration" class="author-select" aria-describedby="selected-nominal-help" .value=${'quarter'}>
+              <label class="field" for="selected-duration">Nominal value<select id="selected-duration" name="selected-duration" class="author-select" aria-describedby="selected-nominal-help">
                   <button type="button"><selectedcontent></selectedcontent></button>
-                  <option value="breve">Breve</option>
-                  <option value="whole">Whole</option>
-                  <option value="half">Half</option>
-                  <option value="quarter" selected>Quarter</option>
-                  <option value="eighth">Eighth</option>
-                  <option value="sixteenth">Sixteenth</option>
-                  <option value="thirty-second">32nd</option>
-                  <option value="sixty-fourth">64th</option>
-                  <option value="128th">128th</option>
+                  ${nativeOptionTemplate({ value: "breve", label: "Breve", icon: bravuraNoteDoubleWhole })}
+                  ${nativeOptionTemplate({ value: "whole", label: "Whole", icon: bravuraNoteWhole })}
+                  ${nativeOptionTemplate({ value: "half", label: "Half", icon: bravuraNoteHalfUp })}
+                  ${nativeOptionTemplate({ value: "quarter", label: "Quarter", icon: bravuraNoteQuarterUp, selected: true })}
+                  ${nativeOptionTemplate({ value: "eighth", label: "Eighth", icon: bravuraNote8thUp })}
+                  ${nativeOptionTemplate({ value: "sixteenth", label: "Sixteenth", icon: bravuraNote16thUp })}
+                  ${nativeOptionTemplate({ value: "thirty-second", label: "32nd", icon: bravuraNote32ndUp })}
+                  ${nativeOptionTemplate({ value: "sixty-fourth", label: "64th", icon: bravuraNote64thUp })}
+                  ${nativeOptionTemplate({ value: "128th", label: "128th", icon: bravuraNote128thUp })}
+                  ${nativeSelectDefault('quarter')}
                 </select>
               </label>
               <label class="field" for="selected-dots">Nominal dots<select id="selected-dots" name="selected-dots" class="author-select" aria-describedby="selected-nominal-help">
@@ -69,7 +74,7 @@ export function eventProperties(): TemplateResult {
           </fieldset>
           <label class="check-field" for="selected-measure-rest" id="selected-measure-rest-field" hidden>
             <input id="selected-measure-rest" name="selected-measure-rest" type="checkbox" />Full-measure rest</label>
-          <button id="update-event" type="button" class="primary-button" disabled>Apply event details</button>
+          <button id="update-event" type="button" class="primary-button" disabled>${buttonContent(phCheck, 'Apply event details')}</button>
         </div>
       </details>
       <details id="event-engraving" class="sub-disclosure"><summary>Engraving</summary>
@@ -107,7 +112,7 @@ export function eventProperties(): TemplateResult {
           <input id="selected-rhythmic" name="selected-rhythmic" type="checkbox" />Write slash rhythm</label>
       </div>
       <div class="button-row panel-actions">
-        <button id="remove-event" type="button" class="danger-button">Remove event</button>
+        <button id="remove-event" type="button" class="danger-button">${buttonContent(phTrash, 'Remove event')}</button>
       </div>
     </section>
   `;
@@ -125,9 +130,9 @@ export function eventMarkings(): TemplateResult {
       <div class="draft-notice">
         <p id="event-markings-draft-status" class="draft-status" role="status" aria-live="polite" tabindex="-1"></p>
         <div class="draft-actions">
-          <button id="discard-event-markings" type="button" class="quiet-button" hidden>Discard changes</button>
-          <button id="return-event-markings" type="button" class="quiet-button" hidden>Return to target</button>
-          <button id="review-event-markings" type="button" class="quiet-button" hidden>Review current changes</button>
+          <button id="discard-event-markings" type="button" class="quiet-button" hidden>${buttonContent(phArrowCounterClockwise, html`<span id="discard-event-markings-label" data-control-label>Discard changes</span>`)}</button>
+          <button id="return-event-markings" type="button" class="quiet-button" hidden>${buttonContent(phArrowUUpLeft, html`<span id="return-event-markings-label" data-control-label>Return to target</span>`)}</button>
+          <button id="review-event-markings" type="button" class="quiet-button" hidden>${buttonContent(phMagnifyingGlass, 'Review current changes')}</button>
         </div>
       </div>
       <div id="event-markings-tie-options" class="event-markings-tie-options" hidden>
@@ -138,16 +143,16 @@ export function eventMarkings(): TemplateResult {
       <p id="event-markings-empty" class="field-help">No marks attached to this event.</p>
       <div id="event-markings-rows"></div>
       <div class="button-row">
-        <button id="add-event-articulation" type="button">Add articulation</button>
-        <button id="add-event-ornament" type="button">Add ornament</button>
-        <button id="add-event-interval" type="button">Add harmony interval</button>
+        <button id="add-event-articulation" type="button">${buttonContent(bravuraArticAccentAbove, 'Add articulation')}</button>
+        <button id="add-event-ornament" type="button">${buttonContent(bravuraOrnamentTrill, 'Add ornament')}</button>
+        <button id="add-event-interval" type="button">${buttonContent(bravuraNoteheadBlack, 'Add harmony interval')}</button>
       </div>
       <p id="event-markings-availability" class="field-help"></p>
       <p id="event-markings-placement-help" class="field-help">Articulations and ornaments are placed automatically opposite the drawn stem, or above when there is no stem. Harmony direction stays above or below the main pitch.</p>
       <p id="event-markings-interval-help" class="field-help" hidden>Use intervals 1–13 with optional b or #. For example, 5 above F is C; b3 below B♭ is G. Alter the interval’s distance before applying above or below. Every tied road segment must list the same full set of harmony intervals; nothing is inherited.</p>
       <p id="event-markings-ornament-help" class="field-help" hidden>Ornaments are printed instructions, not written auxiliary notes. In 3 roads music, choose ornament notes freely. Harmony and ornament notes never replace the main pitch used by higher, same, and lower.</p>
       <div class="button-row panel-actions">
-        <button id="apply-event-markings" type="button" class="primary-button" disabled>Apply attached marks</button>
+        <button id="apply-event-markings" type="button" class="primary-button" disabled>${buttonContent(phCheck, 'Apply attached marks')}</button>
       </div>
     </section>
   `;

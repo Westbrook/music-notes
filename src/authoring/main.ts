@@ -1,3 +1,7 @@
+import { phArrowDown, phArrowRight, phArrowUp, phMusicNotes } from '../ui/icons/phosphor.js';
+import { bravuraNoteQuarterUp, bravuraNoteheadSlashHorizontalEnds, bravuraNoteheadSlashWhiteWhole, bravuraRestWholeLegerLine } from '../ui/icons/bravura.js';
+import { durationIcon } from '../ui/notation-icons.js';
+import { setControlLabel, setControlIcon } from '../ui/control-content.js';
 import '../components/index.js';
 import './pages.css';
 import { mountAuthorShell } from './ui/author-shell.js';
@@ -636,14 +640,14 @@ export class AuthorWorkspace {
       this.el('save-status').hidden = !!fullFeedback;
     }
     trigger.hidden = !pending && !count && !problem && !fullFeedback && !this.notationNotices.length;
-    trigger.textContent = problem ? 'Review error' : 'Review';
+    setControlLabel(trigger, problem ? 'Review error' : 'Review');
     const retainedReview = this.controls.get('selection-review-history');
     if (retainedReview) retainedReview.hidden = !selectionProblem;
     const localReview = this.controls.get('selection-review');
     if (localReview) localReview.hidden = true;
     this.el('review-source').hidden = !pending;
     this.el('review-drafts').hidden = !count;
-    this.el('review-drafts').textContent = count ? `Review ${drafts}` : 'Review unsaved forms';
+    setControlLabel(this.el('review-drafts'), count ? `Review ${drafts}` : 'Review unsaved forms');
     const recovery = this.validMarkingRecovery();
     const recoveryButton = this.el<HTMLButtonElement>('review-incompatible-mark');
     recoveryButton.hidden = !recovery || problem !== recovery.message;
@@ -651,7 +655,7 @@ export class AuthorWorkspace {
     if (recovery) {
       const place = this.location(recovery.eventId);
       const marking = place.event!.markings!.find(item => item.id === recovery.markingId)!;
-      recoveryButton.textContent = `Edit ${markingLabel(marking)} in bar ${place.measure.number}`;
+      setControlLabel(recoveryButton, `Edit ${markingLabel(marking)} in bar ${place.measure.number}`);
     }
   }
   private requireWriting(): void {
@@ -1085,7 +1089,7 @@ export class AuthorWorkspace {
     this.el('document-title').textContent = project.metadata.title || 'Untitled composition';
     const viewedPart = project.parts.find(part => part.id === this.partId);
     const viewedPartName = viewedPart ? partLabel(viewedPart, project.parts) : 'Full score';
-    this.el('active-part-label').textContent = viewedPartName;
+    setControlLabel(this.el('active-part-label'), viewedPartName);
     this.syncHistoryControls();
     this.options('part-select', [{ value: 'score', label: 'Full score' }, ...project.parts.map(part => ({ value: part.id, label: partLabel(part, project.parts) }))], this.partId);
     this.options('staff-select', this.visibleStaves().map(staff => ({ value: staff.id, label: this.staffName(staff.id) })), location.staff.id);
@@ -1107,7 +1111,7 @@ export class AuthorWorkspace {
     if (compact) compact.textContent = `Bar ${location.measure.number} · V${location.voiceIndex + 1}`;
     const compactStaff = this.controls.get('selection-compact-staff');
     if (compactStaff) compactStaff.textContent = this.staffName(location.staff.id);
-    this.el('add-measure').textContent = `Add measure after ${location.measure.number}`;
+    setControlLabel(this.el('add-measure'), `Add measure after ${location.measure.number}`);
     this.el('add-measure').title = 'Adds an aligned measure to every staff';
     for (const id of ['add-measure', 'add-chord-symbol', 'start-entry-here']) this.el<HTMLButtonElement>(id).disabled = this.mode !== 'write' || project.pendingSource !== null;
     this.el<HTMLButtonElement>('next-measure').disabled = location.measureIndex >= location.staff.measures.length - 1;
@@ -1279,7 +1283,7 @@ export class AuthorWorkspace {
     const blocked = this.mode !== 'write' || this.session.signals.pendingSource.get() !== null;
     this.el<HTMLButtonElement>('tie-events').disabled = blocked || !!tieReason;
     this.el<HTMLButtonElement>('clear-ties').disabled = blocked || !chosen.some(event => event.tie !== 'none');
-    this.el('clear-ties').textContent = 'Clear connected ties';
+    setControlLabel(this.el('clear-ties'), 'Clear connected ties');
     const oneBar = ids.length > 0 && ids.every(id => this.location(id).measure.id === place.measure.id);
     const wrap = this.el<HTMLButtonElement>('wrap-tuplet');
     wrap.disabled ||= blocked || !contiguous || !oneBar || chosen.some(event => event.measureRest);
@@ -1345,7 +1349,7 @@ export class AuthorWorkspace {
     this.el('tools-toggle').hidden = !this.entryMode;
     if (mark) {
       const measure = this.session.signals.score.get().staves.find(staff => staff.id === mark.cursor.staffId)?.measures.find(item => item.id === mark.cursor.measureId);
-      this.el('resume-entry').textContent = `Resume at bar ${measure?.number ?? '?'}`;
+      setControlLabel(this.el('resume-entry'), `Resume at bar ${measure?.number ?? '?'}`);
       this.el('resume-entry').setAttribute('aria-label', `Resume writing at ${this.entryLocationLabel(mark.cursor)}`);
       this.el('resume-entry').title = this.entryLocationLabel(mark.cursor);
     }
@@ -1370,14 +1374,21 @@ export class AuthorWorkspace {
     this.el('entry-settings-label').textContent = toolName;
     this.el('entry-settings-trigger').hidden = kind === 'road';
     this.el('entry-direction-trigger').hidden = kind !== 'road';
-    this.el('entry-direction-trigger').textContent = kind === 'road'
-      ? this.value('event-direction') === 'higher' ? 'Higher' : this.value('event-direction') === 'lower' ? 'Lower' : 'Same' : 'Direction';
+    setControlLabel(this.el('entry-direction-trigger'), kind === 'road'
+      ? this.value('event-direction') === 'higher' ? 'Higher' : this.value('event-direction') === 'lower' ? 'Lower' : 'Same' : 'Direction');
+    setControlIcon(this.el('entry-direction-trigger'), this.value('event-direction') === 'higher' ? phArrowUp
+      : this.value('event-direction') === 'lower' ? phArrowDown : phArrowRight);
     this.el('entry-direction-trigger').setAttribute('aria-label', `New 3 roads direction: ${directionLabel(this.value('event-direction'))}`);
     for (const direction of ['higher', 'same', 'lower']) this.el(`entry-direction-${direction}`).setAttribute('aria-pressed', String(this.value('event-direction') === direction));
     this.el('entry-settings-trigger').setAttribute('aria-label', `Next event settings: ${recipe}`);
     this.el('entry-settings-trigger').setAttribute('aria-describedby', `${kind === 'road' ? 'direction-help ' : pitchedEntry ? 'pitch-help ' : ''}position-help`);
     const nominal = kind === 'slash';
     const duration = this.value('event-duration');
+    const valueIcon = measureRest ? bravuraRestWholeLegerLine : nominal ? bravuraNoteheadSlashWhiteWhole
+      : durationIcon(duration as Duration, kind === 'rest');
+    setControlIcon(this.el('entry-value-trigger'), valueIcon);
+    setControlIcon(this.el('entry-settings-trigger'), kind === 'chord' ? phMusicNotes
+      : kind === 'rhythmic-slash' ? bravuraNoteheadSlashHorizontalEnds : valueIcon);
     const durationName = duration ? duration[0].toUpperCase() + duration.slice(1) : 'Value';
     const compactDuration = ({ sixteenth: '16th', 'thirty-second': '32nd', 'sixty-fourth': '64th', '128th': '128th' } as Record<string, string>)[duration] ?? durationName;
     this.el('entry-value-label').textContent = measureRest ? 'Follows meter' : nominal ? 'Nominal span' : compactDuration;
@@ -1387,7 +1398,8 @@ export class AuthorWorkspace {
     this.el('entry-value-field-label').textContent = nominal ? 'Nominal span' : 'Written value';
     this.el('entry-value-trigger').setAttribute('aria-label', measureRest ? `Full-measure rest follows ${location.measure.meter.display}`
       : `${nominal ? 'Nominal span' : 'Written value'} for new ${kind === 'rest' ? 'rests' : 'notes'}: ${durationName}, ${dots} dots`);
-    this.el('entry-choose-note').textContent = notation === 'three-roads' ? '3 roads note' : notation === 'rhythm' ? 'Rhythm note' : 'Note';
+    setControlLabel(this.el('entry-choose-note'), notation === 'three-roads' ? '3 roads note' : notation === 'rhythm' ? 'Rhythm note' : 'Note');
+    setControlIcon(this.el('entry-choose-note'), notation === 'three-roads' ? bravuraNoteheadSlashHorizontalEnds : bravuraNoteQuarterUp);
     this.el('entry-choose-note').setAttribute('aria-pressed', String(kind === defaultEntryKind[notation]));
     this.el('entry-choose-rest').setAttribute('aria-pressed', String(kind === 'rest' && !measureRest));
     const handle = this.el<HTMLButtonElement>('drag-entry');
@@ -1399,14 +1411,14 @@ export class AuthorWorkspace {
     handle.disabled = !supportsPlacement || kind === 'note' && !validPitch || this.mode !== 'write' || this.session.signals.pendingSource.get() !== null;
     handle.setAttribute('aria-label', ordinaryRest ? 'Drag the configured rest to the staff' : 'Drag the configured note to the staff');
     handle.title = ordinaryRest ? 'Drag a rest to its musical position; height does not change the rest' : 'Drag a note to the staff';
-    handle.querySelector('span')!.textContent = ordinaryRest ? 'Drag rest' : 'Drag note';
+    setControlLabel(handle, ordinaryRest ? 'Drag rest' : 'Drag note');
     this.el('drag-entry-value').textContent = supportsPlacement ? recipe : 'Use Insert here for this entry';
     this.el('insert-event').hidden = this.entryMode && this.entryDragArmed;
     this.el('entry-value-trigger').hidden = this.entryMode && this.entryDragArmed;
     this.el('cancel-entry-drag').hidden = !this.entryMode || !this.entryDragArmed;
     this.el('cancel-entry-drag').setAttribute('aria-label', ordinaryRest ? 'Cancel prepared rest drag' : 'Cancel prepared note drag');
     this.el<HTMLButtonElement>('prepare-entry-drag').disabled = handle.disabled;
-    this.el('prepare-entry-drag').textContent = ordinaryRest ? 'Prepare rest drag' : 'Prepare note drag';
+    setControlLabel(this.el('prepare-entry-drag'), ordinaryRest ? 'Prepare rest drag' : 'Prepare note drag');
     this.el('entry-drag-help').textContent = supportsPlacement
       ? 'Prepare the handle, then drag it to a staff. The written value stays unchanged. Escape or Done returns to ordinary writing.'
       : measureRest ? 'A full-measure rest follows the meter. Use Insert here; dragging is reserved for ordinary rests and single pitched notes.'
@@ -1943,7 +1955,7 @@ export class AuthorWorkspace {
     if (!analysis.eligible && !analysis.ending) return false;
     this.pointerOffer = this.captureOffer(command, true);
     this.el('pointer-recovery-context').textContent = `No music changed. The voice at ${this.entryLocationLabel(command.cursor)} is full. ${analysis.ending ? 'Review the final barlines, then add' : 'Add'} bar ${analysis.newMeasureLabel} to every staff and insert the captured ${this.entryDescription(command.value)} on ${this.staffName(command.cursor.staffId)}, voice ${command.cursor.voiceIndex + 1}?`;
-    this.el('confirm-pointer-recovery').textContent = analysis.ending ? 'Review ending…' : 'Add measure and insert';
+    setControlLabel(this.el('confirm-pointer-recovery'), analysis.ending ? 'Review ending…' : 'Add measure and insert');
     this.surfaces.open('pointer-recovery', '#confirm-pointer-recovery');
     return true;
   }

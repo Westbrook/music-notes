@@ -1,4 +1,11 @@
+import { phArrowDown, phArrowUp, phTrash } from '../ui/icons/phosphor.js';
 import { ARTICULATION_TYPES, ORNAMENT_TYPES, harmonyIntervalText, pitchDescription } from '../model/index.js';
+import { html, render } from 'lit';
+import { buttonContent } from '../ui/button-content.js';
+import { setControlLabel } from '../ui/control-content.js';
+import { renderNativeOptions } from '../ui/native-options.js';
+import type { NativeOption } from '../ui/native-options.js';
+import { articulationIcon, ornamentIcon } from '../ui/notation-icons.js';
 import type { ArticulationType, EventMarking, MusicEvent, OrnamentType, Score, Staff } from '../model/types.js';
 import { asControlScope } from './control-scope.js';
 import type { ControlRoot, ControlScope } from './control-scope.js';
@@ -472,7 +479,7 @@ export class EventMarkingsEditor {
     const grid = this.doc.createElement('div'); grid.className = row.kind === 'interval' ? 'field-grid two-fields' : 'field-grid'; element.append(grid);
     if (row.kind !== 'interval') grid.style.gridTemplateColumns = 'minmax(0, 1fr)';
     const controls = new Map<EventMarkingField, HTMLInputElement | HTMLSelectElement>();
-    const field = (key: EventMarkingField, title: string, choices?: readonly { value: string; label: string }[]) => {
+    const field = (key: EventMarkingField, title: string, choices?: readonly NativeOption[]) => {
       const label = this.doc.createElement('label'); label.className = 'field'; label.append(this.doc.createTextNode(title));
       const control = this.doc.createElement(choices ? 'select' : 'input') as HTMLInputElement | HTMLSelectElement;
       control.id = `event-marking-${this.instance}-${++this.sequence}-${key}`; control.name = control.id;
@@ -480,18 +487,21 @@ export class EventMarkingsEditor {
       label.htmlFor = control.id;
       if (choices) {
         const button = this.doc.createElement('button'); button.type = 'button'; button.append(this.doc.createElement('selectedcontent')); control.append(button);
-        for (const choice of choices) { const option = this.doc.createElement('option'); option.value = choice.value; option.textContent = choice.label; control.append(option); }
+        renderNativeOptions(control as HTMLSelectElement, choices, row[key]);
       } else { const input = control as HTMLInputElement; input.type = 'text'; input.placeholder = '5, b3, #11'; input.autocomplete = 'off'; input.spellcheck = false; }
       label.append(control); grid.append(label); controls.set(key, control);
     };
     if (row.kind === 'interval') {
       field('value', 'Interval figure');
       field('placement', 'Harmony direction', [
-        { value: 'above', label: 'Above main pitch' },
-        { value: 'below', label: 'Below main pitch' },
+        { value: 'above', label: 'Above main pitch', icon: phArrowUp },
+        { value: 'below', label: 'Below main pitch', icon: phArrowDown },
       ]);
-    } else field('type', `${kindNames[row.kind]} type`, (row.kind === 'articulation' ? ARTICULATION_TYPES : ORNAMENT_TYPES).map(type => ({ value: type, label: names[type] })));
-    const remove = this.doc.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button'; remove.textContent = 'Remove';
+    } else field('type', `${kindNames[row.kind]} type`, row.kind === 'articulation'
+      ? ARTICULATION_TYPES.map(type => ({ value: type, label: names[type], icon: articulationIcon(type) }))
+      : ORNAMENT_TYPES.map(type => ({ value: type, label: names[type], icon: ornamentIcon(type) })));
+    const remove = this.doc.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button';
+    render(buttonContent(phTrash, html`<span data-control-label>Remove</span>`, { layout: 'inline' }), remove);
     remove.dataset.removeMarking = row.key; remove.setAttribute('aria-label', `Remove ${kindNames[row.kind].toLowerCase()}`); element.append(remove);
     enhanceSelects(element);
     return { element, controls, remove };
@@ -605,7 +615,7 @@ export class EventMarkingsEditor {
       }
       mounted.remove.disabled = blocked;
       const recovery = recoveryRow(row, view.current?.rows ?? []);
-      mounted.remove.textContent = recovery ? 'Discard row change' : 'Remove';
+      setControlLabel(mounted.remove, recovery ? 'Discard row change' : 'Remove');
       mounted.remove.setAttribute('aria-label', `${recovery ? 'Discard row change for' : 'Remove'} ${rowDescription(row)}${row.markingId ? ` (${row.markingId})` : ''}`);
     });
     this.el('event-markings-empty').hidden = rows.length > 0;
@@ -633,11 +643,11 @@ export class EventMarkingsEditor {
         : 'Complete scope is available for connected tied road notes. Articulations and ornaments always stay on the selected segment.';
     this.el<HTMLButtonElement>('apply-event-markings').disabled = !view.canApply;
     const discard = this.el<HTMLButtonElement>('discard-event-markings'); discard.hidden = !view.dirty && !view.error && !this.error;
-    discard.textContent = (!view.matchesSelection || context.entryMode) && current ? `Discard and edit ${eventName(current.event)}`
-      : 'Discard changes';
+    setControlLabel(discard, (!view.matchesSelection || context.entryMode) && current ? `Discard and edit ${eventName(current.event)}`
+      : 'Discard changes');
     const back = this.el<HTMLButtonElement>('return-event-markings'); back.hidden = !needsReturn;
     back.disabled = view.status === 'missing' || view.status === 'document-changed';
-    back.textContent = place ? `Return to ${eventName(place.event)}` : 'Return to original event';
+    setControlLabel(back, place ? `Return to ${eventName(place.event)}` : 'Return to original event');
     const review = this.el<HTMLButtonElement>('review-event-markings'); review.hidden = view.status !== 'conflict'; review.disabled = blocked;
     this.displayed = { documentId: view.documentId, eventId: view.targetId, event: place?.event, blockedReason: view.blockedReason, chain };
     this.discardKey = inspectionDiscardKey(context, this.options.session.project.id, view);

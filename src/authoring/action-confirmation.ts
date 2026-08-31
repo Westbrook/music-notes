@@ -1,3 +1,5 @@
+import { phCheck, phTrash } from '../ui/icons/phosphor.js';
+import { setControlLabel, setControlIcon } from '../ui/control-content.js';
 import { activeElement, composedAncestors, composedContains } from '../ui/composed-dom.js';
 import { asControlScope } from './control-scope.js';
 import type { ControlRoot, ControlScope } from './control-scope.js';
@@ -99,9 +101,10 @@ export class ActionConfirmation {
     this.pending = { isCurrent: request.isCurrent, returnFocus: request.returnFocus ?? previousFocus, previousFocus, resolve, stale: false };
     this.title.textContent = request.title;
     this.message.textContent = request.message;
-    this.confirmButton.textContent = request.confirmLabel;
+    setControlLabel(this.confirmButton, request.confirmLabel);
+    setControlIcon(this.confirmButton, request.destructive ? phTrash : phCheck);
     this.confirmButton.disabled = false;
-    this.cancelButton.textContent = 'Cancel';
+    setControlLabel(this.cancelButton, 'Cancel');
     this.cancelButton.disabled = false;
     this.confirmButton.autofocus = !request.destructive;
     this.cancelButton.autofocus = !!request.destructive;
@@ -150,7 +153,7 @@ export class ActionConfirmation {
       this.status.hidden = false;
       this.dialog.setAttribute('aria-describedby', `${this.message.id} ${this.status.id}`);
       this.dialog.dataset.confirmationState = 'stale';
-      this.cancelButton.textContent = 'Close and review';
+      setControlLabel(this.cancelButton, 'Close and review');
       this.revealStatus();
       this.cancelButton.focus({ preventScroll: true });
       return;

@@ -1,3 +1,7 @@
+import { phArrowCounterClockwise, phArrowUUpLeft, phEye } from '../ui/icons/phosphor.js';
+import { setControlLabel } from '../ui/control-content.js';
+import { html, render } from 'lit';
+import { buttonContent } from '../ui/button-content.js';
 import { pitchDescription, pitchText } from '../model/index.js';
 import type { Measure, MusicEvent, Score, Staff, Tuplet, Voice } from '../model/types.js';
 import { renderNativeCheckboxes } from '../ui/native-checkboxes.js';
@@ -659,8 +663,8 @@ export class InspectorForms {
     const discard = this.el<HTMLButtonElement>(form === 'selected' && this.el('load-event-values') ? 'load-event-values' : `discard-${form}-draft`);
     if (discard) {
       discard.hidden = !snapshot.dirty && !snapshot.error; discard.disabled = !snapshot.dirty && !snapshot.error;
-      discard.textContent = form === 'selected' && (!snapshot.matchesSelection || frame.context.entryMode) && currentEvent
-        ? `Discard and edit ${eventName(currentEvent)}` : form === 'selected' || snapshot.matchesSelection ? 'Discard changes' : 'Discard and start here';
+      setControlLabel(discard, form === 'selected' && (!snapshot.matchesSelection || frame.context.entryMode) && currentEvent
+        ? `Discard and edit ${eventName(currentEvent)}` : form === 'selected' || snapshot.matchesSelection ? 'Discard changes' : 'Discard and start here');
     }
     const review = this.el<HTMLButtonElement>(`review-${form}-draft`);
     if (review) { review.hidden = snapshot.status !== 'conflict'; review.disabled = snapshot.status !== 'conflict'; }
@@ -669,7 +673,7 @@ export class InspectorForms {
       returnButton.hidden = !needsReturn;
       returnButton.disabled = !snapshot.targetId || snapshot.status === 'missing' || snapshot.status === 'document-changed';
       const event = form === 'selected' ? location(frame.score, snapshot.targetId ?? undefined)?.event : undefined;
-      returnButton.textContent = event ? `Return to ${eventName(event)}` : 'Return to draft target';
+      setControlLabel(returnButton, event ? `Return to ${eventName(event)}` : 'Return to draft target');
     }
     for (const id of applyIds[form]) {
       const button = this.el<HTMLButtonElement>(id);
@@ -768,7 +772,10 @@ export class InspectorForms {
     for (const [prefix, text] of [['discard', 'Discard changes'], ['return', 'Return to draft target'], ['review', 'Review current music']]) {
       if (prefix === 'discard' && form === 'selected' && this.el('load-event-values')) continue;
       if (this.el(`${prefix}-${form}-draft`)) continue;
-      const button = this.doc.createElement('button'); button.type = 'button'; button.id = `${prefix}-${form}-draft`; button.textContent = text; button.hidden = true;
+      const button = this.doc.createElement('button'); button.type = 'button'; button.id = `${prefix}-${form}-draft`; button.hidden = true;
+      render(buttonContent(prefix === 'discard' ? phArrowCounterClockwise : prefix === 'return' ? phArrowUUpLeft : phEye,
+        html`<span data-control-label></span>`, { layout: 'inline' }), button);
+      setControlLabel(button, text);
       this.describe(button, `${form}-draft-status`);
       actions.append(button);
     }

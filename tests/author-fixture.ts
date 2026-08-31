@@ -1,3 +1,4 @@
+import { LitElement, nothing, render } from 'lit';
 import { mountAuthorShell } from '../src/authoring/ui/author-shell.js';
 import type { AuthorShell } from '../src/authoring/ui/author-shell.js';
 
@@ -61,6 +62,41 @@ export function authorControlParent(element: HTMLElement): HTMLElement | null {
 export function mountAuthorFixture(root: HTMLElement = document.body): AuthorShell {
   root.replaceChildren();
   return mountAuthorShell(root);
+}
+
+/**
+ * After controllers are disposed and assertions finish, release this fixture's
+ * descendant graph. Vitest 4.1's strong mock registry retains spy receivers,
+ * call contexts, and original callback closures after restoreAllMocks(). In
+ * long Happy DOM suites one retained control would otherwise pin its complete
+ * old Author tree, including every shadow root. This is harness cleanup only;
+ * production teardown and lifecycle assertions run before it.
+ */
+export async function releaseAuthorFixture(root: HTMLElement = document.body): Promise<void> {
+  const children = [...root.childNodes];
+  const nodes: Node[] = [];
+  const updates: Promise<unknown>[] = [];
+  const visit = (node: Node, action: (node: Node) => void): void => {
+    action(node);
+    if (node instanceof Element && node.shadowRoot) visit(node.shadowRoot, action);
+    for (const child of [...node.childNodes]) visit(child, action);
+  };
+  for (const child of children) visit(child, node => {
+    nodes.push(node);
+    if (node.isConnected && 'updateComplete' in node) updates.push((node as Node & { updateComplete: Promise<unknown> }).updateComplete);
+  });
+  // Complete already-scheduled Lit ownership work before dismantling mounts.
+  await Promise.all(updates);
+  // A retained host also retains Lit's cached template parts. Empty each owned
+  // render range through Lit while its markers and renderBefore node remain in
+  // place; raw DOM removal alone leaves those template instances reachable.
+  for (const node of [...nodes].reverse()) {
+    if (node instanceof LitElement && node.renderRoot) render(nothing, node.renderRoot, node.renderOptions);
+  }
+  root.replaceChildren();
+  for (const node of nodes) {
+    if ('replaceChildren' in node) (node as Element | DocumentFragment).replaceChildren();
+  }
 }
 
 /** Detached structure for accessibility/markup contracts without fonts or SVG. */

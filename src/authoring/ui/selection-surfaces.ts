@@ -1,5 +1,9 @@
+import { phArrowDown, phArrowRight, phArrowUp, phMinus, phPlus, phX } from '../../ui/icons/phosphor.js';
+import { bravuraAccidentalDoubleFlat, bravuraAccidentalDoubleSharp, bravuraAccidentalFlat, bravuraAccidentalNatural, bravuraAccidentalQuarterToneFlatStein, bravuraAccidentalQuarterToneSharpStein, bravuraAccidentalSharp, bravuraAccidentalThreeQuarterTonesFlatZimmermann, bravuraAccidentalThreeQuarterTonesSharpStein, bravuraArticAccentAbove, bravuraArticMarcatoAbove, bravuraArticStaccatissimoAbove, bravuraArticStaccatoAbove, bravuraArticTenutoAbove, bravuraFermataAbove, bravuraNote128thUp, bravuraNote16thUp, bravuraNote32ndUp, bravuraNote64thUp, bravuraNote8thUp, bravuraNoteDoubleWhole, bravuraNoteHalfUp, bravuraNoteQuarterUp, bravuraNoteWhole } from '../../ui/icons/bravura.js';
+import { nativeOptionTemplate } from '../../ui/option-content.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 
 /** Immediate written value and dot changes for the accepted selection. */
 export function selectionValueChooser(): TemplateResult {
@@ -7,22 +11,22 @@ export function selectionValueChooser(): TemplateResult {
     <section id="selection-value-chooser" class="surface-popover selection-chooser nonprinting" popover="auto" role="dialog" aria-labelledby="selection-value-heading" aria-describedby="selection-controls-context">
       <div class="popover-heading">
         <h2 id="selection-value-heading">Written value</h2>
-        <button id="close-selection-value" type="button" class="quiet-button" popovertarget="selection-value-chooser" popovertargetaction="hide">Close</button>
+        <button id="close-selection-value" type="button" class="quiet-button" popovertarget="selection-value-chooser" popovertargetaction="hide">${buttonContent(phX, "Close")}</button>
       </div>
       <div class="popover-body">
         <div class="field-grid two-fields">
           <label class="field" for="selection-duration">Note value<select id="selection-duration" name="selection-duration" class="author-select" aria-describedby="selection-rhythm-help">
               <button type="button"><selectedcontent></selectedcontent></button>
               <option value="">Mixed</option>
-              <option value="breve">Breve</option>
-              <option value="whole">Whole</option>
-              <option value="half">Half</option>
-              <option value="quarter">Quarter</option>
-              <option value="eighth">Eighth</option>
-              <option value="sixteenth">Sixteenth</option>
-              <option value="thirty-second">32nd</option>
-              <option value="sixty-fourth">64th</option>
-              <option value="128th">128th</option>
+              ${nativeOptionTemplate({ value: "breve", label: "Breve", icon: bravuraNoteDoubleWhole })}
+              ${nativeOptionTemplate({ value: "whole", label: "Whole", icon: bravuraNoteWhole })}
+              ${nativeOptionTemplate({ value: "half", label: "Half", icon: bravuraNoteHalfUp })}
+              ${nativeOptionTemplate({ value: "quarter", label: "Quarter", icon: bravuraNoteQuarterUp })}
+              ${nativeOptionTemplate({ value: "eighth", label: "Eighth", icon: bravuraNote8thUp })}
+              ${nativeOptionTemplate({ value: "sixteenth", label: "Sixteenth", icon: bravuraNote16thUp })}
+              ${nativeOptionTemplate({ value: "thirty-second", label: "32nd", icon: bravuraNote32ndUp })}
+              ${nativeOptionTemplate({ value: "sixty-fourth", label: "64th", icon: bravuraNote64thUp })}
+              ${nativeOptionTemplate({ value: "128th", label: "128th", icon: bravuraNote128thUp })}
             </select>
           </label>
           <label class="field" for="selection-dots">Dots<select id="selection-dots" name="selection-dots" class="author-select" aria-describedby="selection-rhythm-help">
@@ -49,7 +53,7 @@ export function selectionPitchChooser(): TemplateResult {
     <section id="selection-pitch-chooser" class="surface-popover selection-chooser nonprinting" popover="auto" role="dialog" aria-labelledby="selection-pitch-heading" aria-describedby="selection-controls-context">
       <div class="popover-heading">
         <h2 id="selection-pitch-heading">Pitch &amp; direction</h2>
-        <button id="close-selection-pitch" type="button" class="quiet-button" popovertarget="selection-pitch-chooser" popovertargetaction="hide">Close</button>
+        <button id="close-selection-pitch" type="button" class="quiet-button" popovertarget="selection-pitch-chooser" popovertargetaction="hide">${buttonContent(phX, "Close")}</button>
       </div>
       <div class="popover-body">
         <div class="field-grid two-fields selection-pitch-components">
@@ -81,31 +85,31 @@ export function selectionPitchChooser(): TemplateResult {
           </label>
         </div>
         <div id="selection-chooser-accidentals" role="group" aria-label="Set absolute accidental" aria-describedby="selection-pitch-help" hidden>
-          <button id="selection-chooser-flat" type="button" aria-pressed="false">Flat</button>
-          <button id="selection-chooser-natural" type="button" aria-pressed="false">Natural</button>
-          <button id="selection-chooser-sharp" type="button" aria-pressed="false">Sharp</button>
+          <button id="selection-chooser-flat" type="button" aria-pressed="false">${buttonContent(bravuraAccidentalFlat, "Flat")}</button>
+          <button id="selection-chooser-natural" type="button" aria-pressed="false">${buttonContent(bravuraAccidentalNatural, "Natural")}</button>
+          <button id="selection-chooser-sharp" type="button" aria-pressed="false">${buttonContent(bravuraAccidentalSharp, "Sharp")}</button>
         </div>
         <div class="field-grid">
           <label id="selection-alteration-field" class="field" for="selection-alteration">Absolute alteration<select id="selection-alteration" name="selection-alteration" class="author-select" aria-describedby="selection-pitch-help">
               <button type="button"><selectedcontent></selectedcontent></button>
               <option value="">Mixed</option>
-              <option value="-2">Double flat · −2 semitones</option>
-              <option value="-1.5">Three-quarter flat · −1.5 semitones</option>
-              <option value="-1">Flat · −1 semitone</option>
-              <option value="-0.5">Quarter flat · −0.5 semitone</option>
-              <option value="0">Natural · 0 semitones</option>
-              <option value="0.5">Quarter sharp · +0.5 semitone</option>
-              <option value="1">Sharp · +1 semitone</option>
-              <option value="1.5">Three-quarter sharp · +1.5 semitones</option>
-              <option value="2">Double sharp · +2 semitones</option>
+              ${nativeOptionTemplate({ value: "-2", label: "Double flat \u00b7 \u22122 semitones", icon: bravuraAccidentalDoubleFlat })}
+              ${nativeOptionTemplate({ value: "-1.5", label: "Three-quarter flat \u00b7 \u22121.5 semitones", icon: bravuraAccidentalThreeQuarterTonesFlatZimmermann })}
+              ${nativeOptionTemplate({ value: "-1", label: "Flat \u00b7 \u22121 semitone", icon: bravuraAccidentalFlat })}
+              ${nativeOptionTemplate({ value: "-0.5", label: "Quarter flat \u00b7 \u22120.5 semitone", icon: bravuraAccidentalQuarterToneFlatStein })}
+              ${nativeOptionTemplate({ value: "0", label: "Natural \u00b7 0 semitones", icon: bravuraAccidentalNatural })}
+              ${nativeOptionTemplate({ value: "0.5", label: "Quarter sharp \u00b7 +0.5 semitone", icon: bravuraAccidentalQuarterToneSharpStein })}
+              ${nativeOptionTemplate({ value: "1", label: "Sharp \u00b7 +1 semitone", icon: bravuraAccidentalSharp })}
+              ${nativeOptionTemplate({ value: "1.5", label: "Three-quarter sharp \u00b7 +1.5 semitones", icon: bravuraAccidentalThreeQuarterTonesSharpStein })}
+              ${nativeOptionTemplate({ value: "2", label: "Double sharp \u00b7 +2 semitones", icon: bravuraAccidentalDoubleSharp })}
             </select>
           </label>
           <label id="selection-direction-field" class="field" for="selection-direction">Relative pitch direction<select id="selection-direction" name="selection-direction" class="author-select" aria-describedby="selection-pitch-help">
               <button type="button"><selectedcontent></selectedcontent></button>
               <option value="">Mixed</option>
-              <option value="higher">Higher (top)</option>
-              <option value="same">Same (middle)</option>
-              <option value="lower">Lower (bottom)</option>
+              ${nativeOptionTemplate({ value: "higher", label: "Higher (top)", icon: phArrowUp })}
+              ${nativeOptionTemplate({ value: "same", label: "Same (middle)", icon: phArrowRight })}
+              ${nativeOptionTemplate({ value: "lower", label: "Lower (bottom)", icon: phArrowDown })}
             </select>
           </label>
         </div>
@@ -123,22 +127,22 @@ export function selectionSharedChooser(): TemplateResult {
     <section id="selection-shared-chooser" class="surface-popover selection-chooser nonprinting" popover="auto" role="dialog" aria-labelledby="selection-shared-heading" aria-describedby="selection-controls-context">
       <div class="popover-heading">
         <h2 id="selection-shared-heading">Shared properties</h2>
-        <button id="close-selection-shared" type="button" class="quiet-button" popovertarget="selection-shared-chooser" popovertargetaction="hide">Close</button>
+        <button id="close-selection-shared" type="button" class="quiet-button" popovertarget="selection-shared-chooser" popovertargetaction="hide">${buttonContent(phX, "Close")}</button>
       </div>
       <div class="popover-body">
         <div class="field-grid two-fields">
           <label class="field" for="selection-shared-duration">Note value<select id="selection-shared-duration" name="selection-shared-duration" class="author-select" aria-describedby="selection-shared-help">
               <button type="button"><selectedcontent></selectedcontent></button>
               <option value="">Mixed</option>
-              <option value="breve">Breve</option>
-              <option value="whole">Whole</option>
-              <option value="half">Half</option>
-              <option value="quarter">Quarter</option>
-              <option value="eighth">Eighth</option>
-              <option value="sixteenth">Sixteenth</option>
-              <option value="thirty-second">32nd</option>
-              <option value="sixty-fourth">64th</option>
-              <option value="128th">128th</option>
+              ${nativeOptionTemplate({ value: "breve", label: "Breve", icon: bravuraNoteDoubleWhole })}
+              ${nativeOptionTemplate({ value: "whole", label: "Whole", icon: bravuraNoteWhole })}
+              ${nativeOptionTemplate({ value: "half", label: "Half", icon: bravuraNoteHalfUp })}
+              ${nativeOptionTemplate({ value: "quarter", label: "Quarter", icon: bravuraNoteQuarterUp })}
+              ${nativeOptionTemplate({ value: "eighth", label: "Eighth", icon: bravuraNote8thUp })}
+              ${nativeOptionTemplate({ value: "sixteenth", label: "Sixteenth", icon: bravuraNote16thUp })}
+              ${nativeOptionTemplate({ value: "thirty-second", label: "32nd", icon: bravuraNote32ndUp })}
+              ${nativeOptionTemplate({ value: "sixty-fourth", label: "64th", icon: bravuraNote64thUp })}
+              ${nativeOptionTemplate({ value: "128th", label: "128th", icon: bravuraNote128thUp })}
             </select>
           </label>
           <label class="field" for="selection-shared-dots">Dots<select id="selection-shared-dots" name="selection-shared-dots" class="author-select" aria-describedby="selection-shared-help">
@@ -169,15 +173,15 @@ export function selectionSharedChooser(): TemplateResult {
           <label class="field" for="selection-shared-alteration">Absolute alteration<select id="selection-shared-alteration" name="selection-shared-alteration" class="author-select" aria-describedby="selection-shared-help">
               <button type="button"><selectedcontent></selectedcontent></button>
               <option value="">Mixed</option>
-              <option value="-2">Double flat · −2 semitones</option>
-              <option value="-1.5">Three-quarter flat · −1.5 semitones</option>
-              <option value="-1">Flat · −1 semitone</option>
-              <option value="-0.5">Quarter flat · −0.5 semitone</option>
-              <option value="0">Natural · 0 semitones</option>
-              <option value="0.5">Quarter sharp · +0.5 semitone</option>
-              <option value="1">Sharp · +1 semitone</option>
-              <option value="1.5">Three-quarter sharp · +1.5 semitones</option>
-              <option value="2">Double sharp · +2 semitones</option>
+              ${nativeOptionTemplate({ value: "-2", label: "Double flat \u00b7 \u22122 semitones", icon: bravuraAccidentalDoubleFlat })}
+              ${nativeOptionTemplate({ value: "-1.5", label: "Three-quarter flat \u00b7 \u22121.5 semitones", icon: bravuraAccidentalThreeQuarterTonesFlatZimmermann })}
+              ${nativeOptionTemplate({ value: "-1", label: "Flat \u00b7 \u22121 semitone", icon: bravuraAccidentalFlat })}
+              ${nativeOptionTemplate({ value: "-0.5", label: "Quarter flat \u00b7 \u22120.5 semitone", icon: bravuraAccidentalQuarterToneFlatStein })}
+              ${nativeOptionTemplate({ value: "0", label: "Natural \u00b7 0 semitones", icon: bravuraAccidentalNatural })}
+              ${nativeOptionTemplate({ value: "0.5", label: "Quarter sharp \u00b7 +0.5 semitone", icon: bravuraAccidentalQuarterToneSharpStein })}
+              ${nativeOptionTemplate({ value: "1", label: "Sharp \u00b7 +1 semitone", icon: bravuraAccidentalSharp })}
+              ${nativeOptionTemplate({ value: "1.5", label: "Three-quarter sharp \u00b7 +1.5 semitones", icon: bravuraAccidentalThreeQuarterTonesSharpStein })}
+              ${nativeOptionTemplate({ value: "2", label: "Double sharp \u00b7 +2 semitones", icon: bravuraAccidentalDoubleSharp })}
             </select>
           </label>
         </div>
@@ -186,17 +190,17 @@ export function selectionSharedChooser(): TemplateResult {
           <h3>Articulation presence</h3>
           <label class="field" for="selection-articulation">Articulation<select id="selection-articulation" name="selection-articulation" class="author-select" aria-describedby="selection-shared-help">
               <button type="button"><selectedcontent></selectedcontent></button>
-              <option value="accent">Accent</option>
-              <option value="staccato">Staccato</option>
-              <option value="tenuto">Tenuto</option>
-              <option value="marcato">Marcato</option>
-              <option value="staccatissimo">Staccatissimo</option>
-              <option value="fermata">Fermata</option>
+              ${nativeOptionTemplate({ value: "accent", label: "Accent", icon: bravuraArticAccentAbove })}
+              ${nativeOptionTemplate({ value: "staccato", label: "Staccato", icon: bravuraArticStaccatoAbove })}
+              ${nativeOptionTemplate({ value: "tenuto", label: "Tenuto", icon: bravuraArticTenutoAbove })}
+              ${nativeOptionTemplate({ value: "marcato", label: "Marcato", icon: bravuraArticMarcatoAbove })}
+              ${nativeOptionTemplate({ value: "staccatissimo", label: "Staccatissimo", icon: bravuraArticStaccatissimoAbove })}
+              ${nativeOptionTemplate({ value: "fermata", label: "Fermata", icon: bravuraFermataAbove })}
             </select>
           </label>
           <div class="button-row">
-            <button id="selection-add-articulation" type="button">Add to selection</button>
-            <button id="selection-remove-articulation" type="button">Remove from selection</button>
+            <button id="selection-add-articulation" type="button">${buttonContent(phPlus, html`<span data-control-label>Add to selection</span>`)}</button>
+            <button id="selection-remove-articulation" type="button">${buttonContent(phMinus, html`<span data-control-label>Remove from selection</span>`)}</button>
           </div>
           <p class="field-help">Add only missing marks; preserve existing identities. Placement follows the drawn stem automatically.</p>
         </div>

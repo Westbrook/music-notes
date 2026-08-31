@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { mountAuthorFixture } from './author-fixture.js';
+import { mountAuthorFixture, releaseAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorSession } from '../src/authoring/editor.js';
 import { createProject } from '../src/authoring/project.js';
@@ -207,10 +207,10 @@ function described(element: HTMLElement): string {
   return `${element.getAttribute('title') ?? ''} ${descriptions}`;
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanups.splice(0).forEach(cleanup => cleanup());
   positionerMocks.records.splice(0); positionerMocks.create.mockClear();
-  document.body.replaceChildren();
+  await releaseAuthorFixture();
 });
 
 describe('isolated SelectionControls roots', () => {

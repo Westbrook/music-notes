@@ -1,9 +1,12 @@
-import { html, render } from 'lit';
+import { render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import type { IconDefinition } from './icon-definition.js';
+import { nativeOptionTemplate } from './option-content.js';
 
 export interface NativeOption {
   readonly value: string;
   readonly label: string;
+  readonly icon?: IconDefinition;
   readonly disabled?: boolean;
 }
 
@@ -31,13 +34,11 @@ export function renderNativeOptions(
     boundaries.set(select, boundary);
   }
 
-  render(repeat(options, option => option.value, option => html`
-    <option value=${option.value} ?disabled=${option.disabled}>${option.label}</option>
-  `), select, { renderBefore: boundary });
+  render(repeat(options, option => option.value, nativeOptionTemplate), select, { renderBefore: boundary });
 
   const value = options.some(option => option.value === selected) ? selected : options[0]?.value ?? '';
   // Native selection and selectedcontent cloning stay with the browser. Even
-  // an unchanged value must be assigned to refresh a changed selected label.
+  // an unchanged value must be assigned to refresh a changed label or icon.
   select.value = value;
   return select.value;
 }

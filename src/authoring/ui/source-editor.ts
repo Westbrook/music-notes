@@ -1,5 +1,7 @@
+import { phArrowCounterClockwise, phCheck } from '../../ui/icons/phosphor.js';
 import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 import { activeElement } from '../../ui/composed-dom.js';
 import { SourceFeedback } from '../source-feedback.js';
 
@@ -199,8 +201,8 @@ export class MusicSourceEditor extends LitElement {
       <p id="source-error" class="source-error" part="error" role="alert" tabindex="-1" hidden></p>
       <p id="source-status" class="field-help" part="status" role="status">${this.view.status}</p>
       <div class="button-row source-actions" part="actions">
-        <button id="source-apply" class="primary-button" part="apply" type="button" .disabled=${this.view.readOnly} @click=${this.applySource}>Apply source</button>
-        <button id="source-revert" part="revert" type="button" .disabled=${this.view.readOnly} @click=${this.revertSource}>Revert to accepted score</button>
+        <button id="source-apply" class="primary-button" part="apply" type="button" .disabled=${this.view.readOnly} @click=${this.applySource}>${buttonContent(phCheck, 'Apply source')}</button>
+        <button id="source-revert" part="revert" type="button" .disabled=${this.view.readOnly} @click=${this.revertSource}>${buttonContent(phArrowCounterClockwise, 'Revert to accepted score')}</button>
       </div>
     `;
   }

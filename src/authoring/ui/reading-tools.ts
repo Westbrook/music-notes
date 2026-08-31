@@ -1,5 +1,7 @@
+import { phArrowLeft, phArrowRight, phArrowsOut } from '../../ui/icons/phosphor.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 
 /** Native navigation controls for the reading view. */
 export function readingTools(): TemplateResult {
@@ -10,15 +12,15 @@ export function readingTools(): TemplateResult {
         <p id="read-location" class="field-help" role="status">Reading at authored pitch.</p>
       </div>
       <div class="read-navigation">
-        <button id="read-previous" type="button">Previous</button>
+        <button id="read-previous" type="button">${buttonContent(phArrowLeft, 'Previous')}</button>
         <label class="field" for="read-measure">Go to measure<select id="read-measure" name="read-measure" class="author-select">
             <button type="button"><selectedcontent></selectedcontent></button>
             <option value="">Choose a measure</option>
           </select>
         </label>
-        <button id="read-go" type="button">Go</button>
-        <button id="read-next" type="button">Next</button>
-        <button id="read-refit" type="button" class="quiet-button">Refit this window</button>
+        <button id="read-go" type="button">${buttonContent(phArrowRight, 'Go')}</button>
+        <button id="read-next" type="button">${buttonContent(phArrowRight, 'Next')}</button>
+        <button id="read-refit" type="button" class="quiet-button">${buttonContent(phArrowsOut, 'Refit this window')}</button>
       </div>
     </section>
   `;

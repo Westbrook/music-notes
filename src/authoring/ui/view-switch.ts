@@ -1,5 +1,7 @@
+import { phBookOpen, phFiles, phNotePencil } from '../../ui/icons/phosphor.js';
 import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 import type { ViewMode } from '../types.js';
 
 export interface ViewRequestDetail {
@@ -38,7 +40,7 @@ export class AuthorViewSwitch extends LitElement {
       min-width: 60px;
       min-height: var(--author-control-size, max(44px, 2.75rem));
       max-width: 100%;
-      padding: 6px 11px;
+      padding: 3px 11px;
       border: 1px solid transparent;
       border-radius: 6px;
       background: transparent;
@@ -101,9 +103,9 @@ export class AuthorViewSwitch extends LitElement {
   protected override render(): TemplateResult {
     return html`
       <nav part="group" aria-label="Workspace view">
-        <button part="button" id="view-write" type="button" aria-pressed=${this.mode === 'write'} @click=${this.requestWrite}>Write</button>
-        <button part="button" id="view-read" type="button" aria-pressed=${this.mode === 'read'} @click=${this.requestRead}>Read</button>
-        <button part="button" id="view-pages" type="button" aria-pressed=${this.mode === 'pages'} @click=${this.requestPages}>Pages</button>
+        <button part="button" id="view-write" type="button" aria-pressed=${this.mode === 'write'} @click=${this.requestWrite}>${buttonContent(phNotePencil, 'Write')}</button>
+        <button part="button" id="view-read" type="button" aria-pressed=${this.mode === 'read'} @click=${this.requestRead}>${buttonContent(phBookOpen, 'Read')}</button>
+        <button part="button" id="view-pages" type="button" aria-pressed=${this.mode === 'pages'} @click=${this.requestPages}>${buttonContent(phFiles, 'Pages')}</button>
       </nav>
     `;
   }

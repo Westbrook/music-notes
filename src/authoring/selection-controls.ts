@@ -1,3 +1,7 @@
+import { phPencilSimple, phSlidersHorizontal } from '../ui/icons/phosphor.js';
+import { bravuraGClef, bravuraNoteheadSlashWhiteWhole, bravuraRestWholeLegerLine } from '../ui/icons/bravura.js';
+import { durationIcon, eventIcon, markingIcon } from '../ui/notation-icons.js';
+import { setControlLabel, setControlIcon } from '../ui/control-content.js';
 import { formatRational, harmonyIntervalText, pitchDescription, pitchText, validateAlteration } from '../model/index.js';
 import type { ArticulationType, Duration, EventMarking, MusicEvent, PitchDirection, Score, Step } from '../model/types.js';
 import { composedAncestors } from '../ui/composed-dom.js';
@@ -677,7 +681,7 @@ export class SelectionControls {
     const button = this.button(id);
     button.hidden = !visible; button.disabled = !!reason || !visible;
     button.title = reason ?? '';
-    if (label !== undefined) button.textContent = label;
+    if (label !== undefined) setControlLabel(button, label);
   }
 
   private setField(id: string, value: string, reason?: string): void {
@@ -734,6 +738,9 @@ export class SelectionControls {
     const nominalSpan = single && event.kind === 'slash' && !event.rhythmic;
     this.setButton('selection-value', !more && !state.pitchDragArmed, nominalSpan ? baseReason : rhythmReason, single && event.measureRest ? 'Follows meter'
       : nominalSpan ? 'Nominal span…' : compactValue);
+    setControlIcon(this.button('selection-value'), single && event.measureRest ? bravuraRestWholeLegerLine
+      : nominalSpan ? bravuraNoteheadSlashWhiteWhole
+        : duration ? durationIcon(duration as Duration, valueEvents.every(item => item.kind === 'rest')) : phSlidersHorizontal);
     this.button('selection-value').setAttribute('aria-label', single && event.measureRest ? 'Value follows the meter'
       : nominalSpan ? 'Edit open slash nominal span in Properties' : group ? `Value for ${state.eventIds.length} selected events: ${writtenValue}` : `Value: ${writtenValue}`);
     this.button('selection-value').title = rhythmReason ?? 'Change the selected music’s written value and dots.';
@@ -749,6 +756,7 @@ export class SelectionControls {
     }
     const pitchLabel = event?.kind === 'note' ? 'Pitch' : event?.kind === 'chord' ? 'Pitches' : event?.kind === 'road' ? 'Direction' : 'Options';
     this.setButton('selection-pitch', !group && !targetAction, baseReason, pitchLabel);
+    setControlIcon(this.button('selection-pitch'), event ? event.kind === 'note' ? bravuraGClef : eventIcon(event) : phSlidersHorizontal);
     this.button('selection-pitch').setAttribute('aria-label', event ? `${pitchLabel}: ${identity(event)}` : 'Event options: choose music on the staff');
     this.setButton('selection-shared', group, baseReason,
       more ? 'Actions' : 'Shared');
@@ -759,6 +767,7 @@ export class SelectionControls {
       single ? baseReason : 'Select one musical event to inspect or add its attached marks.');
     this.button('selection-attached-marks').setAttribute('aria-label', single ? `Attached marks for ${identity(event)}` : 'Attached marks: select one musical event');
     this.setButton('selection-mark-edit', targetAction, state.activeMarkingId ? baseReason : writingReason(state), 'Edit');
+    setControlIcon(this.button('selection-mark-edit'), mark ? markingIcon(mark) : phPencilSimple);
     this.button('selection-mark-edit').setAttribute('aria-label', state.activeMarkingId
       ? `Edit attached ${mark ? markingName(mark) : 'mark'}`
       : state.structural ? `Edit ${state.structural.kind}: ${state.structural.label}` : 'Edit the selected target');

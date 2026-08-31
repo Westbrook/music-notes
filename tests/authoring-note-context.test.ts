@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { mountAuthorFixture } from './author-fixture.js';
+import { mountAuthorFixture, releaseAuthorFixture } from './author-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorSession } from '../src/authoring/editor.js';
 import { NoteEditor } from '../src/authoring/note-editor.js';
@@ -389,9 +389,9 @@ function shortBody(h: Fixture, options: ShortBodyOptions = {}) {
   return { body, context, metrics, offsets, writes, focusSpies, clear, noOutsideScroll, fullyVisible };
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanups.splice(0).forEach(cleanup => cleanup());
-  document.body.replaceChildren();
+  await releaseAuthorFixture();
 });
 
 describe('contextual quick direction on accepted three-roads music', () => {

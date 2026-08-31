@@ -156,7 +156,9 @@ describe('compact writing presentation markup', () => {
     const label = element('insert-event-label');
     const destination = element('insert-event-destination');
     expect(insert.parentElement).toBe(element('entry-slot-action'));
-    expect([...insert.children]).toEqual([label, destination]);
+    const content = insert.querySelector('music-button-content');
+    expect(content?.parentElement).toBe(insert);
+    expect([...(content?.children ?? [])]).toEqual([label, destination]);
     expect(label.tagName).toBe('SPAN');
     expect(label.textContent?.trim()).not.toBe('');
     expect(label.hidden).toBe(false);
@@ -1404,7 +1406,7 @@ describe('score-first authoring CSS contract', () => {
       expect(bar, selector).toMatch(/padding:\s*6px\s+12px;/);
       expect(bar, selector).toMatch(/gap:\s*14px;/);
     }
-    expect(declarationsFor('button', viewSwitchCss)).toMatch(/padding:\s*6px\s+11px;/);
+    expect(declarationsFor('button', viewSwitchCss)).toMatch(/padding:\s*3px\s+11px;/);
     expect(declarationsFor('#workspace-mode-slot > button')).toMatch(/padding:\s*6px\s+11px;/);
     for (const selector of ['body:has(#author-workbench) .header-actions button', '.palette-slot > button', '#palette-more-slot > button']) {
       expect(declarationsFor(selector), selector).toMatch(/padding:\s*7px\s+9px;/);

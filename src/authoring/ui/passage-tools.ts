@@ -1,5 +1,8 @@
+import { phArrowCounterClockwise, phArrowUUpLeft, phCheck, phLink, phLinkBreak, phMagnifyingGlass, phSwap, phTrash } from '../../ui/icons/phosphor.js';
+import { bravuraTuplet3 } from '../../ui/icons/bravura.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 
 /** Ties, conversions, tuplets, and per-event beam policy. */
 export function passageTools(): TemplateResult {
@@ -23,8 +26,8 @@ export function passageTools(): TemplateResult {
       </div>
       <p id="range-status" class="field-help" role="status" tabindex="-1">Select events from one voice for ties, tuplets, or conversion.</p>
       <div class="button-row">
-        <button id="tie-events" type="button">Tie selected notes</button>
-        <button id="clear-ties" type="button">Clear connected ties</button>
+        <button id="tie-events" type="button">${buttonContent(phLink, 'Tie selected notes')}</button>
+        <button id="clear-ties" type="button">${buttonContent(phLinkBreak, html`<span id="clear-ties-label" data-control-label>Clear connected ties</span>`)}</button>
       </div>
       <div class="subsection">
         <div class="field-grid">
@@ -50,7 +53,7 @@ export function passageTools(): TemplateResult {
             <input id="convert-rhythmic" name="convert-rhythmic" type="checkbox"> Specify slash rhythm</label>
         </div>
         <p id="conversion-help" class="field-help">Rhythm notes prescribe durations without pitches; 3 roads notes prescribe relative pitch direction and duration. To switch between pitched and rhythm staves, use rhythmic slashes to preserve the written attacks, change the staff notation, then convert to the intended events. Open slashes leave attacks improvised. Remove incompatible attached marks deliberately; a failed conversion changes nothing.</p>
-        <button id="convert-events" type="button">Review conversion…</button>
+        <button id="convert-events" type="button">${buttonContent(phSwap, 'Review conversion…')}</button>
       </div>
       <section id="tuplet-inspector" class="subsection tuplet-section" aria-label="Tuplets">
         <div class="panel-heading">
@@ -60,9 +63,9 @@ export function passageTools(): TemplateResult {
         <div class="draft-notice">
           <p id="tuplet-draft-status" class="draft-status" role="status" aria-live="polite"></p>
           <div class="draft-actions">
-            <button id="discard-tuplet-draft" type="button" class="quiet-button" hidden="">Discard &amp; reload</button>
-            <button id="return-tuplet-draft" type="button" class="quiet-button" hidden="">Return to target</button>
-            <button id="review-tuplet-draft" type="button" class="quiet-button" hidden="">Review current changes</button>
+            <button id="discard-tuplet-draft" type="button" class="quiet-button" hidden="">${buttonContent(phArrowCounterClockwise, html`<span id="discard-tuplet-draft-label" data-control-label>Discard &amp; reload</span>`)}</button>
+            <button id="return-tuplet-draft" type="button" class="quiet-button" hidden="">${buttonContent(phArrowUUpLeft, html`<span id="return-tuplet-draft-label" data-control-label>Return to target</span>`)}</button>
+            <button id="review-tuplet-draft" type="button" class="quiet-button" hidden="">${buttonContent(phMagnifyingGlass, 'Review current changes')}</button>
           </div>
         </div>
         <label class="field" for="tuplet-select">Existing group<select id="tuplet-select" name="tuplet-select" class="author-select">
@@ -86,9 +89,9 @@ export function passageTools(): TemplateResult {
         <label class="check-field" for="tuplet-ratio">
           <input id="tuplet-ratio" name="tuplet-ratio" type="checkbox"> Print the full ratio</label>
         <div class="button-row">
-          <button id="wrap-tuplet" type="button" class="primary-button">Make tuplet</button>
-          <button id="update-tuplet" type="button">Apply group settings</button>
-          <button id="unwrap-tuplet" type="button" class="danger-button">Remove tuplet grouping</button>
+          <button id="wrap-tuplet" type="button" class="primary-button">${buttonContent(bravuraTuplet3, 'Make tuplet')}</button>
+          <button id="update-tuplet" type="button">${buttonContent(phCheck, 'Apply group settings')}</button>
+          <button id="unwrap-tuplet" type="button" class="danger-button">${buttonContent(phTrash, 'Remove tuplet grouping')}</button>
         </div>
       </section>
       <details id="beam-membership" class="sub-disclosure"><summary>Per-event beam membership</summary>

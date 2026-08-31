@@ -1,3 +1,4 @@
+import { setControlLabel } from '../ui/control-content.js';
 import { compare, divide, durationTime, formatRational, harmonyIntervalText, multiply, pitchDescription, subtract, validateAlteration } from '../model/index.js';
 import type { Duration, EventMarking, MusicEvent, PitchDirection, Rational, Tuplet } from '../model/types.js';
 import { enhanceSelects } from './select.js';
@@ -530,10 +531,10 @@ export class NoteEditor {
       : 'Higher, Same, or Lower relative to the preceding main pitch in this voice. Rests keep the reference; ornaments and harmony tones do not replace it.';
     this.attachedMarks.hidden = !this.options.openAttachedMarks;
     this.attachedMarks.disabled = !this.options.openAttachedMarks;
-    this.attachedMarks.textContent = `Attached marks (${event.markings?.length ?? 0})`;
+    setControlLabel(this.attachedMarks, `Attached marks (${event.markings?.length ?? 0})`);
     this.advanced.hidden = !this.options.openAdvanced;
     this.advanced.disabled = !this.options.openAdvanced;
-    this.advanced.textContent = event.kind === 'chord' ? 'Edit chord pitches…' : 'Advanced properties…';
+    setControlLabel(this.advanced, event.kind === 'chord' ? 'Edit chord pitches…' : 'Advanced properties…');
     const valueReason = rhythmReason(event);
     this.duration.disabled = !!valueReason;
     this.dots.disabled = !!valueReason;

@@ -37,6 +37,7 @@
   --paper-height: 279.4mm;
   --page-margin: 15mm;
   --author-pointer-offset: 0px;
+  --music-icon-opacity: 0.8;
 }
 
 * { box-sizing: border-box; }
@@ -113,6 +114,9 @@ select > button { display: none; }
     box-shadow: none;
   }
   selectedcontent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .option-content { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; vertical-align: middle; }
+  .option-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .option-content .music-icon-graphic { flex: none; width: 20px; height: 20px; }
   select.author-select::picker-icon { color: var(--author-muted); transition: rotate 140ms ease; }
   select.author-select:open::picker-icon { rotate: 180deg; }
   select.author-select::picker(select) {
@@ -540,6 +544,11 @@ body:has(#author-workbench) .header-actions button,
 #palette-more-slot > button,
 #entry-slot-action #drag-entry,
 #selection-slot-3 #drag-pitch { min-height: var(--author-control-size); padding: 7px 9px; font-size: 0.74rem; line-height: 1.35; }
+/* Keep icon-over-label content within the existing 44px control budget. */
+body:has(#author-workbench) .header-actions button:has(> music-button-content),
+#workspace-dock button:has(> music-button-content) { padding-block: 3px; }
+#active-part-label music-button-content { max-width: 100%; }
+#active-part-label [data-control-label] { display: block; overflow: hidden; text-overflow: ellipsis; }
 body:not([data-view="write"]) #source-trigger { display: none; }
 
 body:has(#author-workbench) .author-workspace {

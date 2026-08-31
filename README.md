@@ -106,6 +106,7 @@ When embedding the notation library, edit source attributes or component propert
 ```sh
 npm test
 npm run typecheck
+npm run check:icons
 npm run build
 npm run check:bundle
 ```
@@ -117,6 +118,8 @@ With the dev server running, open `/tests/browser.html` on the same origin and s
 Open `/tests/authoring-browser.html` and select **Run Author regressions** for the actual Author controls, recovery, native selects, parts, and physical page composition. Its fixtures use separate recovery slots and intercept print requests; they do not establish that a native dialog appeared, a PDF was saved, fonts were embedded, or paper output matched the preview.
 
 Open `/tests/shadow-dom-browser.html` and select **Run shadow component checks** for independent component state, slots, native labels/descriptions and form behavior, composed focus and scrolling, popover placement, Source return focus, and isolated score IDs. These are DOM/native-API checks, not screen-reader or trusted keyboard/touch qualification.
+
+Open `/tests/icon-options-browser.html` to check synchronous Phosphor/Bravura SVG delivery through native select cloning, accessible labels, form values, and icon opacity. `npm run check:icons` separately verifies that standalone production bundles remove unused icon definitions and have no deferred icon or font dependencies. The [UI architecture guide](docs/ui-state-architecture.md#icons-and-control-content) describes icon imports and control layouts.
 
 Open `/tests/notation-browser.html` and select **Run notation expansion checks** for actual quarter-tone glyphs, one-line rhythm engraving, rests, beams, tuplets, ties, mixed-staff alignment, and resize/print projection checks. The fixtures remain visible for review; the [notation expansion record](docs/notation-expansion.md) states the supported scope and performer checks.
 

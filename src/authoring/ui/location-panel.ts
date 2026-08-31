@@ -1,5 +1,8 @@
+import { phArrowRight, phArrowUUpLeft, phEye, phListChecks, phPencilSimple, phPlus, phSelection, phX } from '../../ui/icons/phosphor.js';
+import { bravuraNoteheadBlack } from '../../ui/icons/bravura.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 
 /** Native location selectors and actions at the current musical destination. */
 export function locationPanel(): TemplateResult {
@@ -7,7 +10,7 @@ export function locationPanel(): TemplateResult {
     <section id="location-panel" class="surface-popover location-panel nonprinting" popover="auto" aria-labelledby="location-heading">
       <div class="popover-heading">
         <h2 id="location-heading">Location & actions</h2>
-        <button id="close-location" type="button" class="quiet-button" popovertarget="location-panel" popovertargetaction="hide">Close</button>
+        <button id="close-location" type="button" class="quiet-button" popovertarget="location-panel" popovertargetaction="hide">${buttonContent(phX, 'Close', { layout: 'inline' })}</button>
       </div>
       <div class="popover-body">
         <p id="location-context" class="target-context">Actions use the selected staff, bar, and voice.</p>
@@ -15,17 +18,17 @@ export function locationPanel(): TemplateResult {
         <span id="entry-destination" class="entry-destination target-context" hidden></span>
         <span id="remaining-time" class="remaining-time" role="status"></span>
         <div class="local-action-grid">
-          <button id="next-measure" type="button" >Next measure</button>
-          <button id="add-measure" type="button" class="quiet-button">Add measure</button>
-          <button id="add-chord-symbol" type="button" class="primary-button">Add chord symbol</button>
-          <button id="start-entry-here" type="button" >Start writing here</button>
-          <button id="resume-entry" type="button" class="quiet-button" hidden>Resume writing</button>
-          <button id="selection-range" type="button" class="selection-action" hidden>Range…</button>
-          <button id="selection-review" type="button" class="quiet-button" popovertarget="workspace-review" hidden>Review</button>
-          <button id="continue-piece" type="button" hidden>Continue this piece…</button>
-          <button id="selection-select-more" type="button" aria-describedby="selection-context">Select more</button>
-          <button id="return-to-selection" type="button" class="quiet-button" aria-label="Return to selection" hidden>Return to selection</button>
-          <button id="selection-review-history" type="button" class="quiet-button" popovertarget="workspace-review" hidden>Review last editing problem</button>
+          <button id="next-measure" type="button" >${buttonContent(phArrowRight, 'Next measure')}</button>
+          <button id="add-measure" type="button" class="quiet-button">${buttonContent(phPlus, html`<span id="add-measure-label" data-control-label>Add measure</span>`)}</button>
+          <button id="add-chord-symbol" type="button" class="primary-button">${buttonContent(bravuraNoteheadBlack, 'Add chord symbol')}</button>
+          <button id="start-entry-here" type="button" >${buttonContent(phPencilSimple, 'Start writing here')}</button>
+          <button id="resume-entry" type="button" class="quiet-button" hidden>${buttonContent(phPencilSimple, html`<span id="resume-entry-label" data-control-label>Resume writing</span>`)}</button>
+          <button id="selection-range" type="button" class="selection-action" hidden>${buttonContent(phSelection, 'Range…')}</button>
+          <button id="selection-review" type="button" class="quiet-button" popovertarget="workspace-review" hidden>${buttonContent(phEye, 'Review')}</button>
+          <button id="continue-piece" type="button" hidden>${buttonContent(phArrowRight, 'Continue this piece…')}</button>
+          <button id="selection-select-more" type="button" aria-describedby="selection-context">${buttonContent(phSelection, 'Select more')}</button>
+          <button id="return-to-selection" type="button" class="quiet-button" aria-label="Return to selection" hidden>${buttonContent(phArrowUUpLeft, 'Return to selection')}</button>
+          <button id="selection-review-history" type="button" class="quiet-button" popovertarget="workspace-review" hidden>${buttonContent(phListChecks, 'Review last editing problem')}</button>
         </div>
         <label class="field part-picker" for="part-select">Viewing
           <select id="part-select" name="part-select" class="author-select">

@@ -1,3 +1,4 @@
+import { setControlLabel } from '../ui/control-content.js';
 import { compare, formatRational, rational } from '../model/index.js';
 import type { Annotation, Duration, Measure, MusicEvent, Staff } from '../model/types.js';
 import { renderNativeCheckboxes } from '../ui/native-checkboxes.js';
@@ -860,7 +861,7 @@ export class MarkingsEditor {
     }
     const newButton = this.scope.getElementById('new-annotation');
     if (newButton) {
-      newButton.textContent = this.collision && snapshot.dirty ? 'Keep draft as New' : 'New instruction';
+      setControlLabel(newButton, this.collision && snapshot.dirty ? 'Keep draft as New' : 'New instruction');
       newButton.hidden = !editing && !this.collision;
     }
     let message = unavailable || formConflict ? snapshot.message

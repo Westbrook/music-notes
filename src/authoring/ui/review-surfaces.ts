@@ -1,5 +1,7 @@
+import { phCheck, phCode, phDownloadSimple, phListChecks, phPencilSimple, phPlus, phX } from '../../ui/icons/phosphor.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../../ui/button-content.js';
 
 /** Native modal confirmation for reviewed changes. */
 export function actionConfirmation(): TemplateResult {
@@ -13,8 +15,8 @@ export function actionConfirmation(): TemplateResult {
         <p id="author-confirmation-status" role="alert" hidden></p>
       </div>
       <div class="confirmation-actions">
-        <button id="author-confirmation-cancel" type="button" class="quiet-button">Cancel</button>
-        <button id="author-confirmation-confirm" type="button" class="primary-button">Confirm</button>
+        <button id="author-confirmation-cancel" type="button" class="quiet-button">${buttonContent(phX, html`<span id="author-confirmation-cancel-label" data-control-label>Cancel</span>`)}</button>
+        <button id="author-confirmation-confirm" type="button" class="primary-button">${buttonContent(phCheck, html`<span id="author-confirmation-confirm-label" data-control-label>Confirm</span>`)}</button>
       </div>
     </dialog>
   `;
@@ -26,7 +28,7 @@ export function workspaceReview(): TemplateResult {
     <section id="workspace-review" class="surface-popover workspace-review nonprinting" popover="auto" aria-labelledby="workspace-review-heading">
       <div class="popover-heading">
         <h2 id="workspace-review-heading">Workspace review</h2>
-        <button id="close-workspace-review" type="button" class="quiet-button" popovertarget="workspace-review" popovertargetaction="hide">Close</button>
+        <button id="close-workspace-review" type="button" class="quiet-button" popovertarget="workspace-review" popovertargetaction="hide">${buttonContent(phX, 'Close', { layout: 'inline' })}</button>
       </div>
       <div class="popover-body">
         <div id="workspace-notices" class="workspace-notices nonprinting">
@@ -38,7 +40,7 @@ export function workspaceReview(): TemplateResult {
         </div>
         <div id="author-status" class="author-status nonprinting"></div>
         <p id="workspace-recovery-detail" class="workspace-recovery-detail" hidden></p>
-        <button id="review-download-project" type="button" class="primary-button" hidden>Download project</button>
+        <button id="review-download-project" type="button" class="primary-button" hidden>${buttonContent(phDownloadSimple, 'Download project')}</button>
         <section id="notation-review" aria-labelledby="notation-review-heading" hidden>
           <h3 id="notation-review-heading">Notation notices</h3>
           <ul id="notation-review-list"></ul>
@@ -48,9 +50,9 @@ export function workspaceReview(): TemplateResult {
         <p id="selection-controls-error" class="selection-feedback selection-error" hidden></p>
         <div id="author-errors" class="author-errors" tabindex="0" aria-label="Editing problem" hidden></div>
         <div class="button-row review-actions">
-          <button id="review-source" type="button" popovertarget="source-panel" hidden>Review Source</button>
-          <button id="review-drafts" type="button" hidden>Review unsaved forms</button>
-          <button id="review-incompatible-mark" type="button" hidden>Edit attached mark…</button>
+          <button id="review-source" type="button" popovertarget="source-panel" hidden>${buttonContent(phCode, 'Review Source')}</button>
+          <button id="review-drafts" type="button" hidden>${buttonContent(phListChecks, html`<span id="review-drafts-label" data-control-label>Review unsaved forms</span>`)}</button>
+          <button id="review-incompatible-mark" type="button" hidden>${buttonContent(phPencilSimple, html`<span id="review-incompatible-mark-label" data-control-label>Edit attached mark…</span>`)}</button>
         </div>
       </div>
     </section>
@@ -63,12 +65,12 @@ export function continuationReview(): TemplateResult {
     <section id="continuation-review" class="surface-popover confirmation-popover nonprinting" popover="auto" aria-labelledby="continuation-review-heading">
       <div class="popover-heading">
         <h2 id="continuation-review-heading">Continue this piece</h2>
-        <button id="close-continuation-review" type="button" class="quiet-button" popovertarget="continuation-review" popovertargetaction="hide">Close</button>
+        <button id="close-continuation-review" type="button" class="quiet-button" popovertarget="continuation-review" popovertargetaction="hide">${buttonContent(phX, 'Close', { layout: 'inline' })}</button>
       </div>
       <div class="popover-body">
         <p id="continuation-review-context" class="target-context"></p>
         <p class="field-help">Review the named staves and ending before changing it. The whole action has one Undo.</p>
-        <button id="confirm-continue-piece" type="button" class="primary-button">Change final barlines and insert</button>
+        <button id="confirm-continue-piece" type="button" class="primary-button">${buttonContent(phCheck, 'Change final barlines and insert')}</button>
       </div>
     </section>
   `;
@@ -80,12 +82,12 @@ export function pointerRecovery(): TemplateResult {
     <section id="pointer-recovery" class="surface-popover confirmation-popover nonprinting" popover="auto" aria-labelledby="pointer-recovery-heading">
       <div class="popover-heading">
         <h2 id="pointer-recovery-heading">Place in a new measure</h2>
-        <button id="close-pointer-recovery" type="button" class="quiet-button" popovertarget="pointer-recovery" popovertargetaction="hide">Close</button>
+        <button id="close-pointer-recovery" type="button" class="quiet-button" popovertarget="pointer-recovery" popovertargetaction="hide">${buttonContent(phX, 'Close', { layout: 'inline' })}</button>
       </div>
       <div class="popover-body">
         <p id="pointer-recovery-context" class="target-context"></p>
         <p class="field-help">The earlier gesture changed nothing. This confirms a new destination.</p>
-        <button id="confirm-pointer-recovery" type="button" class="primary-button">Add measure and place note</button>
+        <button id="confirm-pointer-recovery" type="button" class="primary-button">${buttonContent(phPlus, html`<span id="confirm-pointer-recovery-label" data-control-label>Add measure and place note</span>`)}</button>
       </div>
     </section>
   `;

@@ -1,6 +1,10 @@
+import { phPencilSimple } from '../../ui/icons/phosphor.js';
+import { bravuraDynamicForte, bravuraNoteQuarterUp } from '../../ui/icons/bravura.js';
 import { css, html, LitElement, nothing, render } from 'lit';
 import type { TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import { buttonContent } from '../../ui/button-content.js';
+import { eventIcon, markingIcon } from '../../ui/notation-icons.js';
 import { formatRational } from '../../model/index.js';
 import type { Measure } from '../../model/types.js';
 import { eventLabel, markingLabel } from '../event-label.js';
@@ -32,16 +36,16 @@ function eventNavigatorTemplate(state: EventNavigatorState): TemplateResult {
         ${repeat(voice.events, event => event.id, event => html`
           <button type="button" data-source-id=${event.id}
             aria-pressed=${String(selectedIds.has(event.id))}
-            class=${index === state.voiceIndex ? 'active-voice' : ''}>${eventLabel(event)} · at ${formatRational(event.onset)}</button>
+            class=${index === state.voiceIndex ? 'active-voice' : ''}>${buttonContent(eventIcon(event), `${eventLabel(event)} · at ${formatRational(event.onset)}`, { layout: 'inline' })}</button>
           ${repeat(event.markings ?? [], marking => marking.id, marking => html`
             <button type="button" class="event-marking-link" data-source-id=${marking.id}
-              aria-current=${state.activeMarkingId === marking.id ? 'true' : nothing}>${markingLabel(marking)} · attached to ${eventLabel(event)}</button>
+              aria-current=${state.activeMarkingId === marking.id ? 'true' : nothing}>${buttonContent(markingIcon(marking), `${markingLabel(marking)} · attached to ${eventLabel(event)}`, { layout: 'inline' })}</button>
           `)}
         `)}
       </div>
     `)}
     ${repeat(state.measure.annotations, annotation => annotation.id, annotation => html`
-      <button type="button" data-source-id=${annotation.id}>${annotation.kind}: ${annotation.text || annotation.bpm} · at ${formatRational(annotation.onset)}</button>
+      <button type="button" data-source-id=${annotation.id}>${buttonContent(annotation.kind === 'dynamics' ? bravuraDynamicForte : annotation.kind === 'tempo' ? bravuraNoteQuarterUp : phPencilSimple, `${annotation.kind}: ${annotation.text || annotation.bpm} · at ${formatRational(annotation.onset)}`, { layout: 'inline' })}</button>
     `)}
   `;
 }

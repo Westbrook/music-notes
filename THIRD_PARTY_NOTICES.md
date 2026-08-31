@@ -1,6 +1,34 @@
 # Third-party notices
 
-This file covers the Lit and Signals runtimes, VexFlow 5.0.0, and the three font assets loaded by its `vexflow/bravura` entry point. Development-only tooling is not included. Preserve these copyright and license notices when redistributing the included components.
+This file covers the Lit and Signals runtimes, the Phosphor icon subset, VexFlow 5.0.0, and the three font assets loaded by its `vexflow/bravura` entry point. Development-only tooling is not included. Preserve these copyright and license notices when redistributing the included components.
+
+## Phosphor Icons Core 2.1.1 — MIT
+
+The curated Fill SVG paths in `src/ui/icons/phosphor/`, re-exported by `src/ui/icons/phosphor.ts`, are copied without shape changes from `@phosphor-icons/core` 2.1.1. The application wraps those paths in decorative, current-color SVGs; it does not distribute the complete icon catalog or contact a runtime CDN. Official source: [Phosphor core](https://github.com/phosphor-icons/core). Distribution source: [version 2.1.1 package](https://registry.npmjs.org/@phosphor-icons/core/-/core-2.1.1.tgz).
+
+```text
+MIT License
+
+Copyright (c) 2023 Phosphor Icons
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## VexFlow 5.0.0 — MIT
 
@@ -53,6 +81,8 @@ Bravura is a registered trademark of Steinberg Media Technologies GmbH in the Eu
 ```
 
 The full applicable font license appears below. Primary font project: [Steinberg Bravura](https://github.com/steinbergmedia/bravura). Distribution source: [VexFlow Bravura font package](https://github.com/vexflow/vexflow-fonts/tree/main/bravura).
+
+UI music icons in `src/ui/icons/bravura.ts` are SVG outlines extracted from this exact bundled Bravura 1.392 font. They preserve the original outline coordinates with SVG's y direction and use individual viewBoxes to center and optically fit their actual ink. The reproducible offline generator is `scripts/generate-bravura-icons.py`. These individual artwork exports render synchronously and do not load a font or engraving engine in the UI. The unchanged Bravura font remains the score renderer's font; no modified font is distributed under its Reserved Font Name.
 
 ## Academico 0.902, Regular and Bold — SIL Open Font License 1.1
 

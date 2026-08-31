@@ -1,4 +1,5 @@
 import { AuthorWorkspace } from './main.js';
+import { setControlLabel } from '../ui/control-content.js';
 
 // Entry-point effects stay outside reusable controllers and state modules.
 let workspace: AuthorWorkspace | undefined;
@@ -12,7 +13,7 @@ catch (error) {
   const summary = document.getElementById('workspace-review-summary');
   if (summary) { summary.hidden = false; summary.textContent = `The editor could not open: ${message}`; }
   const trigger = document.getElementById('workspace-review-trigger');
-  if (trigger) { trigger.hidden = false; trigger.textContent = 'Review error'; }
+  if (trigger) { trigger.hidden = false; setControlLabel(trigger, 'Review error'); }
 }
 
 if (import.meta.hot) {

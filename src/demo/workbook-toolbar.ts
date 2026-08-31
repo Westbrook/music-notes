@@ -1,5 +1,7 @@
+import { phCode, phPrinter } from '../ui/icons/phosphor.js';
 import { css, html, LitElement, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
+import { buttonContent } from '../ui/button-content.js';
 import { SignalController } from '../ui/signal-controller.js';
 import type { WorkbookState, WorkbookView } from './workbook-state.js';
 
@@ -36,7 +38,7 @@ export function workbookToolbarTemplate(
   const count = options.scoreCount && Number.isInteger(options.scoreCount) && options.scoreCount > 0
     ? `all ${options.scoreCount} scores` : 'all scores';
   const sourceLink = options.sourceHref
-    ? html`<a class="source-link" part="link" href=${options.sourceHref}>Read the markup</a>` : nothing;
+    ? html`<a class="source-link" part="link" href=${options.sourceHref}>${buttonContent(phCode, 'Read the markup', { layout: 'inline' })}</a>` : nothing;
 
   return html`
     <div class="toolbar" part="controls" role="group" aria-label="Score display controls">
@@ -44,7 +46,7 @@ export function workbookToolbarTemplate(
         aria-describedby=${id('print-layout-help')} .checked=${view.preview}
         @change=${actions.preview} /> Use print layout on screen${width}</label>
       <button id=${id('print-scores')} part="print-button" type="button" aria-describedby=${id('print-dialog-help')}
-        .disabled=${view.disabled} @click=${actions.print}>Open print dialog…</button>
+        .disabled=${view.disabled} @click=${actions.print}>${buttonContent(phPrinter, 'Open print dialog…')}</button>
       ${slotted ? html`<slot name="actions"></slot><slot name="links">${sourceLink}</slot>` : sourceLink}
     </div>
     <p id=${id('print-layout-help')} class="toolbar-help" part="help">The checkbox fixes score wrapping at the print width; it does not show paper pages. Short scores may look unchanged.${options.exampleHref
@@ -88,6 +90,8 @@ export class MusicWorkbookToolbar extends LitElement {
     label { display: flex; align-items: center; gap: 9px; cursor: pointer; min-width: 0; }
     .toolbar input { width: 1.1rem; height: 1.1rem; margin: 0; flex-shrink: 0; }
     button, ::slotted(button) {
+      min-width: 44px;
+      min-height: 44px;
       color: var(--workbook-button-color, #fffefa);
       background: var(--workbook-button-background, #3e493e);
       border: 1px solid var(--workbook-button-background, #3e493e);

@@ -88,12 +88,42 @@ Focus and geometry use the composed-tree helpers in `src/ui/composed-dom.ts`, fo
 
 - Source-only musical elements keep synchronous attribute reflection. Only outer score roots allocate full presentation and engraving mounts; nested staves and measures remain source data.
 - Lit owns score loading, diagnostics, transcripts, Author templates, native option/checkbox collections, event navigation, and page furniture. The engraving adapter owns its stable SVG mounts, geometry, and render-completion promises.
-- Native buttons, selects, checkboxes, dialogs, details, and popovers keep browser keyboard and focus behavior. Authored select defaults use explicit initial property bindings as well as reset attributes. Repeated template renders preserve user edits.
+- Native buttons, selects, checkboxes, dialogs, details, and popovers keep browser keyboard and focus behavior. Authored select defaults initialize the native value as well as reset attributes. Repeated template renders preserve user edits.
 - Keyed lists reuse surviving options, events, annotations, markings, and checkboxes. Navigation repairs focus when a focused item disappears; normal label or selection updates do not refocus controls.
 - Text bindings escape source labels, project metadata, and diagnostic prose. Do not introduce `unsafeHTML` for user content or render generated SVG back into the editable source tree.
 - Printing reuses measured complete SVG systems. Draft stamps and publication checks update synchronously before the print request. UI scheduling never creates an asynchronous gap between final validation and printing.
 
 Every dynamic container has one rendering owner. Controllers may modify explicitly unbound properties or the contents of designated empty mounts; they must not replace a Lit-owned range with `textContent` or `replaceChildren`. `setPagePreflightMessage()` exists for transient preflight feedback through the same owner.
+
+## Icons and control content
+
+**Phosphor Fill** action icons and **Bravura** music glyphs are synchronous SVG definitions. Import named exports from `src/ui/icons/phosphor.ts` or `src/ui/icons/bravura.ts`; each contains only its name, view box, and paths. There is no runtime catalog, dynamic import, network request, font loading, or measurement step. Unused definitions can be removed by the bundler. The Phosphor 2.1.1 source and MIT license are recorded in the third-party notices. Bravura paths are extracted offline from the exact Bravura 1.392 font bundled with VexFlow 5.0.0, with provenance and a reproducible generator in `scripts/generate-bravura-icons.py`. Score engraving continues to use VexFlow and its font.
+
+`music-button-content` supplies presentation inside a native button or link. Its `icon` property receives an `IconDefinition` object; `layout` is a reflected attribute. SVG paths are delivered in the component's normal Lit render, without a second loading or readiness cycle. Labels stay in its light-DOM slot. The default layout places the icon above a smaller label. `inline` and `icon-only` use the same component, with `icon-only` visually hiding the label while retaining its accessible name. The surrounding native control owns disabled state, focus, events, forms, popovers, and optional tooltip text. `music-icon` offers the same definition property for standalone decorative artwork.
+
+```ts
+import { html } from 'lit';
+import { buttonContent } from '../ui/button-content.js';
+import { phArrowUUpLeft, phPrinter } from '../ui/icons/phosphor.js';
+
+html`<button type="button">${buttonContent(phArrowUUpLeft, 'Undo')}</button>`;
+html`<button type="button">${buttonContent(phPrinter, 'Print', { layout: 'inline' })}</button>`;
+html`<button type="button" title="Undo">${buttonContent(phArrowUUpLeft, 'Undo', { layout: 'icon-only' })}</button>`;
+```
+
+Use `--music-icon-size`, `--music-button-label-size`, `--music-button-gap`, and `--music-button-inline-gap` for local sizing. `--music-icon-opacity` defaults to **0.8**, applied once to the SVG; labels retain full opacity. The icon/label parts expose further styling without replacing the native control. Colors inherit from their control, including disabled, selected, and forced-color states. Bravura outlines are centered by their ink bounds during generation, with a scale cap so a staccato dot does not become an oversized circle. Whole/half rest icons include a ledger line to retain their meaning outside a stave.
+
+The small `notation-icons.ts` helpers map durations, rests, accidentals, clefs, event kinds, and markings to named icons. Controls publish their current icon alongside accepted selection or entry-recipe labels, so editing, undo, and redo cannot leave an old value pictured. Commands and score state remain outside the components.
+
+The Write view uses `ph:note-pencil`, music entry uses `ph:music-notes-plus`, and the part selector uses `ph:stack-simple`. Generic contextual Edit retains `ph:pencil-simple`, with the actual Bravura glyph taking precedence for attached musical marks; Pages retains `ph:files`.
+
+Controllers that change a button label use a literal, unbound `<span data-control-label>Initial label</span>` inside `buttonContent()`, then call `setControlLabel(button, text)`. `setControlIcon(button, icon)` updates the component property. Do not replace the whole button's `textContent`, or mutate a Lit-bound label range.
+
+Native notation options retain their exact text and submitted values. Inside a `<select>`, insert complete `nativeOptionTemplate({ value, label, icon })` expressions, so Lit binds each option before native `selectedcontent` cloning. Do not place nested template expressions inside literal static options: Chromium can clone their unfinished Lit markers and detach their parts. For changing collections, `renderNativeOptions()` accepts `NativeOption.icon` and reuses keyed native options. Inline SVG paths survive native cloning without custom-element properties or font readiness. Rich options have explicit accessible names; the ordinary-select fallback still displays the original text. Native controls retain their keyboard and form behavior.
+
+For a static select with an explicit default, place `nativeSelectDefault(value)` after its options and keep `selected: true` on the default option. The directive sets the initial native value once, after the options exist. Later renders preserve user changes, and the selected attribute retains native form reset behavior.
+
+The icon option browser fixture also compares reset behavior against a native DOM baseline without Lit. Chromium 151 resets the selected value correctly but leaves `selectedcontent` showing the previous option in both cases. The fixture reports this browser limitation separately; it does not qualify reset cloning as passing or add a custom reset implementation.
 
 ## Delivery and performance
 
@@ -102,13 +132,16 @@ Vite builds separate workbook and Author entry points, a cached UI runtime chunk
 ```sh
 npm test
 npm run typecheck
+npm run check:icons
 npm run build
 npm run check:bundle
 ```
 
 `check:bundle` totals emitted HTML, synchronous JavaScript imports, CSS, and referenced assets using per-file gzip sizes. It fails above 50 kB for the initial workbook or 630 kB for initial Author delivery, and rejects any Author chunk in the workbook's complete graph, including dynamic imports. Lazy engraving is excluded from the initial workbook figure; fonts already imported by Author are included. HTTP overhead, cache state, and browser execution time are separate measurements.
 
-The measured initial delivery is about **48.3 kB gzip for the workbook** and **606.5 kB for Author**, within the **50 kB / 630 kB** budgets, compared with **34.6 kB** and **583.8 kB** from the previous source built with the same local toolchain. This is an explicit loading tradeoff for the component/state architecture. Cached score selectors, indexed control lookup, keyed DOM updates, lazy nested-surface presentation, and disconnected subscriptions remove avoidable interaction and lifecycle work without changing engraving policy.
+`check:icons` builds a standalone button from each icon family with Vite and checks the emitted output: exactly the requested definition remains, with one synchronous chunk, no dynamic imports, and no engraving or font dependencies. Lit is external to these small fixture bundles. This verifies tree shaking against the production bundler rather than relying only on source conventions.
+
+The measured initial delivery is about **49.6 kB gzip for the workbook** and **625.6 kB for Author**, within the **50 kB / 630 kB** budgets, compared with **48.3 kB** and **606.5 kB** before icon controls. Phosphor definitions live in individual modules behind a named-export barrel, so the workbook loads only its two icons. Bravura retains original outline coordinates with static optical view boxes and lossless SVG command compression. Cached score selectors, indexed control lookup, keyed DOM updates, lazy nested-surface presentation, and disconnected subscriptions remove avoidable interaction and lifecycle work without changing engraving policy.
 
 For a repeatable comparison, build another checkout with `vite build --manifest`, then run `node scripts/check-bundle.mjs /absolute/path/to/that/dist`.
 
@@ -142,3 +175,13 @@ These are Chromium/local-browser results. Other browser engines, screen-reader c
 Initial delivery before this shadow migration was **47.0 / 599.3 kB gzip** (workbook / Author); it is now **48.3 / 606.5 kB**, under the unchanged **50 / 630 kB** budgets. Native indexed control lookup reduced the same isolated 32-note/32-Undo unit fixture from about 10.02 s to 2.62 s compared with the first scoped-selector implementation. That fixture timing is an implementation comparison, not a browser latency benchmark.
 
 These are Chromium/local-browser checks. Screen-reader combinations, other browser engines, trusted touch/software-keyboard workflows, saved PDFs, and physical printing remain separate qualification work.
+
+## Icon control verification — 2026-08-31
+
+- `npm test -- --maxWorkers=4 --reporter=dot`: **113 files, 4,176 passing tests**.
+- TypeScript, production build, bundle budgets, and `check:icons` pass. Initial delivery is **49.6 / 625.2 kB gzip** (workbook / Author). The initial workbook contains only its `ph:code` and `ph:printer` definitions.
+- The offline Bravura generator verifies source provenance and exact contour/control-point equivalence for all **59 glyphs**, including projected optical bounds.
+- Browser suites: Author **23/23**, workspace journeys **21/21**, shadow components **9/9**. Icon option checks pass for synchronous artwork, native label/value preservation, keyed updates, initial defaults, and user edits. Native reset-cloning behavior is separately recorded against the browser-only baseline described above.
+- Real controls report SVG opacity **0.8** and label opacity **1**. The 390px phone fixture retains **44px controls**, a **101px palette**, and **451px usable score height** in its score view. The expanded tool layout was visually inspected.
+- Both optimized production entry points render their Phosphor/Bravura control paths; Author starts with the correct quarter-note recipe. Bravura control artwork has no runtime font dependency.
+- Long workspace tests now release Lit render ranges during fixture cleanup before unlinking their DOM. This removes test-spy retention without changing production teardown, assertions, or heap limits.

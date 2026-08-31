@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Icon option browser qualification</title>
+    <style>
+      body { max-width: 70rem; margin: 2rem auto; padding: 1rem; font: 16px/1.5 system-ui, sans-serif; }
+      article { margin-block: 1.5rem; padding: 1rem; border: 1px solid #aaa; border-radius: 8px; }
+      h2 { margin-block: 0 .75rem; font-size: 1.1rem; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      [data-result="pass"] { border-color: #2d7a37; }
+      [data-result="fail"] { border-color: #b63232; }
+      [data-result="limitation"] { border-color: #9b6b18; background: #fff8e7; }
+      select > button { display: none; }
+      @supports (appearance: base-select) and selector(::picker(select)) {
+        select, select::picker(select) { appearance: base-select; }
+        select > button { display: flex; border: 0; background: none; padding: 0; }
+        .option-content { display: inline-flex; align-items: center; gap: .5rem; }
+        select, option { min-height: 2.5rem; padding: .35rem .7rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Icon option browser qualification</h1>
+    <p>This checks synchronous SVG delivery, native selectedcontent cloning, accessible labels, and icon opacity in the current browser.</p>
+    <p>Application results and native browser limitations are reported separately. A stale clone after native form reset is not counted as passing reset cloning.</p>
+    <p id="environment"></p>
+    <main id="results"></main>
+    <script type="module" src="./icon-options-browser.ts"></script>
+  </body>
+</html>

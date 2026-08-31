@@ -23,8 +23,8 @@ import { actionConfirmation, workspaceReview, continuationReview, pointerRecover
  * The application composition contains no project state or score processing.
  * Each feature owns a small native template; controllers bind the resulting
  * controls while dynamic projections render inside their dedicated hosts.
- * Authored select defaults use both selected attributes (for native reset) and
- * initial value properties (for cloned templates); later user edits stay local.
+ * Authored select defaults retain selected attributes for native reset and
+ * initialize the native value after options exist; later user edits stay local.
  */
 export function authorShellTemplate(mode: ViewMode = 'write'): TemplateResult {
   return html`
