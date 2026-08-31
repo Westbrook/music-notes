@@ -30,10 +30,10 @@ const ownedKeys = new Set<string>();
 const tabNames = ['rhythm', 'markings', 'measure'] as const;
 const taskNames = ['edit', ...tabNames] as const;
 const panels = { edit: 'selection-inspector', rhythm: 'passage-inspector', markings: 'annotation-inspector', measure: 'measure-inspector' } as const;
-// Existing score/ink minima remain unchanged. The approved writing-surface
-// palette replaces the old multirow ceiling with 48px plus 1px rounding.
-const limits = { desktopFirstInk: 241, phoneFirstInk: 261, desktopScore: 399, shortScore: 179, shortPendingScore: 139,
-  desktopStrip: 49, phoneEntryStrip: 49, shortSelectStrip: 49, target: 43.75, pinnedScore: 719 } as const;
+// Header-sized controls reserve one desktop row and two phone rows. Preserve
+// actual ink, target, and no-overlap checks within the resulting score region.
+const limits = { desktopFirstInk: 241, phoneFirstInk: 261, desktopScore: 399, shortScore: 150, shortPendingScore: 139,
+  target: 43.75, pinnedScore: 719 } as const;
 const tests: Test[] = [];
 let token = '';
 let sequence = 0;
@@ -394,6 +394,18 @@ function overlaps(a: Box, b: Box, tolerance = 0.25): boolean {
 function inside(inner: Box, outer: Box, tolerance = 0.75): boolean {
   return inner.left >= outer.left - tolerance && inner.right <= outer.right + tolerance && inner.top >= outer.top - tolerance && inner.bottom <= outer.bottom + tolerance;
 }
+function expectedPaletteLayout(fixture: Fixture): { height: number; rows: number; rowGap: number; controlSize: number } {
+  const rootSize = Number.parseFloat(fixture.view.getComputedStyle(fixture.doc.documentElement).fontSize);
+  const controlSize = Math.max(44, 2.75 * rootSize);
+  const phone = fixture.view.innerWidth <= 760;
+  const short = fixture.view.innerHeight <= 480;
+  const rows = field(fixture, '#author-workbench').clientWidth <= Math.max(760, 47.5 * rootSize) ? 2 : 1;
+  const rowGap = phone ? 2 : fixture.view.innerWidth <= 1099 ? 8 : 14;
+  const padding = short ? 2 : phone ? 4 : 6;
+  // The mode enclosure adds two border pixels; the dock has one top divider.
+  const height = Math.max(short ? 48 : 60, controlSize + 2 + (rows - 1) * (controlSize + rowGap) + 2 * padding + 1);
+  return { height, rows, rowGap, controlSize };
+}
 function layoutMetrics(fixture: Fixture): Record<string, unknown> {
   const root = surface(fixture); const layout = root.getLayoutGeometry()!; const svgs = [...root.shadowRoot!.querySelectorAll<SVGSVGElement>(`.${layout.projection} .system-row svg`)];
   const clip = clipBox(fixture); const strip = box(field(fixture, '#workspace-dock'));
@@ -652,7 +664,7 @@ tests.push({
       const rectangles = () => ({ dock: box(field(fixture, '#workspace-dock')), modeSlot: box(field(fixture, '#workspace-mode-slot')),
         write: box(field(fixture, '#toggle-entry')), select: box(field(fixture, '#select-mode')), moreSlot: box(field(fixture, '#palette-more-slot')),
         more: box(field(fixture, moreSelector())), location: box(field(fixture, '#location-trigger')) });
-      const baseline = rectangles(); const checkpoints: Record<string, unknown>[] = [];
+      const baseline = rectangles(); const expectedPalette = expectedPaletteLayout(fixture); const checkpoints: Record<string, unknown>[] = [];
       const viewport = { left: 0, top: 0, right: width, bottom: 660, width, height: 660 };
       const checkpoint = async (label: string, expectedPresentation: 'closed' | 'side' | 'sheet' = 'closed', preserveMusic = true) => {
         await frames(fixture); await settle(fixture);
@@ -664,9 +676,9 @@ tests.push({
             assert(delta <= 0.5, `${label}: ${name}.${dimension} moved ${delta}px; More, Mode, and Location must stay within 0.5 CSS px of their original rectangles.`);
           }
         }
-        const expectedStripHeight = enlargedText ? 2 * current.write.height + 8 : 48;
-        const minimumTarget = enlargedText ? 54.75 : limits.target;
-        assert(Math.abs(current.dock.height - expectedStripHeight) <= 1, `${label}: the ${enlargedText ? 'two-row CSS 20px fixture' : 'normal palette'} must remain ${expectedStripHeight}px ±1; received ${current.dock.height}px.`);
+        const minimumTarget = expectedPalette.controlSize - 0.25;
+        assert(Math.abs(current.dock.height - expectedPalette.height) <= 1, `${label}: the ${expectedPalette.rows}-row palette with header spacing must remain ${expectedPalette.height}px ±1; received ${current.dock.height}px.`);
+        assert(Math.abs(current.write.height - expectedPalette.controlSize) <= 0.25, `${label}: the shared header and palette control size must remain ${expectedPalette.controlSize}px.`);
         const dockControls = [...field(fixture, '#workspace-dock').querySelectorAll<HTMLButtonElement>('button')].filter(control => visible(fixture, control));
         for (const control of dockControls) {
           const bounds = box(control);
@@ -677,10 +689,11 @@ tests.push({
         assert(fixture.doc.documentElement.scrollWidth <= fixture.doc.documentElement.clientWidth + 1, `${label}: the palette must not create document-level horizontal overflow.`);
         if (enlargedText) {
           equal(fixture.view.getComputedStyle(fixture.doc.documentElement).fontSize, '20px', `${label}: retain the explicit CSS root size without shrinking text`);
-          assert(Math.abs(current.write.height - 55) <= 0.25, `${label}: 2.75rem controls must measure 55px in the CSS 20px fixture.`);
+        }
+        if (expectedPalette.rows === 2) {
           const musical = box(field(fixture, '#palette-musical-slots'));
-          assert(Math.abs(musical.top - current.write.bottom - 4) <= 0.5
-            && Math.abs(musical.height - current.write.height) <= 0.5, `${label}: the musical controls must occupy the second actual row, below the fixed owners with the 4px gap.`);
+          assert(Math.abs(musical.top - current.modeSlot.bottom - expectedPalette.rowGap) <= 0.5
+            && Math.abs(musical.height - current.write.height) <= 0.5, `${label}: the musical controls must occupy the second actual row, below the mode enclosure with the ${expectedPalette.rowGap}px header row gap.`);
           for (const control of dockControls) assert([current.write.top, musical.top].some(top => Math.abs(box(control).top - top) <= 0.5), `${label}: each visible palette control must belong to one of the two actual rows.`);
         }
         const otherMore = moreSelector() === '#tools-toggle' ? '#edit-selected-event' : '#tools-toggle';
@@ -771,7 +784,7 @@ tests.push({
       unchanged(fixture, restored, 'Resume the original writer without changing music or selection', false);
       click(fixture, '#select-mode'); await checkpoint('Park the same writer after Undo', 'closed', false); unchanged(fixture, restored, 'Park the original writer');
       observations.push({ viewport: [width, 660], pane: presentation, textSizing: enlargedText ? 'Explicit CSS 20px root fixture; not OS preferences, page zoom, or native accessibility qualification' : 'Default text size', baselineRectangles: baseline, paperBounds, checkpoints,
-        rectangleTolerancePx: 0.5, paletteHeightPx: enlargedText ? 118 : 48, paletteRows: enlargedText ? 2 : 1, paletteHeightTolerancePx: 1, targetMinimumPx: limits.target,
+        rectangleTolerancePx: 0.5, paletteHeightPx: expectedPalette.height, paletteRows: expectedPalette.rows, paletteHeightTolerancePx: 1, targetMinimumPx: limits.target,
         acceptedCorrectionTransactions: 1, rejectedEditTransactions: 0, undoTransactions: 1 });
     }
     return { detail: 'The actual More, Write, Select, and Location controls keep their rectangles through side/sheet task toggles, native choosers, overflow Review, one accepted pitch correction, and one Undo. Pure workspace changes preserve Source, selection, recipe, and the existing Redo branch.', metrics: { observations } };
@@ -1209,7 +1222,7 @@ tests.push(
     },
   },
   {
-    gate: 'UX-SCORE-FIRST', name: 'Actual notation meets the locked desktop, phone, and short-screen size budgets',
+    gate: 'UX-SCORE-FIRST', name: 'Actual notation stays usable beside header-sized desktop, phone, and short-screen controls',
     async run() {
       const observations: Record<string, unknown>[] = [];
       for (const name of ['lead', 'piano'] as const) {
@@ -1217,17 +1230,17 @@ tests.push(
         fixture.view.scrollTo(0, 0); field(fixture, '#score-scroll').scrollTop = 0; await frames(fixture);
         const metrics = layoutMetrics(fixture); assert(Number(metrics.firstInk) <= limits.desktopFirstInk, `${name}: first actual notation must appear by y=${limits.desktopFirstInk}, received ${metrics.firstInk}.`);
         assert(Number(metrics.usableHeight) >= limits.desktopScore, `${name}: useful score viewport must be at least ${limits.desktopScore}px, received ${metrics.usableHeight}.`);
-        assert((metrics.strip as Box).height <= limits.desktopStrip, 'The desktop music palette must meet the approved 48px height plus rounding.');
+        assert(Math.abs((metrics.strip as Box).height - expectedPaletteLayout(fixture).height) <= 1, 'The desktop music palette must use the header height and spacing, allowing one rounding pixel.');
         const id = name === 'lead' ? 'lead-m1-n1' : 'piano-upper-m1-n1'; equalScale(inkMetrics(surface(fixture), id), await neutralMetrics(fixture, id), `${name} first-screen music`);
         observations.push({ fixture: name, ...metrics });
       }
       const phone = await mount('Phone useful notation budgets', 390, 660); await applySource(phone, leadSource(8)); await tools(phone, false); phone.view.scrollTo(0, 0); field(phone, '#score-scroll').scrollTop = 0; await frames(phone);
       const regular = layoutMetrics(phone); assert(Number(regular.firstInk) <= limits.phoneFirstInk, `Phone first notation must appear by y=${limits.phoneFirstInk}, received ${regular.firstInk}.`); observations.push({ fixture: 'phone', ...regular });
       await recipe(phone, { pitch: 'F4', duration: 'quarter', dots: '0' }); await enter(phone); const entry = layoutMetrics(phone);
-      assert((entry.strip as Box).height <= limits.phoneEntryStrip, `Phone Enter mode controls exceed ${limits.phoneEntryStrip}px.`); observations.push({ fixture: 'phone enter', ...entry });
+      assert(Math.abs((entry.strip as Box).height - expectedPaletteLayout(phone).height) <= 1, 'Phone Enter mode must retain the two rows and spacing shared with the header.'); observations.push({ fixture: 'phone enter', ...entry });
       click(phone, '#select-mode'); await resize(phone, 390, 360); await selectEvent(phone, 'journey-n6a'); await tools(phone, false); await reveal(phone, 'journey-n6a', 0.1);
       const short = layoutMetrics(phone); assert(Number(short.usableHeight) >= limits.shortScore, `Deep short-screen Select needs at least ${limits.shortScore}px of useful score, received ${short.usableHeight}.`);
-      assert((short.strip as Box).height <= limits.shortSelectStrip, 'Short-screen Select controls must stay within the locked local strip budget.'); observations.push({ fixture: 'short deep Select', ...short });
+      assert(Math.abs((short.strip as Box).height - expectedPaletteLayout(phone).height) <= 1, 'Short-screen Select must use the shared header padding while retaining both palette rows.'); observations.push({ fixture: 'short deep Select', ...short });
       for (const observation of observations) for (const control of observation.controls as (Box & { selector: string })[]) {
         if (control.width === 0 || control.height === 0) continue;
         assert(control.width >= limits.target && control.height >= limits.target, `${control.selector}: currently visible target must be at least ${limits.target}px in both axes, received ${control.width}×${control.height}.`);
@@ -1460,12 +1473,13 @@ tests.push(
       assert(visible(fixture, feedback) && /unavailable|changed|missing/i.test(status) && /location|start writing here/i.test(status), 'The persistent header must explain the unavailable writing point and its deliberate local recovery.');
       assert(visible(fixture, label) && /^write notes$/i.test(startLabel), 'Missing bookmarks must not replace the fixed Write notes mode label.');
       assert(/unavailable/i.test(entryAction.getAttribute('aria-label') ?? ''), 'The fixed Write control must also explain its unavailable saved location accessibly.');
-      const actionBounds = box(entryAction); assert(actionBounds.height >= limits.target && actionBounds.height <= 44.25, `The fixed Write control must retain its 44px target; received ${actionBounds.height}px.`);
+      const expectedPalette = expectedPaletteLayout(fixture);
+      const actionBounds = box(entryAction); assert(Math.abs(actionBounds.height - expectedPalette.controlSize) <= 0.25, `The fixed Write control must retain its shared ${expectedPalette.controlSize}px target; received ${actionBounds.height}px.`);
       assert(inside(box(label), actionBounds), 'The fixed mode label must fit without clipping.');
       assert(field(fixture, '#entry-destination').hidden, 'Select mode must not add a second destination/status row for the unavailable bookmark.');
       await reveal(fixture, 'journey-n2a'); const missingLayout = layoutMetrics(fixture);
-      assert(Number(missingLayout.usableHeight) >= limits.shortScore, `The clean missing-bookmark state must retain the original ${limits.shortScore}px short-screen score budget; received ${missingLayout.usableHeight}.`);
-      assert((missingLayout.strip as Box).height <= 49, 'The missing-bookmark state must retain the approved 48px palette plus rounding.');
+      assert(Number(missingLayout.usableHeight) >= limits.shortScore, `The clean missing-bookmark state must retain the ${limits.shortScore}px short-screen score budget; received ${missingLayout.usableHeight}.`);
+      assert(Math.abs((missingLayout.strip as Box).height - expectedPalette.height) <= 1, 'A missing bookmark must not change the palette height or shared header spacing.');
       for (const selector of ['#select-mode', '#toggle-entry', '#location-trigger', '#edit-selected-event']) {
         const control = field(fixture, selector); const bounds = box(control);
         assert(visible(fixture, control) && bounds.width >= limits.target && bounds.height >= limits.target

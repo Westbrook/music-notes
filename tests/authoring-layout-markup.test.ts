@@ -1323,7 +1323,7 @@ describe('stable writing palette CSS contract', () => {
     const frame = declarationsFor('#author-workbench > .score-editor');
     expect(frame).toMatch(/background:\s*var\(--author-paper\);/);
     expect(frame).toMatch(/color:\s*var\(--author-ink\);/);
-    expect(declarationsFor('#workspace-dock')).toMatch(/background:\s*var\(--author-chrome\);/);
+    expect(declarationsFor('#workspace-dock')).toMatch(/background:\s*var\(--paper\);/);
     expect(declarationsFor('.palette-slot > button')).toMatch(/color:\s*var\(--author-control-ink\);/);
     for (const kind of ['warning', 'error']) {
       expect(declarationsFor(`#workspace-feedback-label[data-feedback-kind="${kind}"]`)).toMatch(new RegExp(`color:\\s*var\\(--author-${kind}\\);`));
@@ -1341,7 +1341,7 @@ describe('stable writing palette CSS contract', () => {
     }
     const slot = declarationsFor('#workspace-mode-slot');
     expect(slot).toMatch(/display:\s*grid;/);
-    expect(slot).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(44px,\s*1fr\)\);/);
+    expect(slot).toMatch(/grid-template-columns:\s*repeat\(2,\s*max-content\);/);
   });
 
   it('does not let selection rejection or gesture feedback cover or suppress the musical controls', () => {
@@ -1372,20 +1372,29 @@ describe('stable writing palette CSS contract', () => {
 });
 
 describe('score-first authoring CSS contract', () => {
-  it('declares one 48px default strip with a shared 44px minimum that can grow with text', () => {
-    const dock = rulesFor('#workspace-dock')[0] ?? '';
+  it('shares header spacing and full-size controls while allowing the palette to grow with text', () => {
+    const dock = declarationsFor('#workspace-dock');
     expect(dock).toMatch(/grid-area:\s*dock;/);
     expect(dock).toMatch(/display:\s*grid;/);
-    expect(dock).toMatch(/--palette-control-size:\s*max\(44px,\s*2\.75rem\);/);
-    expect(dock).toMatch(/--palette-strip-height:\s*calc\(var\(--palette-control-size\)\s*\+\s*4px\);/);
-    expect(dock).toMatch(/grid-template-rows:\s*var\(--palette-control-size\);/);
-    expect(dock).toMatch(/grid-template-columns:\s*calc\(2\s*\*\s*var\(--palette-control-size\)\)\s+minmax\(144px,\s*1fr\)\s+var\(--palette-control-size\)\s+max\(80px,\s*5rem\);/);
-    expect(dock).toMatch(/min-height:\s*var\(--palette-strip-height\);/);
-    expect(dock).toMatch(/padding:\s*2px\s+8px;/);
-    expect(dock).toMatch(/gap:\s*4px;/);
+    expect(declarationsFor('body:has(#author-workbench)')).toMatch(/--author-control-size:\s*max\(44px,\s*2\.75rem\);/);
+    expect(dock).toMatch(/--palette-control-size:\s*var\(--author-control-size\);/);
+    expect(dock).toMatch(/grid-template-rows:\s*calc\(var\(--palette-control-size\)\s*\+\s*2px\);/);
+    expect(dock).toMatch(/grid-template-columns:\s*max-content\s+minmax\(max\(264px,\s*16\.5rem\),\s*1fr\)\s+max-content\s+max\(140px,\s*8\.75rem\);/);
+    for (const selector of ['body:has(#author-workbench) .app-header', '#workspace-dock']) {
+      const bar = declarationsFor(selector);
+      expect(bar, selector).toMatch(/min-height:\s*60px;/);
+      expect(bar, selector).toMatch(/padding:\s*6px\s+12px;/);
+      expect(bar, selector).toMatch(/gap:\s*14px;/);
+    }
+    for (const selector of ['body:has(#author-workbench) .view-switch button', '#workspace-mode-slot > button']) {
+      expect(declarationsFor(selector), selector).toMatch(/padding:\s*6px\s+11px;/);
+    }
+    for (const selector of ['body:has(#author-workbench) .header-actions button', '.palette-slot > button', '#palette-more-slot > button']) {
+      expect(declarationsFor(selector), selector).toMatch(/padding:\s*7px\s+9px;/);
+    }
     expect(dock).not.toMatch(/overflow:\s*hidden|text-overflow:\s*ellipsis/);
-    // At the default 16px root size this declares 44px controls plus 4px
-    // padding, not a measured fit. Text scaling and native fit remain separate.
+    // Native checks establish the shared 60px desktop bars and the taller
+    // phone/text layouts; stylesheet declarations alone do not establish fit.
   });
 
   it('places a side task after the independently chosen frame without adding a wrapping breakpoint', () => {
@@ -1433,7 +1442,7 @@ describe('score-first authoring CSS contract', () => {
       ['#workspace-mode-slot', 1], ['#palette-musical-slots', 2],
       ['#palette-more-slot', 3], ['#workspace-dock > .location-trigger', 4],
     ] as const) {
-      const normal = rulesFor(selector)[0] ?? '';
+      const normal = declarationsFor(selector);
       expect(normal, selector).toMatch(new RegExp(`grid-column:\\s*${column};`));
       expect(normal, selector).toMatch(/grid-row:\s*1;/);
     }
@@ -1526,25 +1535,26 @@ describe('score-first authoring CSS contract', () => {
   });
 
   it('uses the same musical columns with a container fallback that responds to width and larger root text', () => {
-    const normal = rulesFor('#workspace-dock')[0] ?? '';
-    expect(normal).toMatch(/--palette-musical-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
+    const normal = declarationsFor('#workspace-dock');
+    expect(normal).toMatch(/--palette-musical-columns:\s*repeat\(3,\s*minmax\(0,\s*max-content\)\);/);
     for (const selector of ['#entry-toolbar .entry-tools', '#selection-controls']) {
       const rule = declarationsFor(selector);
       expect(rule).toMatch(/display:\s*grid;/);
       expect(rule).toMatch(/grid-template-columns:\s*var\(--palette-musical-columns\);/);
+      expect(rule).toMatch(/gap:\s*8px;/);
     }
     expect(declarationsFor('.palette-slot')).toMatch(/grid-template-rows:\s*var\(--palette-control-size\);/);
     expect(declarationsFor('.popover-body :is(input:not([type="checkbox"]), select), .popover-body > button')).toMatch(/min-height:\s*44px;/);
-    const narrow = blockFor(/@container\s+author-workbench\s*\(width\s*<\s*384px\)\s*or\s*\(width\s*<\s*24rem\)/);
+    const narrow = blockFor(/@container\s+author-workbench\s*\(width\s*<=\s*760px\)\s*or\s*\(width\s*<=\s*47\.5rem\)/);
     const fallback = declarationsFor('#workspace-dock', narrow);
     expect(fallback).toMatch(/display:\s*flex;/);
     expect(fallback).toMatch(/flex-wrap:\s*wrap;/);
     expect(fallback).not.toMatch(/--palette-control-size\s*:/);
     expect(declarationsFor('#workspace-dock #selection-compact-context', narrow)).toMatch(/white-space:\s*normal;/);
     for (const [selector, order, flex] of [
-      ['#workspace-mode-slot', 0, /flex:\s*0\s+1\s+calc\(2\s*\*\s*var\(--palette-control-size\)\);/],
+      ['#workspace-mode-slot', 0, /flex:\s*0\s+0\s+auto;/],
       ['#workspace-dock > .location-trigger', 1, /flex:\s*1\s+1\s+max\(80px,\s*5rem\);/],
-      ['#palette-more-slot', 2, /flex:\s*0\s+1\s+var\(--palette-control-size\);/],
+      ['#palette-more-slot', 2, /flex:\s*0\s+0\s+auto;/],
       ['#palette-musical-slots', 3, /flex:\s*1\s+0\s+100%;/],
     ] as const) {
       const rule = declarationsFor(selector);
@@ -1554,7 +1564,7 @@ describe('score-first authoring CSS contract', () => {
     expect(narrow).not.toMatch(/data-entry-mode|data-selection-state/);
     expect(narrow).not.toMatch(/text-overflow:\s*ellipsis|overflow:\s*hidden/);
     const unsupported = blockFor(/@supports\s+not\s*\(container-type:\s*inline-size\)/);
-    const viewportFallback = blockFor(/@media\s*\(max-width:\s*383px\)\s*,\s*\(max-width:\s*24rem\)/, unsupported);
+    const viewportFallback = blockFor(/@media\s*\(max-width:\s*760px\)\s*,\s*\(max-width:\s*47\.5rem\)/, unsupported);
     expect(declarationsFor('#workspace-dock', viewportFallback)).toMatch(/display:\s*flex;/);
     expect(declarationsFor('#workspace-dock', viewportFallback)).toMatch(/flex-wrap:\s*wrap;/);
     expect(declarationsFor('#workspace-dock #selection-compact-context', viewportFallback)).toMatch(/white-space:\s*normal;/);
@@ -1565,11 +1575,11 @@ describe('score-first authoring CSS contract', () => {
   });
 
   it('reserves desktop direct corrections beside the complete Pitch route without changing musical slot ownership', () => {
-    const desktop = blockFor(/@container\s+author-workbench\s*\(width\s*>=\s*900px\)\s*and\s*\(width\s*>=\s*56\.25rem\)/);
+    const desktop = blockFor(/@container\s+author-workbench\s*\(width\s*>=\s*1100px\)\s*and\s*\(width\s*>=\s*68\.75rem\)/);
     const dock = declarationsFor('#workspace-dock', desktop);
-    expect(dock).toMatch(/grid-template-columns:\s*max\(100px,\s*6\.25rem\)\s+minmax\(max\(444px,\s*27\.75rem\),\s*1fr\)\s+max\(56px,\s*3\.5rem\)\s+max\(180px,\s*11\.25rem\);/);
-    expect(dock).toMatch(/--palette-musical-columns:\s*minmax\(max\(244px,\s*15\.25rem\),\s*1\.6fr\)\s+minmax\(max\(88px,\s*5\.5rem\),\s*1fr\)\s+minmax\(max\(100px,\s*6\.25rem\),\s*1fr\);/);
-    expect(declarationsFor('#selection-slot-1', desktop)).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+max\(174px,\s*10\.875rem\);/);
+    expect(dock).toMatch(/grid-template-columns:\s*max-content\s+minmax\(max\(480px,\s*30rem\),\s*1fr\)\s+max-content\s+max\(180px,\s*11\.25rem\);/);
+    expect(dock).toMatch(/--palette-musical-columns:\s*minmax\(max\(264px,\s*16\.5rem\),\s*max-content\)\s+minmax\(max\(88px,\s*5\.5rem\),\s*max-content\)\s+minmax\(max\(100px,\s*6\.25rem\),\s*max-content\);/);
+    expect(declarationsFor('#selection-slot-1', desktop)).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+max\(204px,\s*12\.75rem\);/);
     expect(declarationsFor('#selection-slot-1 > button', desktop)).toMatch(/grid-area:\s*1\s*\/\s*1;/);
     expect(declarationsFor('.selection-direct-choices', desktop)).toMatch(/grid-area:\s*1\s*\/\s*2;/);
     expect(declarationsFor('.selection-direct-choices', desktop)).toMatch(/display:\s*grid;/);
@@ -1642,15 +1652,15 @@ describe('score-first authoring CSS contract', () => {
     }
     for (const { declarations } of leafRules()) {
       for (const [, value] of declarations.matchAll(/--palette-control-size:\s*([^;]+)/g)) {
-        expect(value.trim()).toBe('max(44px, 2.75rem)');
+        expect(value.trim()).toBe('var(--author-control-size)');
       }
     }
   });
 
   it('keeps the mode labels readable and missing-bookmark guidance outside their fixed footprint', () => {
     const entry = declarationsFor('#workspace-mode-slot > button');
-    expect(entry).toMatch(/white-space:\s*normal;/);
-    expect(entry).toMatch(/min-width:\s*44px;/);
+    expect(entry).toMatch(/white-space:\s*nowrap;/);
+    expect(entry).toMatch(/min-width:\s*60px;/);
     for (const selector of ['#workspace-mode-slot > button', '#entry-mode-reason', '#entry-mode-label']) {
       for (const rule of rulesFor(selector)) {
         expect(rule).not.toMatch(/(?:text-overflow:\s*ellipsis|overflow:\s*hidden|line-clamp\s*:)/);

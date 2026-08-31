@@ -1442,8 +1442,9 @@ async function showVisualPreview(width: 1180 | 390): Promise<void> {
     // Write's remembered destination. Deliberately start at this selected bar.
     enterAtSelection(fixture); await exposeScore(fixture);
     const palette = field(fixture, '#workspace-dock');
-    assert(Math.abs(palette.getBoundingClientRect().height - 48) <= 1,
-      'The normal palette at 390px or desktop width must retain its 48px strip, allowing one rounding pixel.');
+    const expectedPaletteHeight = field(fixture, '.app-header').getBoundingClientRect().height;
+    assert(Math.abs(palette.getBoundingClientRect().height - expectedPaletteHeight) <= 1,
+      'The phone and desktop palettes must match the corresponding header height, allowing one rounding pixel.');
     assert(!visible(fixture, field(fixture, '#drag-entry')), 'The visual fixture must explicitly prepare its handle, not assume Write exposes it.');
     await prepareEntryHandle(fixture);
     const layout = surface(fixture).getLayoutGeometry();
@@ -1466,8 +1467,8 @@ async function showVisualPreview(width: 1180 | 390): Promise<void> {
       'The later system must be reached through the actual notation viewport without scrolling away its controls.');
     assert(paletteBounds.top >= -1 && paletteBounds.bottom <= fixture.view.innerHeight + 1
       && tileBounds.top >= 0 && tileBounds.bottom <= fixture.view.innerHeight + 1
-      && tileBounds.width >= 43.5 && tileBounds.height >= 43.5 && Math.abs(paletteBounds.height - 48) <= 1,
-    'The bottom palette and deliberately prepared 44px handle must fit the actual viewport without enlarging the 48px strip.');
+      && tileBounds.width >= 43.5 && tileBounds.height >= 43.5 && Math.abs(paletteBounds.height - expectedPaletteHeight) <= 1,
+    'The bottom palette and deliberately prepared 44px handle must fit the actual viewport while retaining the shared header height.');
     assert(scoreBounds.bottom <= paletteBounds.top + 1 && target.point.x > 0 && target.point.x < fixture.view.innerWidth
       && target.point.y > scoreBounds.top && target.point.y < Math.min(scoreBounds.bottom, fixture.view.innerHeight),
       'Author navigation must keep the later staff inside the reserved score region above the bottom palette, with no overlap.');
