@@ -2,6 +2,7 @@ import { css, html, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
 import { iconGraphic } from './icon-graphics.js';
 import type { IconDefinition } from './icon-definition.js';
+import './design-tokens.css';
 
 export type { IconDefinition } from './icon-definition.js';
 export type ButtonLayout = 'stacked' | 'inline' | 'icon-only';
@@ -19,7 +20,7 @@ export class MusicButtonContent extends LitElement {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: var(--music-button-gap, 2px);
+      gap: var(--music-button-gap, var(--music-ui-content-gap));
       max-width: 100%;
       min-width: 0;
       vertical-align: middle;
@@ -30,15 +31,15 @@ export class MusicButtonContent extends LitElement {
     :host([hidden]) { display: none !important; }
     svg {
       display: block;
-      width: var(--music-icon-size, 1.25rem);
-      height: var(--music-icon-size, 1.25rem);
+      width: var(--music-icon-size, var(--music-ui-icon-size));
+      height: var(--music-icon-size, var(--music-ui-icon-size));
       flex: none;
     }
     .label {
       min-width: 0;
       max-width: 100%;
-      font-size: var(--music-button-label-size, 0.72rem);
-      line-height: 1.15;
+      font-size: var(--music-button-label-size, var(--music-ui-label-size));
+      line-height: var(--music-ui-label-line-height);
       text-align: inherit;
     }
     :host([layout='inline']) {

@@ -7,6 +7,7 @@ import './workspace-frame.js';
 import './panel-frame.js';
 import './view-switch.js';
 import { workspaceHeader } from './workspace-header.js';
+import { listeningTools } from './listening-tools.js';
 import { readingTools } from './reading-tools.js';
 import { pageTools } from './page-tools.js';
 import { scoreFrame } from './score-frame.js';
@@ -18,6 +19,8 @@ import { entrySettings, entryValueChooser, entryDirectionChooser } from './entry
 import { selectionValueChooser, selectionPitchChooser, selectionSharedChooser } from './selection-surfaces.js';
 import { noteEditor } from './note-editor.js';
 import { actionConfirmation, workspaceReview, continuationReview, pointerRecovery } from './review-surfaces.js';
+
+const ownedFeatures = 'music-workspace-frame, music-panel-frame, music-view-switch, music-score-viewport, music-source-editor, music-toggle-button-group';
 
 /**
  * The application composition contains no project state or score processing.
@@ -31,6 +34,7 @@ export function authorShellTemplate(mode: ViewMode = 'write'): TemplateResult {
     ${workspaceHeader(mode)}
     <main class="author-workspace">
       ${readingTools()}
+      ${listeningTools()}
       ${pageTools()}
       <music-workspace-frame id="author-workbench" class="author-workbench" .mode=${mode} tools-presentation="closed">
         ${scoreFrame()}
@@ -79,7 +83,7 @@ export class AuthorShell extends LitElement {
 
   protected override async getUpdateComplete(): Promise<boolean> {
     const complete = await super.getUpdateComplete();
-    await Promise.all([...this.querySelectorAll('music-workspace-frame, music-panel-frame, music-view-switch, music-score-viewport, music-source-editor')]
+    await Promise.all([...this.querySelectorAll(ownedFeatures)]
       .map(child => (child as LitElement).updateComplete));
     return complete;
   }
@@ -87,7 +91,7 @@ export class AuthorShell extends LitElement {
   /** Synchronous first mount for controller binding and isolated fixtures. */
   mount(): void {
     this.performUpdate();
-    for (const child of this.querySelectorAll('music-workspace-frame, music-panel-frame, music-view-switch, music-score-viewport, music-source-editor')) {
+    for (const child of this.querySelectorAll(ownedFeatures)) {
       (child as HTMLElement & { mount(): void }).mount();
     }
   }

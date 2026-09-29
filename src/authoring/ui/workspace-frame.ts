@@ -66,7 +66,8 @@ export class AuthorWorkspaceFrame extends LitElement {
     }
     :host([tools-presentation="sheet"]) ::slotted([slot="tools"]) { width: 100%; margin-inline-start: 0; }
     :host([tools-presentation="closed"]) ::slotted([slot="tools"]) { display: none !important; }
-    :host([mode="read"]) { grid-template-rows: minmax(0, 1fr); grid-template-areas: "score"; }
+    :host([mode="read"]), :host([mode="listen"]) { grid-template-rows: minmax(0, 1fr); grid-template-areas: "score"; }
+    :host([mode="listen"]) ::slotted([slot="score"]) { width: min(960px, 100%); }
     :host(:not([mode="write"])) ::slotted([slot="tools"]),
     :host(:not([mode="write"])) ::slotted([slot="palette"]) { display: none !important; }
     @media (forced-colors: active) {

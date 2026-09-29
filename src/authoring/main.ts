@@ -21,6 +21,7 @@ import type { Annotation, Clef, Diagnostic, Duration, EventMarking, Measure, Mus
 import { serializeScore } from '../dom/index.js';
 import { applyCommand } from './commands.js';
 import { EditorSession } from './editor.js';
+import { copyMusic, MUSIC_CLIPBOARD_TYPE } from './music-clipboard.js';
 import { createProject, defaultLayout, getProjectNotices, importProject, serializeProject } from './project.js';
 import { buildProjection } from './projection.js';
 import { renderPageView, updatePagePreflight, setPagePreflightMessage } from './page-view.js';
@@ -51,10 +52,13 @@ import { MarkingsEditor } from './markings-editor.js';
 import { EventMarkingsEditor } from './event-markings-editor.js';
 import { EventMarkingCompatibilityError } from './event-markings-commands.js';
 import { EntryPitch } from './entry-pitch.js';
+import type { MusicToggleButtonGroup } from '../ui/toggle-button-group.js';
+import { ENTRY_ATTACK_OPTIONS, entryAttack, entryAttackAllowed, entryAttackOptions, entryDurationOptions } from './entry-palette.js';
 import { ENTRY_KINDS as entryKinds, DEFAULT_ENTRY_KIND as defaultEntryKind } from './notation-capabilities.js';
 import { createViewportAnchor } from './viewport-anchor.js';
 import { createSelectionHud } from './selection-hud.js';
 import type { SelectionHud, SelectionHudTarget } from './selection-hud.js';
+import type { ListenController } from './listen-controller.js';
 import { analyzeContinuation } from './continuation.js';
 import type { AuthorCommand, AuthorProject, Cursor, EventInput, LayoutProfile, MeasureInput, ViewMode } from './types.js';
 
@@ -78,6 +82,9 @@ const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', classNam
 /** The application owns commands and project metadata; musical meaning remains in its source DOM. */
 export class AuthorWorkspace {
   readonly session: EditorSession;
+  private listen?: ListenController;
+  private listenLoading?: Promise<void>;
+  private playingIds: readonly string[] = [];
   private readonly viewState = new AuthorViewState();
   /** Observe workspace choices; transitions run through the workspace controls. */
   readonly view = this.viewState.snapshot;
@@ -102,6 +109,8 @@ export class AuthorWorkspace {
   private readonly markings: MarkingsEditor;
   private readonly eventMarkings: EventMarkingsEditor;
   private readonly entryPitch: EntryPitch;
+  private entryPaletteKind?: string;
+  private entryPaletteAlteration = '0';
   private readonly viewport: ReturnType<typeof createViewportAnchor>;
   private viewportRestore?: ReturnType<ReturnType<typeof createViewportAnchor>['capture']>;
   private sheetViewportRestore?: ReturnType<ReturnType<typeof createViewportAnchor>['capture']>;
@@ -183,7 +192,7 @@ export class AuthorWorkspace {
     this.controlScope = new ControlScope(shell);
     // Only explicitly owned UI roots participate in control discovery. The
     // score viewport's imported musical source remains outside this scope.
-    for (const id of ['view-switch', 'event-navigator', 'source-editor']) {
+    for (const id of ['view-switch', 'event-navigator', 'source-editor', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack']) {
       const root = shell.querySelector<HTMLElement>(`#${id}`)?.shadowRoot;
       if (root) this.controlScope.register(root);
     }
@@ -224,6 +233,7 @@ export class AuthorWorkspace {
       changed: () => { this.syncEntryVisibility(); this.invalidateOffers(); },
     }, this.controlScope);
     this.staffInteraction = new StaffInteraction({
+      flowingEntry: true,
       session: this.session, host: viewport, overlayMount: viewport.previewMount,
       getViewport: () => this.el('score-scroll'),
       getChromeBounds: () => {
@@ -748,7 +758,14 @@ export class AuthorWorkspace {
   private startEntry(resume: boolean): void {
     this.requireWriting();
     const mark = resume ? this.validBookmark() : undefined;
-    if (resume && !mark) throw new Error('The previous writing location is unavailable. Choose Location, then Start writing here to choose a new destination.');
+    if (resume && !mark) {
+      // Keep the choice of a replacement destination explicit, but bring that
+      // choice to the user instead of sending them back to a failing toggle.
+      this.closeTransientSurfaces();
+      this.status('The previous writing location is unavailable. Choose Start writing here to use the location shown, or choose another location.');
+      this.surfaces.open('location-panel', 'start-entry-here');
+      return;
+    }
     this.closeTransientSurfaces(); this.staffInteraction.cancel('mode'); this.clearActiveMarking();
     this.selectMore = false; this.pitchDragArmed = false;
     document.body.dataset.selectionFeedback = 'none';
@@ -796,6 +813,7 @@ export class AuthorWorkspace {
   }
   private prepareEntryDrag(): void {
     if (!this.entryMode) this.activateWriting();
+    if (!this.entryMode) return;
     this.requireWriting(); this.closeTransientSurfaces(); this.staffInteraction.cancel('mode');
     this.entryDragArmed = true; this.syncEntryVisibility();
     const handle = this.el<HTMLButtonElement>('drag-entry');
@@ -1136,6 +1154,7 @@ export class AuthorWorkspace {
     this.selectionControls?.refresh();
     this.selectionHud?.refresh();
     this.renderNavigator(); this.syncReturnControl();
+    this.listen?.refresh();
   }
 
   private noteEditorState(): NoteEditorState {
@@ -1327,7 +1346,7 @@ export class AuthorWorkspace {
     this.el('entry-mode-label').textContent = 'Write notes';
     this.el('entry-mode-reason').hidden = !missingBookmark;
     if (missingBookmark) {
-      const explanation = 'Write notes: previous writing location unavailable. Choose Location, then Start writing here.';
+      const explanation = 'Write notes: previous writing location unavailable; choose a new location.';
       this.el('toggle-entry').setAttribute('aria-label', explanation);
       this.el('toggle-entry').title = explanation;
     } else { this.el('toggle-entry').removeAttribute('aria-label'); this.el('toggle-entry').removeAttribute('title'); }
@@ -1356,9 +1375,6 @@ export class AuthorWorkspace {
     const measureRest = kind === 'rest' && this.checked('event-measure-rest');
     const position = this.value('insert-position');
     const dots = this.value('event-dots');
-    const recipe = kind === 'road'
-      ? `${dots === '0' ? 'No dots' : `${dots} ${dots === '1' ? 'dot' : 'dots'}`} · ${position ? position[0].toUpperCase() + position.slice(1) : 'Choose position'}`
-      : `${measureRest ? `Full-measure rest · ${location.measure.meter.display}` : kind === 'note' ? this.value('event-pitch') : kind === 'chord' ? this.value('event-pitches') : kind === 'rhythmic-slash' ? 'Written rhythm' : kind === 'slash' ? 'Open improvisation' : kind === 'rhythm' ? 'No pitch' : 'Rest'}${!measureRest && dots !== '0' ? ` · ${dots} dot(s)` : ''} · ${position}`;
     this.el<HTMLSelectElement>('event-duration').disabled = measureRest;
     this.el<HTMLSelectElement>('event-dots').disabled = measureRest;
     this.el<HTMLSelectElement>('event-beam').disabled = measureRest;
@@ -1366,6 +1382,11 @@ export class AuthorWorkspace {
     this.el('event-duration').title = measureRest ? 'A full-measure rest follows the meter; this ordinary note value is not used.' : '';
     this.el('event-dots').title = measureRest ? 'A full-measure rest follows the meter; dots are not used.' : '';
     this.el('event-beam').title = measureRest ? 'A full-measure rest has no beam; this ordinary entry setting is not used.' : '';
+    this.syncEntryPalette();
+    const attackLabel = ENTRY_ATTACK_OPTIONS.find(option => option.value === this.el<MusicToggleButtonGroup>('entry-attack').value)?.label;
+    const recipe = kind === 'road'
+      ? `${dots === '0' ? 'No dots' : `${dots} ${dots === '1' ? 'dot' : 'dots'}`}${attackLabel && attackLabel !== 'None' ? ` · ${attackLabel}` : ''} · ${position ? position[0].toUpperCase() + position.slice(1) : 'Choose position'}`
+      : `${measureRest ? `Full-measure rest · ${location.measure.meter.display}` : kind === 'note' ? this.value('event-pitch') : kind === 'chord' ? this.value('event-pitches') : kind === 'rhythmic-slash' ? 'Written rhythm' : kind === 'slash' ? 'Open improvisation' : kind === 'rhythm' ? 'No pitch' : 'Rest'}${!measureRest && dots !== '0' ? ` · ${dots} dot(s)` : ''}${attackLabel && attackLabel !== 'None' ? ` · ${attackLabel}` : ''} · ${position}`;
     const toolName = kind === 'note' ? 'Note' : kind === 'chord' ? 'Chord' : kind === 'road' ? '3 roads'
       : kind === 'rhythm' ? 'Rhythm' : kind === 'rhythmic-slash' ? 'Slash rhythm' : kind === 'slash' ? 'Open slash' : 'Rest';
     this.el('entry-recipe').textContent = kind === 'note' ? this.value('event-pitch') || 'Pitch…'
@@ -1437,6 +1458,33 @@ export class AuthorWorkspace {
     this.syncConversionVisibility(); this.syncInsertAction();
     this.selectionControls?.refresh();
   }
+  private syncEntryPalette(): void {
+    const enabled = this.mode === 'write' && this.session.signals.pendingSource.get() === null;
+    const kind = this.value('event-kind');
+    const attack = this.el<MusicToggleButtonGroup>('entry-attack');
+    if (kind !== this.entryPaletteKind) {
+      this.el<MusicToggleButtonGroup>('entry-duration').options = entryDurationOptions(kind === 'rest');
+      if (!entryAttackAllowed(attack.value, kind)) {
+        const previous = ENTRY_ATTACK_OPTIONS.find(option => option.value === attack.value)?.label ?? 'Attack';
+        attack.value = 'none';
+        this.el('entry-attack-status').textContent = `${previous} does not apply to this event type. Attack is now None.`;
+      } else this.el('entry-attack-status').textContent = '';
+      attack.options = entryAttackOptions(kind);
+      this.entryPaletteKind = kind;
+    }
+    attack.disabled = !enabled;
+    for (const [groupId, fieldId] of [['entry-accidentals', 'event-alteration'], ['entry-duration', 'event-duration'], ['entry-dots', 'event-dots']] as const) {
+      const group = this.el<MusicToggleButtonGroup>(groupId);
+      const field = this.el<HTMLSelectElement>(fieldId);
+      const invalidPitch = fieldId === 'event-alteration' && !field.value;
+      if (fieldId === 'event-alteration') {
+        if (field.value) this.entryPaletteAlteration = field.value;
+        group.value = this.entryPaletteAlteration;
+      } else group.value = field.value;
+      group.disabled = !enabled || field.disabled || invalidPitch;
+      group.title = invalidPitch ? 'Enter a valid pitch in New-note options before choosing an accidental.' : field.title;
+    }
+  }
   private syncConversionVisibility(): void {
     const notation = this.location().staff.notation ?? 'pitched';
     const kind = this.value('convert-kind');
@@ -1470,6 +1518,7 @@ export class AuthorWorkspace {
     const kind = this.value(`${prefix}-kind`);
     const measureRest = kind === 'rest' && this.checked(`${prefix}-measure-rest`);
     const meterControlled = prefix === 'event' && measureRest;
+    const attack = prefix === 'event' ? entryAttack(this.el<MusicToggleButtonGroup>('entry-attack').value) : undefined;
     return {
       kind: (kind === 'rhythmic-slash' ? 'slash' : kind) as EventInput['kind'], pitch: this.value(`${prefix}-pitch`).trim(), pitches: this.value(`${prefix}-pitches`).trim(),
       duration: meterControlled ? 'whole' : this.value(`${prefix}-duration`) as Duration, dots: meterControlled ? 0 : this.numeric(`${prefix}-dots`), rhythmic: kind === 'rhythmic-slash',
@@ -1477,12 +1526,13 @@ export class AuthorWorkspace {
       ...(kind === 'road' ? { pitchDirection: this.value(`${prefix}-direction`) as PitchDirection } : {}),
       accidentalDisplay: this.value(`${prefix}-accidental-display`) as EventInput['accidentalDisplay'],
       stem: meterControlled ? 'auto' : this.value(`${prefix}-stem`) as EventInput['stem'], beam: meterControlled ? 'none' : this.value(`${prefix}-beam`) as EventInput['beam'],
+      ...(attack ? { attack } : {}),
     };
   }
   private execute(command: AuthorCommand): void {
     this.requireWriting();
     if (this.entryMode || command.type === 'insert-event') this.session.setCursor(this.cursor);
-    const advancing = ['insert-event', 'append-and-insert', 'continue-piece', 'append-measure'].includes(command.type);
+    const advancing = ['insert-event', 'paste-music', 'append-and-insert', 'continue-piece', 'append-measure'].includes(command.type);
     this.advancingWriting = advancing;
     let result: ReturnType<EditorSession['execute']>;
     try { result = this.session.execute(command); } finally { this.advancingWriting = false; }
@@ -1496,7 +1546,7 @@ export class AuthorWorkspace {
   private bind(): void {
     this.on('view-switch', 'view-request', event => {
       const mode = (event as CustomEvent<{ mode: ViewMode }>).detail?.mode;
-      if (mode === 'write' || mode === 'read' || mode === 'pages') this.setMode(mode);
+      if (mode === 'write' || mode === 'read' || mode === 'listen' || mode === 'pages') this.setMode(mode);
     });
     this.on('undo', 'click', () => { if (this.mode === 'write') this.session.undo(); }); this.on('redo', 'click', () => { if (this.mode === 'write') this.session.redo(); });
     for (const id of ['project-title', 'project-composer', 'project-subtitle']) this.on(id, 'input', () => {
@@ -1514,6 +1564,7 @@ export class AuthorWorkspace {
       this.partId = 'score'; this.entryMode = false; this.rangeStart = ''; this.rangeEnd = '';
       this.session.replaceProject(createTemplate(template)); this.resetCursor(); this.inspectors.reset(); this.markings.reset(); this.eventMarkings.reset();
       this.setValue('event-kind', defaultEntryKind[this.location().staff.notation ?? 'pitched']); this.setValue('event-direction', 'same'); this.setValue('event-pitch', 'C4'); this.setValue('event-duration', 'quarter'); this.setValue('event-dots', '0'); this.check('event-measure-rest', false);
+      this.el<MusicToggleButtonGroup>('entry-attack').value = 'none';
       this.setMode('write');
     });
     this.on('open-project', 'click', () => { this.closeDocumentMenu(); this.el<HTMLInputElement>('project-file').click(); });
@@ -1551,6 +1602,25 @@ export class AuthorWorkspace {
       this.syncEntryVisibility(); this.invalidateOffers();
     });
     for (const id of ['event-pitch', 'event-pitches', 'event-direction', 'event-duration', 'event-dots', 'event-measure-rest', 'event-accidental-display', 'event-stem', 'event-beam']) this.on(id, 'input', () => { this.staffInteraction.cancel('recipe'); this.syncEntryVisibility(); this.invalidateOffers(); });
+    for (const [groupId, fieldId] of [['entry-accidentals', 'event-alteration'], ['entry-duration', 'event-duration'], ['entry-dots', 'event-dots']] as const) {
+      this.on(groupId, 'change', () => {
+        const group = this.el<MusicToggleButtonGroup>(groupId);
+        const field = this.el<HTMLSelectElement>(fieldId);
+        if (group.disabled || field.disabled) { this.syncEntryPalette(); return; }
+        this.staffInteraction.cancel('recipe');
+        field.value = group.value;
+        // Existing native controls retain their validation and recipe ownership.
+        field.dispatchEvent(new Event(fieldId === 'event-alteration' ? 'change' : 'input', { bubbles: true }));
+        this.syncEntryPalette();
+      });
+    }
+    this.on('entry-attack', 'change', () => {
+      const group = this.el<MusicToggleButtonGroup>('entry-attack');
+      if (group.disabled) return;
+      this.staffInteraction.cancel('recipe');
+      this.el('entry-attack-status').textContent = '';
+      this.syncEntryVisibility(); this.invalidateOffers();
+    });
     this.on('select-mode', 'click', () => {
       this.staffInteraction.cancel('mode'); this.parkEntry(); this.entryDragArmed = false;
       this.closeTransientSurfaces(); if (this.tools.state.presentation === 'sheet') this.tools.hide(false);
@@ -1572,7 +1642,6 @@ export class AuthorWorkspace {
     this.on('drag-entry', 'click', () => { if (!this.entryMode) this.activateWriting(); });
     this.on('drag-pitch', 'click', () => this.activateSelection());
     this.on('insert-position', 'change', () => { this.staffInteraction.cancel('recipe'); this.syncEntryVisibility(); this.drawSelection(); this.invalidateOffers(); });
-    this.on('continuation-enabled', 'change', () => this.syncInsertAction());
     this.on('insert-event', 'click', () => this.insert());
     this.on('confirm-continue-piece', 'click', () => this.confirmContinuation(false));
     this.on('continue-piece', 'click', () => { this.requireWriting(); this.reviewEnding(this.captureOffer(this.insertionCommand(), false)); });
@@ -1816,6 +1885,32 @@ export class AuthorWorkspace {
     for (const id of ['score-editor', 'workspace-dock']) this.el(id).addEventListener('keydown', (event) => {
       void this.run(() => this.keyboard(event as KeyboardEvent));
     }, { signal: this.abort.signal });
+    for (const kind of ['copy', 'paste'] as const) this.el('score-editor').addEventListener(kind, event => {
+      const clipboard = event as ClipboardEvent;
+      if (event.defaultPrevented || this.mode !== 'write' || this.isScoreInputBlocked() || isNativeAuthorInput(event)
+        || document.body.dataset.pointerGesture || this.pitchDragArmed || this.entryDragArmed
+        || window.getSelection()?.isCollapsed === false || !clipboard.clipboardData) return;
+      const path = event.composedPath();
+      const owner = classifyAuthorInput(event, { host: this.el('score-host'), surface: this.surface });
+      if (!['score-editor', 'score-scroll', 'score-host'].some(id => path[0] === this.el(id)) && path[0] !== this.surface && owner.owner !== 'notation') return;
+      event.preventDefault();
+      void this.run(() => {
+        if (kind === 'copy') {
+          if (this.entryMode) throw new Error('Choose Select and select notes to copy.');
+          if (this.currentMarking()) throw new Error('Select the notes themselves to copy their attached marks.');
+          const text = copyMusic(this.session.score, this.session.selection.ids);
+          clipboard.clipboardData!.setData('text/plain', text);
+          clipboard.clipboardData!.setData(MUSIC_CLIPBOARD_TYPE, text);
+          this.status(`Copied ${this.session.selection.ids.length} event${this.session.selection.ids.length === 1 ? '' : 's'}. Choose Write notes and paste at its cursor.`);
+        } else {
+          if (!this.entryMode) throw new Error('Choose Write notes and a writing location before pasting.');
+          const text = clipboard.clipboardData!.getData(MUSIC_CLIPBOARD_TYPE) || clipboard.clipboardData!.getData('text/plain');
+          this.execute({ type: 'paste-music', cursor: { ...this.cursor }, text,
+            position: this.value('insert-position') === 'before' ? 'before' : 'after' });
+          this.finishInsertion();
+        }
+      });
+    }, { signal: this.abort.signal });
     document.addEventListener('selectstart', event => {
       // A fresh browser text gesture relinquishes score shortcuts. Keep the
       // Range itself intact; selecting notation explicitly claims focus again.
@@ -1899,7 +1994,7 @@ export class AuthorWorkspace {
     const location = this.location();
     const value = this.readEvent();
     const starter = location.voice.events.length === 1 && location.voice.events[0].measureRest;
-    return { type: 'insert-event', cursor: { ...this.cursor, eventId: this.cursor.eventId ?? (starter ? location.voice.events[0].id : undefined) }, value,
+    return { type: 'insert-event', flow: true, cursor: { ...this.cursor, eventId: this.cursor.eventId ?? (starter ? location.voice.events[0].id : undefined) }, value,
       position: starter ? 'replace' : this.value('insert-position') as 'before' | 'after' | 'replace' };
   }
   private recipeKey(): string { return JSON.stringify({ value: this.readEvent(), position: this.value('insert-position') }); }
@@ -1924,9 +2019,8 @@ export class AuthorWorkspace {
         button.setAttribute('aria-label', `Add measure and insert: ${button.title}`);
         if (this.entryMode) { destination.hidden = false; destination.textContent = `Next with Insert: bar ${analysis.newMeasureLabel} · ${this.staffName(this.cursor.staffId)} · voice ${this.cursor.voiceIndex + 1}`; }
       } else if (analysis.ending) {
-        label.textContent = 'Continue piece…'; button.title = 'Review the final barline changes before adding music';
-        button.setAttribute('aria-label', 'Continue piece: review the ending before adding music');
-        localContinue.hidden = false; localContinue.disabled = false;
+        label.textContent = 'Add + insert'; button.title = 'Continue writing in a new measure; the final barline moves to the new ending.';
+        button.setAttribute('aria-label', button.title);
       }
     } catch { /* Invalid entry values stay editable; Insert explains the error. */ }
     this.syncReviewNotice();
@@ -1974,13 +2068,10 @@ export class AuthorWorkspace {
     if (offer.pointer && offer.command.value.kind === 'note') this.setValue('event-pitch', offer.command.value.pitch);
     this.finishInsertion();
   }
-  private insert(keyboard = false): void {
+  private insert(_keyboard = false): void {
     this.requireWriting();
     const command = this.insertionCommand();
-    const analysis = analyzeContinuation(this.session.source, command);
-    if (analysis.ending && !keyboard) { this.reviewEnding(this.captureOffer(command, false)); return; }
-    if (analysis.eligible && (!keyboard || this.checked('continuation-enabled'))) this.execute({ ...command, type: 'append-and-insert' });
-    else this.execute(command);
+    this.execute(command);
     this.finishInsertion();
   }
   private finishInsertion(): void {
@@ -2019,6 +2110,7 @@ export class AuthorWorkspace {
     this.invalidateOffers();
     document.body.dataset.authorPrintReady = 'false';
     if (change.kind === 'draft') {
+      this.listen?.refresh();
       this.syncSourceNotice();
       this.syncEntryVisibility();
       if (this.pageView) this.pageViewRevision = this.session.revision;
@@ -2059,7 +2151,7 @@ export class AuthorWorkspace {
     }
     this.syncPanels(false);
     const notices = getProjectNotices(this.session.project);
-    this.status([lostWriting ? 'The previous writing location changed. Choose Location, then Start writing here before writing again.' : change.label, ...notices].join(' · '));
+    this.status([lostWriting ? 'The previous writing location changed. Choose Write notes to pick a new location.' : change.label, ...notices].join(' · '));
     this.scheduleSave(); this.requestRender();
   }
   private scheduleSave(): void { clearTimeout(this.saveTimer); this.el('save-status').textContent = 'Saving locally…'; this.saveTimer = setTimeout(() => { void this.saveNow(); }, 300); }
@@ -2103,6 +2195,7 @@ export class AuthorWorkspace {
 
   private setMode(mode: ViewMode): void {
     const previous = this.mode;
+    if (mode !== 'listen') this.listen?.stop();
     this.staffInteraction.cancel('mode'); this.closeTransientSurfaces(); this.invalidateOffers();
     if (previous === 'write' && mode !== 'write') {
       this.resumeWritingAfterView = this.entryMode; this.parkEntry(); this.entryDragArmed = false;
@@ -2117,7 +2210,7 @@ export class AuthorWorkspace {
         this.session.setCursor(this.cursor); this.entryMode = true;
       } else {
         this.entryMode = false;
-        this.status('The previous writing location is unavailable. Choose Location, then Start writing here.');
+        this.status('The previous writing location is unavailable. Choose Write notes to pick a new location.');
       }
       this.resumeWritingAfterView = false;
     }
@@ -2126,7 +2219,7 @@ export class AuthorWorkspace {
     const switcher = this.el<AuthorViewSwitch>('view-switch');
     switcher.mode = mode; switcher.mount();
     this.el('author-workbench').setAttribute('mode', mode);
-    for (const view of ['write', 'read', 'pages']) this.el(`${view}-tools`).hidden = view !== mode;
+    for (const view of ['write', 'read', 'listen', 'pages']) this.el(`${view}-tools`).hidden = view !== mode;
     this.el('score-editor').hidden = mode === 'pages'; this.el('page-host').hidden = mode !== 'pages';
     this.el('author-workbench').hidden = mode === 'pages';
     this.el('workspace-dock').hidden = mode !== 'write';
@@ -2134,12 +2227,30 @@ export class AuthorWorkspace {
     this.el<HTMLAnchorElement>('skip-to-score').href = mode === 'pages' ? '#page-host' : '#score-editor';
     this.el('skip-to-score').textContent = mode === 'pages' ? 'Skip to the pages' : 'Skip to the score';
     this.el('page-host').tabIndex = -1;
-    this.el('selection-toolbar').hidden = mode === 'read'; this.el('navigator-panel').hidden = mode === 'read'; this.el('keyboard-help').hidden = mode !== 'write';
+    this.el('selection-toolbar').hidden = mode !== 'write'; this.el('navigator-panel').hidden = mode !== 'write'; this.el('keyboard-help').hidden = mode !== 'write';
     this.el<HTMLButtonElement>('source-trigger').disabled = mode !== 'write';
     this.el<HTMLButtonElement>('score-setup-trigger').disabled = mode !== 'write';
     if (mode === 'write') this.measureWritingFrame();
     this.syncPanels(false); this.syncPointerOffset(); this.requestRender();
     if (mode === 'read') this.el('score-editor').focus({ preventScroll: true });
+    if (mode === 'listen') void this.openListen();
+  }
+  private async openListen(): Promise<void> {
+    try {
+      this.listenLoading ??= import('./listen-controller.js').then(({ ListenController }) => {
+        if (this.disposed) return;
+        this.listen = new ListenController({
+          control: <T extends HTMLElement = HTMLElement>(id: string) => this.el<T>(id),
+          snapshot: () => ({ project: this.session.project, partId: this.partId, active: this.mode === 'listen', hasDrafts: this.dirtyInspectorCount() > 0 }),
+          highlight: ids => { this.playingIds = ids; this.drawSelection(); },
+        });
+      });
+      await this.listenLoading;
+      if (this.mode === 'listen' && !this.disposed) this.listen?.refresh();
+    } catch (error) {
+      this.listenLoading = undefined;
+      this.el('listen-status').textContent = `Listen could not load: ${messageOf(error)}`;
+    }
   }
   private requestRender(): void {
     this.staffInteraction.cancel('render');
@@ -2215,11 +2326,12 @@ export class AuthorWorkspace {
     this.selectionHud?.refresh();
     this.overlays.replaceChildren();
     const activeMarkingId = this.currentMarking()?.marking.id;
-    if (this.mode !== 'write' || !this.surface) return;
+    if ((this.mode !== 'write' && this.mode !== 'listen') || !this.surface) return;
     const projection = this.surface.getRenderedProjection(); if (!projection) return;
     const bounds = this.el('score-host').getBoundingClientRect();
     const chosen = new Set<string>();
-    if (activeMarkingId) chosen.add(activeMarkingId);
+    if (this.mode === 'listen') for (const id of this.playingIds) chosen.add(id);
+    else if (activeMarkingId) chosen.add(activeMarkingId);
     else try { for (const id of this.selectedEvents()) chosen.add(id); } catch { if (this.session.selectionId) chosen.add(this.session.selectionId); }
     const box = (svg: SVGSVGElement, region: { sourceId?: string; x: number; y: number; width: number; height: number }, className: string) => {
       const matrix = svg.getScreenCTM(); if (!matrix) return;
@@ -2232,8 +2344,8 @@ export class AuthorWorkspace {
       this.overlays.append(element);
     };
     for (const { system, svg } of projection.frames) {
-      for (const region of [...system.events, ...(system.markings ?? []), ...system.annotations, ...system.tuplets, ...system.measures]) if (chosen.has(region.sourceId)) box(svg, region, `author-selection${region.sourceId === this.cursor.measureId ? ' author-measure-selection' : ''}`);
-      if (this.selectMore && this.session.selection.focusId) {
+      for (const region of [...system.events, ...(system.markings ?? []), ...system.annotations, ...system.tuplets, ...system.measures]) if (chosen.has(region.sourceId)) box(svg, region, `author-selection${this.mode === 'listen' ? ' author-playing' : region.sourceId === this.cursor.measureId ? ' author-measure-selection' : ''}`);
+      if (this.mode === 'write' && this.selectMore && this.session.selection.focusId) {
         const focused = system.events.find(region => region.sourceId === this.session.selection.focusId);
         if (focused) box(svg, focused, 'author-selection author-event-focus');
       }
@@ -2473,6 +2585,7 @@ export class AuthorWorkspace {
 
   dispose(): void {
     if (this.disposed) return;
+    this.listen?.dispose();
     this.commitMetadata(); void this.saveNow(); this.disposed = true; this.renderGeneration++; clearTimeout(this.saveTimer); clearTimeout(this.metadataTimer);
     this.selectionHud.dispose(); this.selectionControls.dispose(); this.staffInteraction.dispose(); this.resizeObserver?.disconnect(); this.abort.abort();
     this.tools.dispose(); this.writingFrame.dispose(); this.surfaces.dispose(); this.inspectors.dispose(); this.markings.dispose(); this.eventMarkings.dispose(); this.viewport.dispose();

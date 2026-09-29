@@ -1,0 +1,88 @@
+{
+  "at": "2026-09-27T17:10:19+00:00",
+  "implementationVersion": "3778bc8ad488",
+  "sourceFiles": [
+    "src/authoring/main.ts",
+    "src/authoring/listen-controller.ts",
+    "src/authoring/playback-plan.ts",
+    "src/authoring/playback-audio.ts",
+    "src/authoring/ui/listening-tools.ts",
+    "src/authoring/ui/view-switch.ts",
+    "src/authoring/ui/workspace-frame.ts",
+    "src/authoring/ui/score-viewport.ts",
+    "src/authoring/author.css"
+  ],
+  "scoreFixture": "tests/fixtures/listen-score.music.html",
+  "unitTests": {
+    "command": "npm test -- --maxWorkers=2",
+    "files": 118,
+    "tests": 4237,
+    "passed": true
+  },
+  "browserTests": [
+    {
+      "engine": "chromium",
+      "browser": "151.0.7922.34",
+      "passed": true,
+      "checks": [
+        "current G3 pitch in WAV",
+        "play/pause/resume/stop",
+        "highlighting",
+        "tempo and download duration",
+        "music unchanged by Listen",
+        "pending Source blocks playback",
+        "applied source invalidates audio",
+        "mobile controls and no page overflow",
+        "no external audio requests",
+        "no browser errors"
+      ]
+    },
+    {
+      "engine": "webkit",
+      "browser": "26.5",
+      "passed": true,
+      "checks": [
+        "current G3 pitch in WAV",
+        "play/pause/resume/stop",
+        "highlighting",
+        "tempo and download duration",
+        "music unchanged by Listen",
+        "pending Source blocks playback",
+        "applied source invalidates audio",
+        "mobile controls and no page overflow",
+        "no external audio requests",
+        "no browser errors"
+      ]
+    },
+    {
+      "engine": "firefox",
+      "browser": "153.0",
+      "passed": true,
+      "checks": [
+        "current G3 pitch in WAV",
+        "play/pause/resume/stop",
+        "highlighting",
+        "tempo and download duration",
+        "music unchanged by Listen",
+        "pending Source blocks playback",
+        "applied source invalidates audio",
+        "mobile controls and no page overflow",
+        "no external audio requests",
+        "no browser errors"
+      ]
+    }
+  ],
+  "build": [
+    "typecheck",
+    "build",
+    "check:bundle",
+    "check:icons"
+  ],
+  "limitations": [
+    "Synthesized brass-like sound; no instrument samples.",
+    "WAV is the browser download format.",
+    "Repeats play once in written order; ornaments and fermatas are disclosed but not interpreted.",
+    "Incomplete music and unapplied drafts require attention before playback.",
+    "Automated browser tests run on macOS; other operating systems have not been exercised."
+  ]
+}

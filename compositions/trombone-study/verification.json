@@ -1,0 +1,132 @@
+{
+  "timestamp": "2026-09-27T15:06:17.297Z",
+  "playwright": "1.62.1",
+  "chromium": "151.0.7922.34",
+  "musicalChecks": {
+    "clef": "bass",
+    "meters": [
+      "4/4",
+      "3/4",
+      "4/4"
+    ],
+    "expectedEvents": [
+      [
+        [
+          "G2",
+          "quarter",
+          0
+        ],
+        [
+          "G2",
+          "quarter",
+          0
+        ],
+        [
+          "G2",
+          "quarter",
+          0
+        ],
+        [
+          "rest",
+          "quarter",
+          0
+        ]
+      ],
+      [
+        [
+          "C3",
+          "sixteenth",
+          0
+        ],
+        [
+          "Ab2",
+          "eighth",
+          1
+        ],
+        [
+          "E3",
+          "quarter",
+          0
+        ],
+        [
+          "rest",
+          "quarter",
+          0
+        ]
+      ],
+      [
+        [
+          "Eb3",
+          "sixteenth",
+          0
+        ],
+        [
+          "D3",
+          "sixteenth",
+          0
+        ],
+        [
+          "A2",
+          "sixteenth",
+          0
+        ],
+        [
+          "B2",
+          "sixteenth",
+          0
+        ],
+        [
+          "rest",
+          "quarter",
+          0
+        ],
+        [
+          "rest",
+          "sixteenth",
+          0
+        ],
+        [
+          "F3",
+          "sixteenth",
+          0
+        ],
+        [
+          "C#3",
+          "sixteenth",
+          0
+        ],
+        [
+          "Bb2",
+          "sixteenth",
+          0
+        ],
+        [
+          "Gb2",
+          "quarter",
+          0
+        ]
+      ]
+    ],
+    "measureWholeNoteTotals": [
+      1,
+      0.75,
+      1
+    ],
+    "diagnostics": [],
+    "finalBarline": true
+  },
+  "browserChecks": {
+    "preview": true,
+    "authorLoad": true,
+    "authorReload": true,
+    "progressFlagPresentShowsLink": true,
+    "unflaggedHidesLink": true,
+    "pageErrors": []
+  },
+  "pdf": {
+    "exported": true,
+    "visualReview": "passed: rendered with Poppler; title, all notes/rests, accidentals, dot, changing meters, beams and final barline are legible with no clipping",
+    "pages": 1,
+    "paper": "US Letter portrait"
+  }
+}

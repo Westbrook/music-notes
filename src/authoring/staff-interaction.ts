@@ -48,6 +48,8 @@ interface InteractionOptions {
   status: HTMLElement;
   state: () => InteractionState;
   readEntry: () => EventInput;
+  /** Author enables bar continuation; bounded notation embeddings may omit it. */
+  flowingEntry?: boolean;
   commit: (command: AuthorCommand) => void;
   /** A released, exactly targeted insertion failed without changing accepted music.
    * Return true when the application has presented a separate recovery action. */
@@ -585,18 +587,19 @@ export class StaffInteraction {
         : `Add ${target.position} ${describeEvent(reference)}`;
       const base = { value: entry, notation: target.staff.notation ?? 'pitched', measure: target.measure, lane: target.geometry, frame, x: target.anchorX };
       // Keep the proposed musical value first when compact status text is clipped.
-      const suffix = `${entry.dots ? ` · ${entry.dots} dot${entry.dots === 1 ? '' : 's'}` : ''} · ${action} · ${target.staff.label || 'Staff'}, bar ${target.measure.number}, voice ${target.cursor.voiceIndex + 1} · ${formatRational(target.onset)} whole-note onset · ${target.scopeLabel}.`;
+      const attack = entry.attack ? ` · ${entry.attack.type.replaceAll('-', ' ')}` : '';
+      const suffix = `${entry.dots ? ` · ${entry.dots} dot${entry.dots === 1 ? '' : 's'}` : ''}${attack} · ${action} · ${target.staff.label || 'Staff'}, bar ${target.measure.number}, voice ${target.cursor.voiceIndex + 1} · ${formatRational(target.onset)} whole-note onset · ${target.scopeLabel}.`;
       const chipSuffix = `${action} · bar ${target.measure.number}, voice ${target.cursor.voiceIndex + 1}${target.scopeLabel === 'voice' ? '' : ` · ${target.scopeLabel}`}`;
       if (entry.kind === 'rest') return {
         ...base, entryKind: 'rest', y: (target.geometry.topLine + target.geometry.bottomLine) / 2,
-        command: { type: 'insert-event', cursor: target.cursor, position: target.position, value: { ...entry } },
-        label: `${entry.duration} rest${suffix}`, chip: `${entry.duration} rest · ${chipSuffix}`,
+        command: { type: 'insert-event', ...(this.options.flowingEntry ? { flow: true } : {}), cursor: target.cursor, position: target.position, value: { ...entry } },
+        label: `${entry.duration} rest${suffix}`, chip: `${entry.duration} rest${attack} · ${chipSuffix}`,
       };
       if ((target.staff.notation ?? 'pitched') !== 'pitched') throw new Error('This staff has no fixed pitch positions. Use its direction or rhythm controls and Insert.');
       const pitch = pitchAtStaffY(point.y, target.measure, target.geometry, parsePitch(entry.pitch, undefined, entry.accidentalDisplay));
       return { ...base, entryKind: 'note', pitch, y: staffPitchY(pitch, target.measure.clef, target.geometry),
-        command: { type: 'insert-event', cursor: target.cursor, position: target.position, value: { ...entry, pitch: pitchText(pitch) } },
-        label: `${pitchText(pitch)}, ${entry.duration}${suffix}`, chip: `${pitchText(pitch)} · ${chipSuffix}` };
+        command: { type: 'insert-event', ...(this.options.flowingEntry ? { flow: true } : {}), cursor: target.cursor, position: target.position, value: { ...entry, pitch: pitchText(pitch) } },
+        label: `${pitchText(pitch)}, ${entry.duration}${suffix}`, chip: `${pitchText(pitch)}${attack} · ${chipSuffix}` };
     }
     return undefined;
   }

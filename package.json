@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:pages": "npm run build -- --mode pages",
+    "deploy:pages": "npm run build:pages && npm run check:bundle && gh-pages -d dist --dotfiles",
+    "test:pages:browser": "node scripts/check-pages-browser.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
     "check:icons": "node scripts/check-icon-delivery.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:listen:browser": "node scripts/check-listen-browser.mjs"
   },
   "dependencies": {
     "lit": "3.3.3",
@@ -21,7 +25,9 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "gh-pages": "6.3.0",
     "happy-dom": "^20.11.12",
+    "playwright": "1.62.1",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
     "vitest": "^4.1.11"

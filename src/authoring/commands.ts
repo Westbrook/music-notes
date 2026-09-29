@@ -3,10 +3,12 @@ import type { ReadScoreResult } from '../dom/index.js';
 import {
   add, compare, durationTime, formatRational, meterBoundaries, meterTime, multiply,
   parseMeter, parsePitch, pitchText, rational, subtract, validateAlteration, validateClef, validateKey, validatePitchDirection,
+  validateArticulationType, validateOrnamentType,
 } from '../model/index.js';
 import type { Annotation, Duration, Measure, Meter, MusicEvent, Rational, Staff, Voice } from '../model/types.js';
 import { applyEventPropertyChange } from './batch-properties.js';
 import { analyzeContinuation } from './continuation.js';
+import { readMusicClipboard } from './music-clipboard.js';
 import { patchEventFields, validateEventPatchFields } from './event-field-patch.js';
 import { applyEventMarkingEdits, applyRoadTieIntervalEdits, assertEventMarkingsCompatible } from './event-markings-commands.js';
 import type { AnnotationInput, AuthorCommand, Cursor, EditResult, EventInput, EventMarkingEdit } from './types.js';
@@ -104,6 +106,32 @@ function validateEventInput(value: EventInput): void {
   requireCondition(!value.measureRest || value.kind === 'rest', 'Only a rest can fill an entire measure.');
   requireCondition(!value.measureRest || value.dots === 0, 'A full-measure rest cannot have dots.');
   requireCondition(!value.measureRest || value.beam === 'auto' || value.beam === 'none', 'A full-measure rest cannot belong to a beam group.');
+  validateEventAttack(value);
+}
+
+function validateEventAttack(value: Pick<EventInput, 'kind' | 'rhythmic' | 'attack'>): void {
+  const attack = value.attack;
+  if (attack === undefined) return;
+  requireCondition(attack && (attack.kind === 'articulation' || attack.kind === 'ornament'),
+    'Choose an articulation or ornament for the entry attack.');
+  if (attack.kind === 'articulation') {
+    validateArticulationType(attack.type);
+    requireCondition(attack.type === 'fermata' || value.kind !== 'rest' && (value.kind !== 'slash' || value.rhythmic),
+      'Rests and open slashes accept only fermata. Choose a compatible attack before inserting this event.');
+  } else {
+    validateOrnamentType(attack.type);
+    requireCondition(value.kind === 'note' || value.kind === 'road',
+      'An ornament requires a single note or road event. Choose a compatible attack before inserting this event.');
+  }
+}
+
+/** Add the entry recipe once without rewriting existing marking IDs or placement. */
+function writeEventAttack(element: Element, attack: EventInput['attack'], create: (tag: string) => Element): void {
+  if (!attack || directChildren(element, `music-${attack.kind}`).some(child => child.getAttribute('type') === attack.type)) return;
+  const marking = create(`music-${attack.kind}`);
+  marking.setAttribute('type', attack.type);
+  marking.setAttribute('placement', attack.kind === 'articulation' ? 'auto' : 'above');
+  element.append(marking);
 }
 
 function validateStaffEvent(staff: Staff, kind: EventInput['kind']): void {
@@ -409,6 +437,7 @@ class EditContext {
     }
     replacement.id = location.event.id;
     writeEvent(replacement, value);
+    writeEventAttack(replacement, value.attack, tag => this.create(tag));
     if (replacement !== previous) previous.replaceWith(replacement);
     this.changedBar(location.measure);
     return replacement;
@@ -517,6 +546,10 @@ class EditContext {
 
 function insertEvent(context: EditContext, command: Extract<AuthorCommand, { type: 'insert-event' }>): EditResult {
   const { location, voice, container } = context.voice(command.cursor.measureId, command.cursor.voiceIndex);
+  const insideTuplet = voice.events.find(event => event.id === command.cursor.eventId)?.tupletIds.length;
+  if (command.flow && !insideTuplet && !command.value.measureRest && (command.position !== 'replace' || voice.events.length === 1 && voice.events[0].measureRest)) {
+    return pasteMusic(context, command);
+  }
   requireCondition(location.staff.id === command.cursor.staffId, 'The insertion cursor must belong to the selected staff and measure.');
   validateEventInput(command.value);
   validateStaffEvent(location.staff, command.value.kind);
@@ -540,6 +573,7 @@ function insertEvent(context: EditContext, command: Extract<AuthorCommand, { typ
     && !(next && (next.tie === 'end' || next.tie === 'continue')), 'Clear the connected tie chain before inserting between tied events.');
   const event = context.create(`music-${command.value.kind}`);
   writeEvent(event, command.value);
+  writeEventAttack(event, command.value.attack, tag => context.create(tag));
   if (selected) {
     const anchor = context.node(selected.event.id);
     if (command.position === 'before') anchor.before(event);
@@ -547,6 +581,146 @@ function insertEvent(context: EditContext, command: Extract<AuthorCommand, { typ
   } else container.append(event);
   context.changedBar(location.measure);
   return { selectionId: event.id, message: `Inserted ${command.value.kind === 'slash' ? command.value.rhythmic ? 'a rhythmic slash' : 'an open slash' : command.value.kind === 'rhythm' ? 'a rhythm note' : command.value.kind === 'road' ? `a ${command.value.pitchDirection} road event` : `a ${command.value.kind}`}.` };
+}
+
+interface PasteUnit { node: Element; time: Rational; events: readonly MusicEvent[]; copied: boolean }
+
+/** Reflow one voice only, staging the whole operation in EditorSession's detached source. */
+function pasteMusic(initial: EditContext, command: Extract<AuthorCommand, { type: 'paste-music' | 'insert-event' }>): EditResult {
+  const target = initial.voice(command.cursor.measureId, command.cursor.voiceIndex);
+  let clip: ReadScoreResult;
+  if (command.type === 'paste-music') clip = readMusicClipboard(command.text);
+  else {
+    validateEventInput(command.value);
+    const staff = initial.create('music-staff');
+    staff.setAttribute('notation', target.location.staff.notation ?? 'pitched');
+    const measure = initial.create('music-measure'); measure.setAttribute('incomplete', '');
+    const event = initial.create(`music-${command.value.kind}`);
+    writeEvent(event, command.value); writeEventAttack(event, command.value.attack, tag => initial.create(tag));
+    measure.append(event); staff.append(measure); clip = readScore(staff);
+  }
+  requireCondition(target.location.staff.id === command.cursor.staffId, 'Choose a writing cursor in the destination staff.');
+  const selected = command.cursor.eventId ? initial.event(command.cursor.eventId) : undefined;
+  requireCondition(!selected || selected.measure.id === command.cursor.measureId && selected.voiceIndex === command.cursor.voiceIndex,
+    'The writing cursor no longer belongs to this voice. Choose Start writing here again.');
+  requireCondition(command.position === 'before' || command.position === 'after' || command.type === 'insert-event', 'Paste inserts before or after the writing cursor.');
+  const clipboardEvents = clip.score.staves[0].measures.flatMap(measure => measure.voices[0].events);
+  for (const event of clipboardEvents) validateStaffEvent(target.location.staff, event.kind);
+  let position = selected ? selected.eventIndex + Number(command.position === 'after') : target.voice.events.length;
+  const placeholder = target.voice.events.length === 1 && target.voice.events[0].measureRest;
+  if (placeholder) position = 0;
+  const previous = target.voice.events[position - 1], next = target.voice.events[position];
+  requireCondition(!(previous && ['start', 'continue'].includes(previous.tie)) && !(next && ['end', 'continue'].includes(next.tie)),
+    'Choose a paste location outside the connected tie, or clear that tie first.');
+  requireCondition(!previous?.tupletIds.some(id => next?.tupletIds.includes(id)),
+    'Paste at a boundary outside the tuplet so the copied rhythm keeps its original timing.');
+
+  const units = (voice: Voice, sources: ReadonlyMap<string, Element>, copied: boolean): PasteUnit[] => {
+    const result: PasteUnit[] = [];
+    for (let index = 0; index < voice.events.length;) {
+      const event = voice.events[index];
+      const tuplet = event.tupletIds[0];
+      const events = tuplet ? voice.events.slice(index).filter(member => member.tupletIds.includes(tuplet)) : [event];
+      const original = sources.get(tuplet ?? event.id)!;
+      requireCondition(original && (!tuplet || original.localName === 'music-tuplet'),
+        'This passage uses legacy tuplet boundaries. Convert it to a music-tuplet group in Source before pasting here.');
+      const node = copied ? initial.copied(original) : original;
+      // Beam groups follow their new measure; no forced beam may cross a barline.
+      for (const member of [node, ...node.querySelectorAll('[beam]')]) if (member.getAttribute('beam') !== 'none') member.removeAttribute('beam');
+      result.push({ node, events, copied, time: events.reduce((sum, member) => add(sum, member.time), ZERO) });
+      index += events.length;
+    }
+    return result;
+  };
+  const queue = clip.score.staves[0].measures.flatMap(measure => units(measure.voices[0], clip.sources, true));
+  let context = initial;
+  let barId = command.cursor.measureId;
+  let lastPasted: Cursor | undefined;
+  let addedBars = 0;
+  let firstBar = true;
+  while (queue.length) {
+    const { location, voice, container } = context.voice(barId, command.cursor.voiceIndex);
+    requireCondition(!location.measure.pickup || firstBar, 'Paste cannot flow into a pickup. Choose another destination.');
+    const at = firstBar ? position : 0;
+    // Instructions retain their original musical positions when surrounding events move.
+    for (const annotation of location.measure.annotations) context.node(annotation.id).setAttribute('at', formatRational(annotation.onset));
+    const existing = units(voice, context.initial.sources, false);
+    let eventCount = 0;
+    const tail = existing.filter(unit => { const index = eventCount; eventCount += unit.events.length; return index >= at; });
+    if (firstBar && placeholder) {
+      context.node(voice.events[0].id).remove();
+    } else {
+      for (const unit of tail) unit.node.remove();
+      queue.push(...tail);
+    }
+    let used = firstBar ? voice.events.slice(0, at).reduce((sum, event) => add(sum, event.time), ZERO) : ZERO;
+    const capacity = location.measure.pickup ? totalTime(voice) : meterTime(location.measure.meter);
+    const bar = context.node(barId);
+    bar.setAttribute('incomplete', '');
+    while (queue.length && compare(used, capacity) < 0) {
+      const unit = queue[0];
+      const remaining = subtract(capacity, used);
+      if (unit.events.length === 1 && unit.events[0].measureRest) {
+        // A copied full-bar rest keeps its original duration in a different meter.
+        unit.node.removeAttribute('measure');
+      }
+      if (compare(unit.time, remaining) > 0 || unit.events[0].measureRest) {
+        requireCondition(unit.events.length === 1 && !unit.events[0].tupletIds.length,
+          'A tuplet would cross a barline. Paste at a location with enough room for the complete tuplet.');
+        const event = unit.events[0];
+        const firstTime = compare(unit.time, remaining) > 0 ? remaining : unit.time;
+        const lengths = [...restValues(firstTime), ...restValues(subtract(unit.time, firstTime))];
+        requireCondition(lengths.length < 2 || event.kind !== 'slash', 'This slash cannot be split across a barline. Choose a different paste location.');
+        const fragments = lengths.map((value, index): PasteUnit => {
+          const node = index === 0 ? unit.node : initial.copied(unit.node);
+          node.removeAttribute('measure'); node.removeAttribute('dotted');
+          node.setAttribute('duration', value.duration); node.setAttribute('dots', String(value.dots));
+          if (index > 0) node.querySelectorAll('music-articulation, music-ornament').forEach(mark => mark.remove());
+          if (event.kind !== 'rest' && event.kind !== 'slash') {
+            const incoming = index > 0 || event.tie === 'end' || event.tie === 'continue';
+            const outgoing = index < lengths.length - 1 || event.tie === 'start' || event.tie === 'continue';
+            node.setAttribute('tie', incoming ? outgoing ? 'continue' : 'end' : outgoing ? 'start' : 'none');
+            if (event.kind === 'road' && incoming) node.setAttribute('direction', 'same');
+          }
+          return { ...unit, node, time: value.time, events: [{ ...event, duration: value.duration, dots: value.dots, time: value.time, measureRest: false,
+            tie: (node.getAttribute('tie') ?? 'none') as MusicEvent['tie'] }] };
+        });
+        queue.splice(0, 1, ...fragments);
+        continue;
+      }
+      queue.shift(); container.append(unit.node); used = add(used, unit.time);
+      if (unit.copied) {
+        const id = unit.node.localName === 'music-tuplet' ? [...unit.node.querySelectorAll([...EVENT_TAGS].join(','))].at(-1)!.id : unit.node.id;
+        lastPasted = { staffId: command.cursor.staffId, measureId: barId, voiceIndex: command.cursor.voiceIndex, eventId: id };
+      }
+    }
+    // Mark only genuinely short bars as drafts, retaining prior intentional flags.
+    if (!location.measure.incomplete && compare(used, capacity) === 0) bar.removeAttribute('incomplete');
+    if (!queue.length) break;
+    const nextMeasure = location.staff.measures[location.measureIndex + 1];
+    if (nextMeasure) barId = nextMeasure.id;
+    else {
+      requireCondition(++addedBars <= 256, 'This paste would add too many measures. Copy a shorter passage.');
+      requireCondition(!context.initial.score.staves.some(staff => staff.measures.at(-1)?.endBar === 'repeat-end'),
+        'Paste cannot extend a closing repeat. Add the intended measures first.');
+      const finals = context.initial.score.staves.filter(staff => staff.measures.at(-1)?.endBar === 'final');
+      const appended = appendMeasure(context, { type: 'append-measure', afterMeasureId: barId, voiceIndex: command.cursor.voiceIndex });
+      for (const staff of finals) {
+        context.node(staff.measures.at(-1)!.id).setAttribute('end-bar', 'single');
+        context.node(staff.id).lastElementChild!.setAttribute('end-bar', 'final');
+      }
+      barId = appended.cursor!.measureId;
+      // New bars have silent placeholders; the target voice is empty for the paste.
+      const refreshed = new EditContext(context.source);
+      const destination = refreshed.voice(barId, command.cursor.voiceIndex);
+      for (const event of destination.voice.events) refreshed.node(event.id).remove();
+      refreshed.node(barId).setAttribute('incomplete', '');
+    }
+    context = new EditContext(initial.source); firstBar = false;
+  }
+  requireCondition(lastPasted, 'No copied notes were available to paste.');
+  return { selectionId: lastPasted.eventId, cursor: lastPasted,
+    message: `${command.type === 'paste-music' ? `Pasted ${clipboardEvents.length} event${clipboardEvents.length === 1 ? '' : 's'}` : 'Inserted the event'}${addedBars ? `; added ${addedBars} measure${addedBars === 1 ? '' : 's'}` : ''}. One Undo restores the previous music.` };
 }
 
 function removeEvents(context: EditContext, ids: readonly string[]): EditResult {
@@ -978,6 +1152,7 @@ export function applyCommand(source: Element, command: AuthorCommand): EditResul
   let result: EditResult;
   switch (command.type) {
     case 'insert-event': result = insertEvent(context, command); break;
+    case 'paste-music': result = pasteMusic(context, command); break;
     case 'append-and-insert':
     case 'continue-piece': result = continueEntry(context, command); break;
     case 'set-events-property': {

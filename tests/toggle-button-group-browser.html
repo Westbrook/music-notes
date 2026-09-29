@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Toggle button group browser checks</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { max-width: 80rem; margin: 1.5rem auto; padding: 1rem; font: 16px/1.5 system-ui, sans-serif; color: #25323d; background: #f7f8fa; }
+      h1 { font-size: 1.7rem; }
+      h2 { margin: 0 0 .65rem; font-size: 1.15rem; }
+      p { max-width: 75ch; }
+      section, article { margin-block: 1rem; padding: 1rem; border: 1px solid #bdc7cf; border-radius: 8px; background: white; }
+      label { display: block; margin-block: .4rem; }
+      input, button, select { font: inherit; }
+      input { width: 8rem; padding: .35rem; }
+      button { padding: .45rem .8rem; cursor: pointer; }
+      .settings { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+      .comparison { display: flex; flex-wrap: wrap; align-items: start; gap: 1.25rem; }
+      .comparison > div { min-width: 0; }
+      .demo-column { flex: 1 1 30rem; }
+      .native-column { flex: 1 1 12rem; }
+      .width-viewport { max-width: 100%; overflow-x: auto; padding: 4px; }
+      .group-frame { width: 640px; outline: 1px dashed #718799; background: #f7f8fa; }
+      .native-column select { min-height: 44px; max-width: 100%; }
+      .custom-select > button { display: none; }
+      .case-status, pre { margin-block: .65rem 0; font: 13px/1.5 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+      [data-result="pass"] { color: #236333; }
+      [data-result="fail"] { color: #a12727; }
+      #outcomes li { margin-block: .5rem; }
+      #summary { font-weight: 650; }
+      @supports (appearance: base-select) and selector(::picker(select)) {
+        .custom-select, .custom-select::picker(select) { appearance: base-select; }
+        .custom-select > button { display: flex; min-width: 9rem; border: 0; padding: 0; background: none; color: inherit; }
+        .custom-select { padding: .4rem .75rem; }
+        .custom-select::picker(select) { max-height: 60vh; overflow: auto; border: 1px solid #718799; padding: .3rem; background: white; }
+        .custom-select option { padding: .4rem .75rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Toggle button group browser checks</h1>
+    <p>This fixture uses the production component and music options. Checks resize real containers and inspect the rendered buttons and native overflow select.</p>
+    <p id="environment"></p>
+    <section aria-labelledby="manual-heading">
+      <h2 id="manual-heading">Manual resize and native picker comparison</h2>
+      <div class="settings">
+        <label for="container-width">Group container width (CSS px)<br><input id="container-width" type="number" min="24" max="2000" step="0.125" value="480"></label>
+        <button id="run-checks" type="button">Run checks</button>
+      </div>
+      <div class="comparison">
+        <div class="demo-column">
+          <p id="demo-label">Duration group · overflow at 4</p>
+          <div class="width-viewport"><div id="demo-frame" class="group-frame"></div></div>
+          <pre id="demo-state" class="case-status"></pre>
+        </div>
+        <div class="native-column">
+          <label for="ordinary-select">Ordinary native select</label>
+          <select id="ordinary-select" name="ordinary-duration"></select>
+          <label for="customizable-select">Customizable native select</label>
+          <select id="customizable-select" class="custom-select" name="customizable-duration"></select>
+        </div>
+      </div>
+      <p>Click each picker, then focus it and try Space, Enter, or Alt+ArrowDown. The status below records the completed event without cancelling it. Automatic selection checks use synthetic events and do not qualify native picker opening.</p>
+      <pre id="interaction-status" aria-live="polite"></pre>
+    </section>
+    <section aria-labelledby="results-heading">
+      <h2 id="results-heading">Automatic DOM outcomes</h2>
+      <p id="summary" role="status" aria-live="polite" data-state="waiting">Waiting to run.</p>
+      <ol id="outcomes"></ol>
+    </section>
+    <section aria-labelledby="cases-heading">
+      <h2 id="cases-heading">Boundary and fractional-width fixtures</h2>
+      <div id="cases"></div>
+    </section>
+    <script type="module" src="./toggle-button-group-browser.ts"></script>
+  </body>
+</html>

@@ -8,6 +8,7 @@ import { eventIcon, markingIcon } from '../../ui/notation-icons.js';
 import { formatRational } from '../../model/index.js';
 import type { Measure } from '../../model/types.js';
 import { eventLabel, markingLabel } from '../event-label.js';
+import '../../ui/design-tokens.css';
 
 export interface EventNavigatorState {
   readonly measure: Measure;
@@ -99,43 +100,43 @@ export class MusicEventNavigator extends LitElement {
       max-height: 360px;
       margin: 14px 0 0;
       overflow: auto;
-      color: var(--author-control-ink, #303942);
+      color: var(--music-ui-color-ink);
       font: inherit;
     }
     :host([hidden]) { display: none !important; }
     *, *::before, *::after { box-sizing: border-box; }
     .field-help {
       margin: 0;
-      color: var(--author-muted, #56616d);
+      color: var(--music-ui-color-muted);
       font-size: 0.75rem;
       font-weight: 400;
       line-height: 1.5;
     }
     button {
-      min-width: 44px;
-      min-height: 44px;
+      min-width: var(--music-ui-control-size);
+      min-height: var(--music-ui-control-size);
       max-width: calc(100% - 6px);
       margin: 3px;
       padding: 8px 13px;
-      border: 1px solid var(--author-border, #798794);
-      border-radius: 6px;
-      background: var(--surface, var(--author-surface, #f7f8fa));
-      color: var(--ink, var(--author-control-ink, #303942));
+      border: var(--music-ui-border-width) solid var(--music-ui-color-border);
+      border-radius: var(--music-ui-control-radius);
+      background: var(--music-ui-color-surface);
+      color: var(--music-ui-color-ink);
       font: inherit;
       font-size: 0.78rem;
-      font-weight: 550;
+      font-weight: var(--music-ui-control-weight);
       line-height: 1.35;
       text-align: start;
       overflow-wrap: anywhere;
       cursor: pointer;
     }
-    button:hover, button[aria-pressed='true'] {
-      border-color: var(--author-border, #798794);
-      background: var(--accent-soft, #dce3ea);
+    button:hover {
+      border-color: var(--music-ui-color-border);
+      background: var(--music-ui-color-active);
     }
     button:focus-visible, nav:focus-visible {
-      outline: 3px solid var(--author-focus, #7037a0);
-      outline-offset: -3px;
+      outline: var(--music-ui-focus-width) solid var(--music-ui-color-focus);
+      outline-offset: calc(-1 * var(--music-ui-focus-width));
     }
     .event-marking-link {
       display: block;
@@ -148,14 +149,22 @@ export class MusicEventNavigator extends LitElement {
       font-size: 0.73rem;
       line-height: 1.3;
     }
-    button[aria-current='true'] {
-      border-color: #84a47c;
-      color: #285031;
-      background: #eaf2e5;
+    button[aria-pressed='true'], button[aria-current='true'] {
+      border-color: var(--music-ui-color-border);
+      color: var(--music-ui-color-ink);
+      background: var(--music-ui-color-active);
     }
     @media (forced-colors: active) {
-      button[aria-pressed='true'], button[aria-current='true'] { outline: 2px solid Highlight; }
-      button:focus-visible, nav:focus-visible { outline: 3px solid Highlight; }
+      button[aria-pressed='true'], button[aria-current='true'] {
+        border-color: Highlight;
+        color: ButtonText;
+        background: Canvas;
+        outline: 2px solid Highlight;
+        outline-offset: calc(-1 * var(--music-ui-focus-width));
+      }
+      button:focus-visible, nav:focus-visible {
+        outline: var(--music-ui-focus-width) dashed Highlight;
+      }
     }
   `;
 

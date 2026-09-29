@@ -41,7 +41,7 @@ measureAttributes = 'incomplete', staffAttributes = 'key="G"') =>
   `<music-staff id="staff" label="Flute" ${staffAttributes}><music-measure id="bar" number="12" ${measureAttributes}>${events}</music-measure></music-staff>`;
 
 function control<T extends HTMLElement = HTMLElement>(id: string, root: FixtureControlRoot = document): T {
-  const element = root.querySelector<HTMLElement>(`#${id}`);
+  const element = root.querySelector<HTMLElement>(`#${id}`) ?? [...root.querySelectorAll('music-toggle-button-group')].map(group => group.shadowRoot?.querySelector<HTMLElement>(`#${id}`)).find(Boolean);
   if (!element) throw new Error(`Missing real selection control ${id}`);
   return element as T;
 }
@@ -177,7 +177,7 @@ function change(field: HTMLSelectElement, value: string): void {
 }
 
 function key(element: HTMLElement, value: string): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
+  const event = new KeyboardEvent('keydown', { key: value, bubbles: true, composed: true, cancelable: true });
   element.dispatchEvent(event);
   return event;
 }
@@ -186,7 +186,7 @@ function key(element: HTMLElement, value: string): KeyboardEvent {
 function activateKey(button: HTMLButtonElement, value: ' ' | 'Enter'): KeyboardEvent {
   const down = key(button, value);
   if (value === 'Enter' && !down.defaultPrevented) button.click();
-  const up = new KeyboardEvent('keyup', { key: value, bubbles: true, cancelable: true });
+  const up = new KeyboardEvent('keyup', { key: value, bubbles: true, composed: true, cancelable: true });
   button.dispatchEvent(up);
   if (value === ' ' && !down.defaultPrevented && !up.defaultPrevented) button.click();
   return down;
@@ -195,7 +195,7 @@ function activateKey(button: HTMLButtonElement, value: ' ' | 'Enter'): KeyboardE
 function pointer(element: HTMLElement, type: 'pointerdown' | 'pointerup' | 'pointercancel'): void {
   element.dispatchEvent(new PointerEvent(type, {
     pointerId: 4, pointerType: 'mouse', isPrimary: true, button: 0, buttons: type === 'pointerdown' ? 1 : 0,
-    bubbles: true, cancelable: true,
+    bubbles: true, composed: true, cancelable: true,
   }));
 }
 
@@ -339,7 +339,7 @@ describe('SelectionControls accepted values and musical transactions', () => {
 
   it('does not report Natural for a quarter-tone outside the three shortcut radios', () => {
     const h = fixture(scoreHtml(note('n1', 'pitch="Ftqs4" duration="quarter"')));
-    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) expect(h.button(id).getAttribute('aria-checked')).toBe('false');
+    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) expect(h.button(id).getAttribute('aria-pressed')).toBe('false');
     h.open('pitch');
     expect(h.field('selection-alteration').value).toBe('1.5');
     expect(h.session.canUndo).toBe(false);
@@ -354,7 +354,7 @@ describe('SelectionControls accepted values and musical transactions', () => {
     expect(h.session.source.querySelector('#n1')).toBe(node);
     expect(node?.getAttribute('accidental-display')).toBe('courtesy');
     expect(node?.getAttribute('data-user')).toBe('keep');
-    expect(h.session.revision).toBe(1); expect(h.button('selection-sharp').getAttribute('aria-checked')).toBe('true');
+    expect(h.session.revision).toBe(1); expect(h.button('selection-sharp').getAttribute('aria-pressed')).toBe('true');
     h.session.undo(); expect(h.event()).toEqual(before); expect(h.session.canUndo).toBe(false);
   });
 
@@ -579,7 +579,7 @@ describe('SelectionControls accepted values and musical transactions', () => {
     for (const id of ['selection-shared-duration', 'selection-shared-dots', 'selection-shared-alteration']) {
       expect(h.field(id).value).toBe(''); expect(h.field(id).selectedOptions[0]?.textContent).toMatch(/mixed/i);
     }
-    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) expect(h.button(id).getAttribute('aria-checked')).toBe('false');
+    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) expect(h.button(id).getAttribute('aria-pressed')).toBe('false');
     expect(h.session.revision).toBe(0);
   });
 
@@ -754,7 +754,7 @@ describe('SelectionControls complete accepted single-note pitch', () => {
     const draft = control<HTMLInputElement>('selected-pitch'); draft.value = 'retained owner text';
     h.open('pitch'); change(h.field('selection-note-step'), 'G');
     expect(h.event().pitches[0].step).toBe('G'); expect(draft.value).toBe('retained owner text'); expect(h.openProperties).not.toHaveBeenCalled();
-    h.controls.close(); h.button('properties-pitch').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    h.controls.close(); h.button('properties-pitch').dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     expect(h.isOpen('pitch')).toBe(false); expect(h.execute).toHaveBeenCalledOnce(); expect(draft.value).toBe('retained owner text');
   });
 
@@ -927,7 +927,7 @@ describe('SelectionControls kind and child-target gates', () => {
     const sharp = h.button('selection-sharp');
     expect(sharp.disabled).toBe(true);
     expect(described(sharp)).toMatch(/tie/i);
-    sharp.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     h.open('pitch'); change(h.field('selection-alteration'), '1');
     expect(h.execute).not.toHaveBeenCalled(); expect(h.session.revision).toBe(0);
     expect(h.event().tie).toBe('start');
@@ -960,16 +960,14 @@ describe('SelectionControls kind and child-target gates', () => {
     expect(h.execute).not.toHaveBeenCalled(); expect(h.event('n1').pitches[0].alter).toBe(0); expect(h.session.revision).toBe(0);
   });
 
-  it('does not turn a hidden single-note shortcut into an eligible batch edit', () => {
+  it('applies quick accidental choices to an eligible exact selection', () => {
     const h = fixture(scoreHtml(), { ids: ['n1', 'n2'] }); const before = h.session.project;
     const sharp = h.button('selection-sharp');
-    expect(sharp.disabled).toBe(true); expect(visible(sharp)).toBe(false);
-    sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    expect(h.execute).not.toHaveBeenCalled(); expect(h.session.project).toEqual(before);
-    expect(h.session.revision).toBe(0); expect(h.session.canUndo).toBe(false);
-    // The dedicated shared surface remains the deliberate route to this eligible edit.
-    h.open('shared'); change(h.field('selection-shared-alteration'), '1');
+    expect(sharp.disabled).toBe(false);
+    sharp.click();
     expect(h.execute).toHaveBeenCalledExactlyOnceWith({ type: 'set-events-property', eventIds: ['n1', 'n2'], change: { property: 'alter', value: 1, ties: 'reject' } });
+    expect(h.event('n1').pitches[0].alter).toBe(1); expect(h.event('n2').pitches[0].alter).toBe(1);
+    h.session.undo(); expect(h.session.project.sourceHtml).toBe(before.sourceHtml);
   });
 
   it('changes only accepted road direction and preserves its rhythm and child marks', () => {
@@ -991,7 +989,7 @@ describe('SelectionControls kind and child-target gates', () => {
     expect(h.button('selection-same').getAttribute('aria-checked')).toBe('true');
     for (const id of ['selection-higher', 'selection-lower']) {
       expect(h.button(id).disabled).toBe(true); expect(described(h.button(id))).toMatch(/tie|continuation/i);
-      h.button(id).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      h.button(id).dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     }
     h.open('pitch'); change(h.field('selection-direction'), 'lower');
     expect(h.execute).not.toHaveBeenCalled(); expect(h.event().pitchDirection).toBe('same'); expect(h.event().tie).toBe('end');
@@ -1015,7 +1013,7 @@ describe('SelectionControls kind and child-target gates', () => {
     pointer(remove, 'pointerdown');
     // The exact child is part of the binding independently of the event/version.
     h.view.activeMarkingId = 'accent'; h.controls.refresh();
-    pointer(remove, 'pointerup'); remove.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    pointer(remove, 'pointerup'); remove.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     expect(h.execute).not.toHaveBeenCalled(); expect(h.session.revision).toBe(0);
     expect(h.session.source.querySelector('#trill')).not.toBeNull(); expect(h.session.source.querySelector('#accent')).not.toBeNull();
   });
@@ -1079,7 +1077,7 @@ describe('SelectionControls direct Pitch chooser actions', () => {
     const natural = h.button('selection-chooser-natural');
     expect(key(natural, ' ').defaultPrevented).toBe(false);
     h.controls.cancel('The chooser moved before the pending key activation.');
-    natural.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    natural.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     await Promise.resolve(); natural.click();
     expect(h.execute).toHaveBeenCalledOnce(); expect(h.event().pitches[0].alter).toBe(1); expect(h.isOpen('pitch')).toBe(false);
 
@@ -1111,7 +1109,7 @@ describe('SelectionControls direct Pitch chooser actions', () => {
     const h = fixture(html); const before = h.session.project; h.open('pitch');
     for (const id of chooserAccidentalIds) {
       const button = h.button(id); expect(button.disabled || !visible(button)).toBe(true);
-      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     }
     expect(h.execute).not.toHaveBeenCalled(); expect(h.session.project).toEqual(before); expect(h.session.revision).toBe(0);
   });
@@ -1136,7 +1134,7 @@ describe('SelectionControls direct Pitch chooser actions', () => {
     else if (reason === 'pending Source') h.session.setPendingSource('<unapplied Source>');
     else h.controls.dispose();
     const before = h.session.project; const revision = h.session.revision;
-    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     expect(h.execute).not.toHaveBeenCalled(); expect(h.session.project).toEqual(before); expect(h.session.revision).toBe(revision);
     expect(h.event('n1').pitches[0].alter).toBe(0); expect(h.event('n2').pitches[0].alter).toBe(0);
   });
@@ -1146,7 +1144,7 @@ describe('SelectionControls direct Pitch chooser actions', () => {
     pointer(sharp, 'pointerdown'); change(h.field('selection-alteration'), '0.5');
     expect(h.event().pitches[0].alter).toBe(0.5); expect(h.session.revision).toBe(1);
     const accepted = h.session.project;
-    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     expect(h.execute).toHaveBeenCalledExactlyOnceWith({ type: 'set-events-property', eventIds: ['n1'], change: { property: 'alter', value: 0.5, ties: 'reject' } });
     expect(h.session.project).toEqual(accepted); expect(h.event().pitches[0].alter).toBe(0.5); expect(h.session.revision).toBe(1);
     h.session.undo(); expect(h.event().pitches[0].alter).toBe(0); expect(h.session.canUndo).toBe(false);
@@ -1158,7 +1156,7 @@ describe('SelectionControls direct Pitch chooser actions', () => {
     h.nativeSurfaces.get('pitch')!.show(properties); expect(h.isOpen('pitch')).toBe(true);
     const sharp = h.button('selection-chooser-sharp'); pointer(sharp, 'pointerdown');
     h.view.inspectionMatchesSelection = false;
-    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     expect(h.execute).not.toHaveBeenCalled(); expect(h.isOpen('pitch')).toBe(false);
     h.select(['n2']); h.open('pitch'); sharp.click();
     expect(h.execute).toHaveBeenCalledExactlyOnceWith({ type: 'set-events-property', eventIds: ['n2'], change: { property: 'alter', value: 1, ties: 'reject' } });
@@ -1243,9 +1241,9 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     const h = fixture(); const sharp = h.button('selection-sharp');
     pointer(sharp, 'pointerdown'); expect(h.controls.interacting).toBe(true);
     h.controls.cancel('The notation moved. Select a control at its current position.');
-    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     expect(h.execute).not.toHaveBeenCalled(); expect(h.session.revision).toBe(0); expect(h.controls.interacting).toBe(false);
-    pointer(sharp, 'pointerdown'); pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    pointer(sharp, 'pointerdown'); pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     expect(h.execute).toHaveBeenCalledOnce(); expect(h.event().pitches[0].alter).toBe(1);
   });
 
@@ -1254,20 +1252,20 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     pointer(sharp, 'pointerdown'); pointer(sharp, 'pointerup');
     expect(h.controls.interacting).toBe(true);
     h.controls.cancel('The control cannot stay here safely.'); expect(h.controls.interacting).toBe(false);
-    sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     expect(h.execute).not.toHaveBeenCalled(); expect(h.session.revision).toBe(0);
     pointer(sharp, 'pointerdown'); pointer(sharp, 'pointerup'); expect(h.controls.interacting).toBe(true);
-    sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     expect(h.execute).toHaveBeenCalledOnce(); expect(h.controls.interacting).toBe(false);
   });
 
   it.each(['edit-selected-event', 'selection-value'] as const)('keeps the pending native Space activation of %s interacting through release', id => {
     const h = fixture(); const button = h.button(id); button.focus();
     expect(key(button, ' ').defaultPrevented).toBe(false); expect(h.controls.interacting).toBe(true);
-    button.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    button.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     expect(h.controls.interacting).toBe(true);
     h.controls.cancel('The selected control moved before activation.'); expect(h.controls.interacting).toBe(false);
-    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true }));
     expect(h.openProperties).not.toHaveBeenCalled(); expect(h.isOpen('value')).toBe(false); expect(h.execute).not.toHaveBeenCalled();
     activateKey(button, ' ');
     if (id === 'edit-selected-event') {
@@ -1282,7 +1280,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     const h = fixture(); const more = h.button('edit-selected-event'); more.focus();
     key(more, ' '); expect(h.controls.interacting).toBe(true);
     h.controls.cancel('Geometry changed before the native activation arrived.');
-    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     // A real browser can run a microtask checkpoint between listeners and the
     // native click/default action. This is a unit lifecycle simulation only.
     await Promise.resolve();
@@ -1291,7 +1289,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     expect(surfaceNames.every(name => !h.isOpen(name))).toBe(true);
 
     key(more, ' ');
-    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     await Promise.resolve();
     expect(h.controls.interacting).toBe(true); more.click();
     expect(h.openProperties).toHaveBeenCalledOnce(); expect(h.controls.interacting).toBe(false);
@@ -1330,7 +1328,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
 
   it('rejects a pressed shortcut when selection changes before its click is delivered', () => {
     const h = fixture(); const sharp = h.button('selection-sharp');
-    pointer(sharp, 'pointerdown'); h.select(['n2']); pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    pointer(sharp, 'pointerdown'); h.select(['n2']); pointer(sharp, 'pointerup'); sharp.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     expect(h.execute).not.toHaveBeenCalled(); expect(h.event('n1').pitches[0].alter).toBe(0); expect(h.event('n2').pitches[0].alter).toBe(0);
   });
 
@@ -1343,7 +1341,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     expect(h.event().pitches[0].alter).toBe(1); expect(h.execute).toHaveBeenCalledOnce();
     const flat = h.button('selection-flat'); flat.focus(); activateKey(flat, 'Enter');
     expect(h.event().pitches[0].alter).toBe(-1); expect(h.execute).toHaveBeenCalledTimes(2);
-    const tabStops = [...h.toolbar.querySelectorAll<HTMLElement>('button')].filter(button => visible(button) && !button.matches(':disabled') && button.tabIndex === 0);
+    const tabStops = [...h.toolbar.querySelectorAll<HTMLElement>('button'), ...[...h.toolbar.querySelectorAll('music-toggle-button-group')].flatMap(group => [...group.shadowRoot!.querySelectorAll<HTMLElement>('.controls > button')])].filter(button => visible(button) && !button.matches(':disabled') && button.tabIndex === 0);
     expect(tabStops).toHaveLength(1);
   });
 
@@ -1372,7 +1370,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     const escaped = key(more, 'Escape');
     expect(escaped.defaultPrevented).toBe(true); expect(bubbled).not.toHaveBeenCalled();
     expect(h.controls.interacting).toBe(false);
-    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     await Promise.resolve(); more.click();
     expect(h.openProperties).not.toHaveBeenCalled(); expect(h.execute).not.toHaveBeenCalled();
     expect(h.showError).not.toHaveBeenCalled(); expect(h.report).not.toHaveBeenCalled();
@@ -1382,7 +1380,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
 
     // Quiet Escape does not suppress a later, unrelated stale-target failure.
     key(more, ' '); h.select(['n2']);
-    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     await Promise.resolve(); more.click();
     expect(h.openProperties).not.toHaveBeenCalled(); expect(h.showError).toHaveBeenCalledOnce();
     expect(control('selection-controls-error').textContent).toMatch(/changed|current/i);
@@ -1397,7 +1395,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     expect(escaped.defaultPrevented).toBe(true); expect(bubbled).not.toHaveBeenCalled();
     expect(h.isOpen('pitch')).toBe(false); expect(h.controls.interacting).toBe(false);
     expect(document.activeElement).toBe(h.button('selection-pitch'));
-    sharp.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    sharp.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     await Promise.resolve(); sharp.click();
     expect(h.execute).not.toHaveBeenCalled(); expect(h.showError).not.toHaveBeenCalled(); expect(h.report).not.toHaveBeenCalled();
     expect(control('selection-controls-error').textContent).toBe(''); expect(h.error('pitch').textContent).toBe('');
@@ -1421,7 +1419,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     expect(native.hide).not.toHaveBeenCalled(); expect(h.isOpen('pitch')).toBe(true);
     // Only the lifecycle stub supplies the browser's default dismissal here.
     native.hide(); expect(h.controls.interacting).toBe(false);
-    sharp.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    sharp.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     await Promise.resolve(); sharp.click();
     expect(h.execute).not.toHaveBeenCalled(); expect(h.showError).not.toHaveBeenCalled();
 
@@ -1430,7 +1428,7 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     expect(key(more, 'Escape').defaultPrevented).toBe(false);
     expect(other.hide).not.toHaveBeenCalled(); expect(other.isOpen()).toBe(true);
     other.hide(); expect(h.controls.interacting).toBe(false);
-    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    more.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, composed: true, cancelable: true }));
     await Promise.resolve(); more.click();
     expect(h.openProperties).not.toHaveBeenCalled(); expect(h.execute).not.toHaveBeenCalled();
     expect(h.showError).not.toHaveBeenCalled(); expect(h.report).not.toHaveBeenCalled();
@@ -1519,8 +1517,8 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     const h = fixture(); h.view.inspectionMatchesSelection = false; h.select(['n2']);
     const pitch = h.button('properties-pitch'); const prepare = h.button('selection-prepare-drag');
     expect(pitch.disabled).toBe(true); expect(prepare.disabled).toBe(true);
-    pitch.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    prepare.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    pitch.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    prepare.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     expect(h.openProperties).not.toHaveBeenCalled(); expect(h.preparePitchDrag).not.toHaveBeenCalled();
     expect(h.button('selection-sharp').disabled).toBe(false); h.button('selection-sharp').click();
     expect(h.event('n2').pitches[0].alter).toBe(1); expect(h.event('n1').pitches[0].alter).toBe(0);

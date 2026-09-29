@@ -1,0 +1,42 @@
+/* Shared UI defaults. Keep this file declarations-only; see /DESIGN.md.
+   Zero specificity lets a page or a scoped theme override these values. */
+:where(:root) {
+  --music-ui-color-paper: #fff;
+  --music-ui-color-surface: #f7f8fa;
+  --music-ui-color-ink: #303942;
+  --music-ui-color-muted: #56616d;
+  --music-ui-color-border: #798794;
+  --music-ui-color-divider: #c8cfd6;
+  --music-ui-color-active: #dce3ea;
+  --music-ui-color-focus: #7037a0;
+
+  --music-ui-control-size: max(44px, 2.75rem);
+  --music-ui-icon-size: 1.25rem;
+  --music-ui-label-size: 0.72rem;
+  --music-ui-label-line-height: 1.15;
+  --music-ui-control-weight: 550;
+  --music-ui-control-padding-block: 3px;
+  --music-ui-control-padding-inline: 6px;
+  --music-ui-control-radius: 6px;
+  --music-ui-group-radius: 8px;
+  --music-ui-content-gap: 2px;
+  --music-ui-group-gap: 2px;
+  --music-ui-group-padding: 2px;
+  --music-ui-group-spacing: 6px;
+  --music-ui-border-width: 1px;
+  --music-ui-focus-width: 3px;
+  --music-ui-disabled-opacity: 0.5;
+}
+
+@media (forced-colors: active) {
+  :where(:root) {
+    --music-ui-color-paper: Canvas;
+    --music-ui-color-surface: Canvas;
+    --music-ui-color-ink: ButtonText;
+    --music-ui-color-muted: CanvasText;
+    --music-ui-color-border: ButtonText;
+    --music-ui-color-divider: GrayText;
+    --music-ui-color-active: Canvas;
+    --music-ui-color-focus: Highlight;
+  }
+}

@@ -4,7 +4,7 @@
  * Only engraving dispatch is stubbed. Public notation-select events verify the
  * app's focus handoff; these are not trusted browser or glyph hit-test claims.
  */
-import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture, releaseAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
@@ -98,7 +98,7 @@ beforeEach(() => {
   vi.spyOn(AuthorWorkspace.prototype as unknown as { requestRender(): void }, 'requestRender').mockImplementation(() => {});
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64'); window.getSelection()?.removeAllRanges();
 });
-afterEach(async () => { app?.dispose(); app = undefined; await flush(); vi.restoreAllMocks(); window.getSelection()?.removeAllRanges(); document.body.replaceChildren(); });
+afterEach(async () => { app?.dispose(); app = undefined; await flush(); vi.clearAllMocks(); vi.restoreAllMocks(); window.getSelection()?.removeAllRanges(); await releaseAuthorFixture(); });
 
 describe('selected-note deletion follows the actual score focus handoff', () => {
   it.each(keys)('%s removes only the clicked note, leaves other voices unchanged, and restores source plus selection with one Undo', async key => {

@@ -5,19 +5,19 @@
   color: var(--author-ink);
   background: var(--author-chrome);
   /* Inherited by score hosts. Shadow-root overlays must consume these tokens too. */
-  --author-paper: #fff;
+  --author-paper: var(--music-ui-color-paper);
   --author-ink: #20252b;
   --author-chrome: #e9ecef;
-  --author-surface: #f7f8fa;
-  --author-control-ink: #303942;
-  --author-muted: #56616d;
-  --author-border: #798794;
-  --author-divider: #c8cfd6;
+  --author-surface: var(--music-ui-color-surface);
+  --author-control-ink: var(--music-ui-color-ink);
+  --author-muted: var(--music-ui-color-muted);
+  --author-border: var(--music-ui-color-border);
+  --author-divider: var(--music-ui-color-divider);
   --author-selection: #175c96;
   --author-selection-fill: rgba(23, 92, 150, 0.12);
   --author-insertion: #087368;
   --author-insertion-fill: rgba(8, 115, 104, 0.1);
-  --author-focus: #7037a0;
+  --author-focus: var(--music-ui-color-focus);
   --author-error: #a32934;
   --author-error-surface: #fff0f1;
   --author-warning: #73521a;
@@ -29,7 +29,7 @@
   --line: var(--author-divider);
   --accent: var(--author-control-ink);
   --accent-hover: #17212b;
-  --accent-soft: #dce3ea;
+  --accent-soft: var(--music-ui-color-active);
   --clay: var(--author-control-ink);
   --focus: var(--author-focus);
   --error: var(--author-error);
@@ -116,7 +116,7 @@ select > button { display: none; }
   selectedcontent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .option-content { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; vertical-align: middle; }
   .option-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .option-content .music-icon-graphic { flex: none; width: 20px; height: 20px; }
+    .option-content .music-icon-graphic { flex: none; width: var(--music-icon-size, var(--music-ui-icon-size)); height: var(--music-icon-size, var(--music-ui-icon-size)); }
   select.author-select::picker-icon { color: var(--author-muted); transition: rotate 140ms ease; }
   select.author-select:open::picker-icon { rotate: 180deg; }
   select.author-select::picker(select) {
@@ -175,9 +175,7 @@ select > button { display: none; }
 .brand { display: inline-flex; align-items: baseline; gap: 12px; width: fit-content; color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 1.3rem; text-decoration: none; white-space: nowrap; }
 .brand span { padding-left: 12px; border-left: 1px solid var(--author-divider); color: var(--clay); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.7rem; letter-spacing: 0.09em; text-transform: uppercase; }
 .view-switch { min-width: 0; }
-#workspace-mode-slot > button[aria-pressed="true"],
-#palette-more-slot > button[aria-expanded="true"],
-.selection-shortcuts > button[aria-checked="true"] { border-color: var(--author-divider); background: var(--surface); color: var(--author-control-ink); box-shadow: 0 1px 2px #27362410; }
+#palette-more-slot > button[aria-expanded="true"] { border-color: var(--music-ui-color-border); background: var(--music-ui-color-active); color: var(--music-ui-color-ink); }
 .header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px 12px; }
 .save-status { color: var(--muted); font-size: 0.72rem; }
 .history-actions { display: flex; }
@@ -231,9 +229,6 @@ select > button { display: none; }
 .entry-strip > .dots-field { flex: 0.55 1 86px; }
 .entry-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .entry-actions button { min-height: 40px; }
-.pointer-modes { display: inline-flex; align-items: stretch; gap: 2px; padding: 2px; border: 1px solid var(--author-divider); border-radius: 7px; background: var(--accent-soft); }
-.pointer-modes button { min-height: 34px; border-color: transparent; background: transparent; color: var(--author-muted); font-size: 0.79rem; }
-.pointer-modes button[aria-pressed="true"] { border-color: var(--author-divider); background: #fff; color: var(--author-control-ink); box-shadow: 0 1px 2px #2636220a; }
 .entry-notes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin-top: 9px; }
 .entry-notes .field-help { font-size: 0.7rem; }
 .entry-notes > .quiet-button { margin-left: auto; min-height: 30px; padding: 5px 8px; font-size: 0.75rem; }
@@ -264,8 +259,8 @@ body:not([data-view="write"]) #pointer-tools { display: none; }
 .note-editor-context { color: var(--author-control-ink); font-size: 0.81rem; font-weight: 550; overflow-wrap: anywhere; }
 .note-accidentals { min-width: 0; padding: 0; margin: 0; border: 0; }
 .note-accidentals legend { padding: 0; margin-bottom: 6px; color: var(--author-muted); font-size: 0.73rem; font-weight: 550; }
-.accidental-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
-.accidental-choices button { display: grid; align-content: center; justify-items: center; gap: 4px; min-width: 44px; min-height: 64px; padding: 5px 3px; font-size: 0.66rem; font-weight: 500; }
+.accidental-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.accidental-choices button { min-height: max(64px, var(--music-ui-control-size)); }
 .accidental-sign { display: block; height: 26px; font-family: "Apple Symbols", "Segoe UI Symbol", serif; font-size: 1.5rem; line-height: 1; }
 .note-rhythm-fields { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
 .note-rhythm-fields select { min-height: 44px; }
@@ -418,8 +413,6 @@ body[data-view="read"] .keyboard-help, body[data-view="read"] .keyboard-shortcut
   .entry-strip > .pitch-field { flex-grow: 1; }
   .entry-actions { gap: 7px; }
   .entry-actions > button { flex-grow: 1; min-height: 44px; }
-  .pointer-modes { flex-grow: 1; }
-  .pointer-modes button { flex-grow: 1; min-height: 40px; }
   .entry-notes { align-items: start; gap: 8px; }
   .entry-notes .field-help { flex-basis: 100%; }
   .entry-notes .quiet-button { margin-left: 0; }
@@ -461,7 +454,7 @@ body[data-view="read"] .keyboard-help, body[data-view="read"] .keyboard-shortcut
   .note-editor-body { gap: 8px; padding: 2px 12px 10px; }
   .note-pitch-controls { gap: 8px; }
   .note-editor-context { font-size: 0.75rem; line-height: 1.4; }
-  .note-editor .accidental-choices button { min-height: 52px; gap: 2px; padding: 3px 2px; }
+  .note-editor .accidental-choices button { min-height: max(52px, var(--music-ui-control-size)); }
   .note-editor .accidental-sign { height: 18px; font-size: 1.25rem; }
   .note-rhythm-fields .field { gap: 3px; }
   .note-editor-footer { padding: 6px 12px; }
@@ -489,7 +482,7 @@ body[data-view="read"] .keyboard-help, body[data-view="read"] .keyboard-shortcut
     --author-warning: CanvasText;
     --author-warning-surface: Canvas;
   }
-  #workspace-mode-slot > button[aria-pressed="true"], #palette-more-slot > button[aria-expanded="true"] { outline: 2px solid Highlight; outline-offset: -3px; }
+  #palette-more-slot > button[aria-expanded="true"] { outline: 2px solid Highlight; outline-offset: -3px; }
   .author-selection { outline: 2px solid Highlight; background: transparent; }
   .author-caret { border-color: Highlight; }
   button[aria-pressed="true"] { outline: 2px solid Highlight; }
@@ -508,7 +501,7 @@ body[data-view="read"] .keyboard-help, body[data-view="read"] .keyboard-shortcut
 
 /* The workspace reserves control space outside the notation scroll region. */
 body:has(#author-workbench) {
-  --author-control-size: max(44px, 2.75rem);
+  --author-control-size: var(--music-ui-control-size);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -535,18 +528,16 @@ body:has(#author-workbench) .brand { flex: none; font-size: 1rem; }
 #workspace-dock > .location-trigger { min-width: 44px; min-height: var(--author-control-size); padding: 5px 8px; border-color: var(--author-divider); background: var(--author-surface); color: var(--author-control-ink); font-size: 0.72rem; line-height: 1.2; }
 body:has(#author-workbench) .save-status { flex: 1; min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.66rem; text-align: start; }
 body:has(#author-workbench) .view-switch { grid-column: auto; grid-row: auto; justify-self: auto; padding: 0; }
-#workspace-mode-slot > button { min-width: 60px; min-height: var(--author-control-size); padding: 6px 11px; font-size: 0.77rem; line-height: 1.35; }
 body:has(#author-workbench) .header-actions { grid-column: auto; grid-row: auto; flex-wrap: nowrap; gap: 8px; }
 .document-actions { display: flex; align-items: center; gap: 4px; }
 body:has(#author-workbench) .header-actions button,
 .palette-slot > button,
-.selection-shortcuts > button,
 #palette-more-slot > button,
 #entry-slot-action #drag-entry,
 #selection-slot-3 #drag-pitch { min-height: var(--author-control-size); padding: 7px 9px; font-size: 0.74rem; line-height: 1.35; }
 /* Keep icon-over-label content within the existing 44px control budget. */
 body:has(#author-workbench) .header-actions button:has(> music-button-content),
-#workspace-dock button:has(> music-button-content) { padding-block: 3px; }
+#workspace-dock button:has(> music-button-content) { padding-block: var(--music-ui-control-padding-block); }
 #active-part-label music-button-content { max-width: 100%; }
 #active-part-label [data-control-label] { display: block; overflow: hidden; text-overflow: ellipsis; }
 body:not([data-view="write"]) #source-trigger { display: none; }
@@ -598,14 +589,15 @@ body:has(#author-workbench) .author-workspace {
 .score-scroll .keyboard-help { margin: 0 0 4px; color: var(--author-muted); font-size: 0.75rem; }
 .score-scroll .workspace-footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--author-divider); font-size: 0.66rem; }
 
-/* The palette shares the header's control sizes and spacing. Its owners stay
-   fixed in both modes, with a second row when full-size controls need room. */
+/* The palette shares the header's control sizes and spacing. Mode, More, and
+   Location stay at the bottom while musical controls can grow above them. */
 #workspace-dock {
-  --palette-control-size: var(--author-control-size);
+  --palette-control-size: var(--music-ui-control-size);
+  --palette-group-size: calc(var(--palette-control-size) + 2 * var(--music-ui-group-padding));
   --palette-musical-columns: repeat(3, minmax(0, max-content));
   display: grid;
   grid-template-columns: max-content minmax(max(264px, 16.5rem), 1fr) max-content max(140px, 8.75rem);
-  grid-template-rows: calc(var(--palette-control-size) + 2px);
+  grid-template-rows: auto;
   align-items: center;
   align-content: center;
   min-width: 0;
@@ -613,23 +605,26 @@ body:has(#author-workbench) .author-workspace {
   background: var(--paper);
   z-index: 10;
 }
-#workspace-mode-slot { grid-column: 1; grid-row: 1; order: 0; flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, max-content); gap: 0; min-width: 0; height: calc(var(--palette-control-size) + 2px); padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); }
-#workspace-mode-slot > button { display: grid; align-content: center; width: 100%; min-height: var(--palette-control-size); height: var(--palette-control-size); margin: 0; border-color: transparent; border-radius: 6px; background: transparent; color: var(--muted); font-weight: 550; white-space: nowrap; }
-#workspace-mode-slot > button:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--author-border); }
+#workspace-mode-slot { grid-column: 1; grid-row: 1; order: 0; flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, max-content); min-width: 0; height: var(--palette-group-size); }
+#workspace-mode-slot > button { width: 100%; min-height: var(--palette-control-size); height: var(--palette-control-size); white-space: nowrap; }
 #entry-mode-label { display: block; line-height: inherit; white-space: inherit; }
 #entry-mode-reason { color: var(--author-warning); }
-#palette-musical-slots { grid-column: 2; grid-row: 1; order: 3; flex: 1 0 100%; display: grid; min-width: 0; height: var(--palette-control-size); }
+#palette-musical-slots { grid-column: 2; grid-row: 1; order: -1; flex: 1 0 100%; display: grid; min-width: 0; height: auto; }
 #entry-toolbar { grid-area: 1 / 1; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; }
 body:not([data-entry-mode="true"]) #entry-toolbar,
 body[data-entry-mode="true"] #pointer-tools { display: none; }
-#entry-toolbar .entry-tools { display: grid; grid-template-columns: var(--palette-musical-columns); gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+#entry-toolbar .entry-tools { display: grid; grid-template-columns: repeat(2, minmax(0, max-content)) minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+body[data-entry-mode="true"] #workspace-dock { grid-template-rows: auto; }
+body[data-entry-mode="true"] #palette-musical-slots { height: auto; }
+.entry-quick-tools, .selection-quick-tools { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--music-ui-group-spacing); min-width: 0; }
+:is(.entry-quick-tools, .selection-quick-tools) music-toggle-button-group { min-width: 0; }
 body[data-entry-kind="road"] #entry-settings-trigger,
 body:not([data-entry-kind="road"]) #entry-direction-trigger { display: none; }
-#author-workbench .pointer-tools { grid-area: 1 / 1; display: block; position: static; z-index: auto; width: 100%; min-width: 0; height: var(--palette-control-size); min-height: 0; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
-#selection-controls-dock { position: relative; width: 100%; min-width: 0; height: var(--palette-control-size); min-height: var(--palette-control-size); }
-#selection-controls { display: grid; grid-template-columns: var(--palette-musical-columns); gap: 8px; width: 100%; min-width: 0; height: var(--palette-control-size); min-height: var(--palette-control-size); margin: 0; padding: 0; border: 0; }
+#author-workbench .pointer-tools { grid-area: 1 / 1; display: block; position: static; z-index: auto; width: 100%; min-width: 0; height: auto; min-height: 0; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+#selection-controls-dock { position: relative; width: 100%; min-width: 0; height: auto; min-height: var(--palette-group-size); }
+#selection-controls { display: grid; grid-template-columns: var(--palette-musical-columns); align-items: center; gap: 8px; width: 100%; min-width: 0; height: auto; min-height: var(--palette-group-size); margin: 0; padding: 0; border: 0; }
 #selection-controls[data-selection-placement="floating"] { z-index: 30; border: 1px solid var(--author-border); border-radius: 5px; background: var(--author-surface); box-shadow: 0 5px 16px rgba(20, 28, 36, 0.15); }
-.palette-slot { display: grid; position: relative; grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--palette-control-size); min-width: 0; height: var(--palette-control-size); }
+.palette-slot { display: grid; position: relative; grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--palette-group-size); align-items: center; min-width: 0; height: var(--palette-group-size); }
 .palette-slot > button { grid-area: 1 / 1; justify-self: start; width: auto; min-width: 44px; min-height: var(--palette-control-size); height: var(--palette-control-size); max-height: none; margin: 0; border-color: transparent; border-radius: 6px; background: transparent; color: var(--author-control-ink); font-weight: 550; white-space: normal; overflow-wrap: normal; }
 .palette-slot > button:hover:not(:disabled),
 #entry-slot-action #insert-event:hover:not(:disabled),
@@ -637,7 +632,7 @@ body:not([data-entry-kind="road"]) #entry-direction-trigger { display: none; }
 .palette-slot > button:disabled { color: var(--author-muted); background: transparent; opacity: 0.72; }
 .palette-slot > button.danger-button { color: var(--author-error); }
 .palette-slot > button:focus-visible { outline-offset: -3px; }
-#workspace-dock button:focus-visible { outline-offset: -3px; }
+#workspace-dock button:focus-visible { outline-offset: calc(-1 * var(--music-ui-focus-width)); }
 .entry-settings-trigger, .entry-value-trigger { display: grid; align-content: center; gap: 1px; text-align: center; }
 .control-caption { display: block; color: var(--author-muted); font-size: 0.68rem; font-weight: 450; line-height: 1.2; }
 #entry-recipe { display: block; color: var(--author-control-ink); font-size: 0.74rem; line-height: 1.2; white-space: normal; }
@@ -653,12 +648,9 @@ body:not([data-pitch-drag-armed="true"]) #drag-pitch { display: none; }
 body[data-pitch-drag-armed="true"] #selection-slot-3 > :not(#drag-pitch) { display: none; }
 body:is([data-pitch-drag-armed="true"], [data-select-more="true"]) #selection-value { display: none; }
 .selection-direct-choices { display: none; }
-.selection-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(44px, 1fr)); gap: 3px; min-width: 0; height: var(--palette-control-size); }
-.selection-shortcuts > button { width: 100%; min-width: 44px; min-height: var(--palette-control-size); height: var(--palette-control-size); border-color: transparent; background: transparent; }
-.selection-shortcuts > button[aria-checked="true"],
+.selection-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(var(--music-ui-control-size), 1fr)); min-width: 0; height: var(--palette-group-size); }
+.selection-shortcuts > button { width: 100%; min-height: var(--palette-control-size); height: var(--palette-control-size); }
 #palette-more-slot > button[aria-expanded="true"] { border-color: var(--author-border); }
-.selection-shortcuts > button:disabled,
-#workspace-mode-slot > button:disabled { color: var(--author-muted); opacity: 0.72; }
 #palette-more-slot { grid-column: 3; grid-row: 1; order: 2; flex: 0 0 auto; display: grid; min-width: 0; height: var(--palette-control-size); }
 #palette-more-slot > button { grid-area: 1 / 1; display: grid; align-content: center; justify-content: center; width: 100%; min-width: 44px; min-height: var(--palette-control-size); height: var(--palette-control-size); max-height: none; margin: 0; border-color: transparent; border-radius: 6px; background: transparent; color: var(--author-control-ink); }
 body:not([data-entry-mode="true"]) #palette-more-slot #tools-toggle,
@@ -673,9 +665,11 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 /* Add direct spelling only when both the available width and text size fit. */
 @container author-workbench (width >= 1100px) and (width >= 68.75rem) {
   #workspace-dock { --palette-musical-columns: minmax(max(264px, 16.5rem), max-content) minmax(max(88px, 5.5rem), max-content) minmax(max(100px, 6.25rem), max-content); grid-template-columns: max-content minmax(max(480px, 30rem), 1fr) max-content max(180px, 11.25rem); }
-  #selection-slot-1 { grid-template-columns: minmax(0, 1fr) max(204px, 12.75rem); gap: 4px; }
+  #entry-toolbar .entry-tools, #selection-controls { grid-template-columns: minmax(calc(4 * var(--palette-group-size) + 3 * var(--music-ui-group-spacing)), 1fr) max-content max-content max-content; }
+  .entry-quick-tools, .selection-quick-tools { grid-column: auto; }
+  #selection-slot-1 { grid-template-columns: minmax(0, max-content); }
   #selection-slot-1 > button { grid-area: 1 / 1; }
-  .selection-direct-choices { grid-area: 1 / 2; display: grid; min-width: 0; }
+  .selection-direct-choices { display: none; }
   .selection-direct-choices > .selection-shortcuts { grid-area: 1 / 1; }
   #workspace-dock > .location-trigger { text-align: start; }
   #workspace-dock .location-compact { display: flex; align-items: baseline; gap: 4px; }
@@ -684,16 +678,16 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
   #selection-compact-staff::after { content: " · "; }
 }
 
-/* The fixed owners wrap together in either mode. Usually this makes two rows;
-   more rows remain possible when enlarged text needs them. */
-@container author-workbench (width <= 760px) or (width <= 47.5rem) {
+/* Stack musical controls above the persistent bottom row until the complete
+   writing recipe fits beside it, including when larger text needs more room. */
+@container author-workbench (width < 1100px) or (width < 68.75rem) {
   #workspace-dock { display: flex; flex-wrap: wrap; }
   #workspace-dock #selection-compact-context { white-space: normal; }
 }
 
 /* Older browsers retain complete Pitch and a text-aware viewport fallback. */
 @supports not (container-type: inline-size) {
-  @media (max-width: 760px), (max-width: 47.5rem) {
+  @media (max-width: 1100px), (max-width: 68.75rem) {
     #workspace-dock { display: flex; flex-wrap: wrap; }
     #workspace-dock #selection-compact-context { white-space: normal; }
   }
@@ -715,9 +709,9 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 #back-to-properties { flex: 1; text-align: start; }
 #workspace-tools[data-tools-view="tools"] #properties-heading { display: none; }
 .tools-tablist { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: none; align-items: stretch; min-width: 0; border-bottom: 1px solid var(--author-divider); }
-.tools-tablist button { flex: 1; min-width: 44px; min-height: 44px; padding: 5px 5px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--author-muted); font-size: 0.73rem; font-weight: 500; }
-.tools-tablist button[aria-selected="true"] { border-bottom-color: var(--author-border); color: var(--author-control-ink); background: var(--accent-soft); font-weight: 650; }
-.tools-tablist button:focus-visible { outline-offset: -4px; }
+.tools-tablist button { flex: 1; min-width: var(--music-ui-control-size); min-height: var(--music-ui-control-size); padding: var(--music-ui-control-padding-block) var(--music-ui-control-padding-inline); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--music-ui-color-muted); font-size: var(--music-ui-label-size); font-weight: var(--music-ui-control-weight); }
+.tools-tablist button[aria-selected="true"] { border-bottom-color: var(--music-ui-color-border); color: var(--music-ui-color-ink); background: var(--music-ui-color-active); }
+.tools-tablist button:focus-visible { outline: var(--music-ui-focus-width) solid var(--music-ui-color-focus); outline-offset: calc(-1 * var(--music-ui-focus-width)); }
 #tools-hide { flex: none; min-width: 44px; min-height: 44px; padding: 5px 6px; font-size: 0.7rem; }
 .tool-panel { flex: 1; min-width: 0; min-height: 0; padding: 10px 12px 14px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .tool-panel:focus-visible { outline-offset: -4px; }
@@ -783,9 +777,8 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 .selection-chooser { width: min(380px, calc(100% - 24px)); }
 .selection-chooser .popover-body { gap: 10px; }
 #selection-pitch-chooser .field-grid { grid-template-columns: minmax(0, 1fr); }
-#selection-chooser-accidentals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-#selection-chooser-accidentals button { min-width: 44px; min-height: 44px; padding: 6px 8px; font-size: 0.81rem; }
-#selection-chooser-accidentals button[aria-pressed="true"] { border-color: var(--author-border); color: var(--author-control-ink); background: var(--accent-soft); }
+#selection-chooser-accidentals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#selection-chooser-accidentals button { min-height: var(--music-ui-control-size); }
 #selection-shared-chooser label[for="selection-shared-alteration"] { grid-column: 1 / -1; }
 .selection-chooser .subsection { margin-top: 0; padding-top: 12px; }
 .selection-chooser .subsection h3 { margin-bottom: 8px; font-size: 1rem; }
@@ -805,12 +798,65 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 .location-panel .cursor-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
 .location-panel .cursor-controls .field { min-width: 0; max-width: none; }
 .location-panel select { min-height: 44px; padding: 7px 8px; font-size: 0.8rem; }
-.entry-basic-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.entry-basic-tools button { min-width: 44px; min-height: 44px; }
-.entry-basic-tools button[aria-pressed="true"] { border-color: var(--author-control-ink); background: var(--accent-soft); box-shadow: inset 0 -2px var(--author-control-ink); }
-.entry-direction-choices { display: grid; grid-template-columns: repeat(3, minmax(44px, 1fr)); gap: 6px; }
-.entry-direction-choices button { min-width: 44px; min-height: 44px; padding: 6px; font-size: 0.8rem; line-height: 1.2; }
-.entry-direction-choices button[aria-pressed="true"] { border-color: var(--author-control-ink); background: var(--accent-soft); box-shadow: inset 0 -2px var(--author-control-ink); }
+.entry-basic-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.entry-basic-tools button { min-height: var(--music-ui-control-size); }
+.entry-direction-choices { display: grid; grid-template-columns: repeat(3, minmax(var(--music-ui-control-size), 1fr)); }
+.entry-direction-choices button { min-height: var(--music-ui-control-size); }
+
+/* Persistent choices share one treatment across the palette and choosers.
+   Layout owners keep their column counts and any extra room for long labels. */
+#workspace-mode-slot,
+.selection-shortcuts,
+#selection-chooser-accidentals,
+.entry-basic-tools,
+.entry-direction-choices,
+.accidental-choices {
+  gap: var(--music-ui-group-gap); padding: var(--music-ui-group-padding); border: 0;
+  border-radius: var(--music-ui-group-radius); background: var(--music-ui-color-paper);
+  box-shadow: inset 0 0 0 var(--music-ui-border-width) var(--music-ui-color-divider);
+}
+#workspace-mode-slot > button,
+.selection-shortcuts > button,
+#selection-chooser-accidentals button,
+.entry-basic-tools button,
+.entry-direction-choices button,
+.accidental-choices button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--music-ui-content-gap); min-width: var(--music-ui-control-size); margin: 0;
+  padding: var(--music-ui-control-padding-block) var(--music-ui-control-padding-inline);
+  border: var(--music-ui-border-width) solid transparent; border-radius: var(--music-ui-control-radius);
+  background: transparent; color: var(--music-ui-color-ink);
+  font: inherit; font-weight: var(--music-ui-control-weight); line-height: var(--music-ui-label-line-height);
+}
+#workspace-mode-slot > button:hover:not(:disabled):not([aria-pressed="true"]),
+.selection-shortcuts > button:hover:not(:disabled):not([aria-checked="true"]),
+#selection-chooser-accidentals button:hover:not(:disabled):not([aria-pressed="true"]),
+.entry-basic-tools button:hover:not(:disabled):not([aria-pressed="true"]),
+.entry-direction-choices button:hover:not(:disabled):not([aria-pressed="true"]),
+.accidental-choices button:hover:not(:disabled):not([aria-pressed="true"]) {
+  border-color: var(--music-ui-color-divider); background: var(--music-ui-color-active);
+}
+#workspace-mode-slot > button[aria-pressed="true"],
+.selection-shortcuts > button[aria-checked="true"],
+#selection-chooser-accidentals button[aria-pressed="true"],
+.entry-basic-tools button[aria-pressed="true"],
+.entry-direction-choices button[aria-pressed="true"],
+.accidental-choices button[aria-pressed="true"] {
+  border-color: var(--music-ui-color-border); background: var(--music-ui-color-active); box-shadow: none;
+}
+#workspace-mode-slot > button[aria-pressed="true"] { border-color: var(--music-ui-color-ink); }
+#workspace-mode-slot > button:disabled,
+.selection-shortcuts > button:disabled,
+#selection-chooser-accidentals button:disabled,
+.entry-basic-tools button:disabled,
+.entry-direction-choices button:disabled,
+.accidental-choices button:disabled { opacity: var(--music-ui-disabled-opacity); cursor: not-allowed; }
+#workspace-mode-slot > button:focus-visible,
+.selection-shortcuts > button:focus-visible,
+#selection-chooser-accidentals button:focus-visible,
+.entry-basic-tools button:focus-visible,
+.entry-direction-choices button:focus-visible,
+.accidental-choices button:focus-visible { outline: var(--music-ui-focus-width) solid var(--music-ui-color-focus); outline-offset: calc(-1 * var(--music-ui-focus-width)); }
 .entry-value-chooser .popover-body { gap: 12px; }
 #selection-pitch-chooser .selection-pitch-components { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .prepared-drag-options h3 { margin-bottom: 6px; font-size: 1rem; }
@@ -900,9 +946,8 @@ body[data-view="read"] #score-scroll { grid-row: 1; }
   body:has(#author-workbench) .app-header { grid-template-columns: minmax(125px, 1fr) auto auto; }
   body:has(#author-workbench) .app-header, #workspace-dock { gap: 8px; padding-inline: 8px; }
   body:has(#author-workbench) .document-name { font-size: 1.15rem; }
-  #workspace-mode-slot > button { min-width: 54px; padding-inline: 8px; }
   body:has(#author-workbench) .header-actions { gap: 4px; }
-  body:has(#author-workbench) .header-actions button, .palette-slot > button, .selection-shortcuts > button, #palette-more-slot > button, #entry-slot-action #drag-entry, #selection-slot-3 #drag-pitch { padding-inline: 7px; }
+  body:has(#author-workbench) .header-actions button, .palette-slot > button, #palette-more-slot > button, #entry-slot-action #drag-entry, #selection-slot-3 #drag-pitch { padding-inline: 7px; }
 }
 @media (max-width: 760px) {
   body:has(#author-workbench) .app-header { grid-template-columns: minmax(0, 1fr) auto; }
@@ -917,7 +962,6 @@ body[data-view="read"] #score-scroll { grid-row: 1; }
   body:has(#author-workbench) .save-status { flex-basis: auto; font-size: 0.62rem; }
   #active-part-label { max-width: 95px; }
   body:has(#author-workbench) .author-workspace { gap: 4px; padding: 5px 0 0; }
-  .tools-tablist button { padding-inline: 4px; font-size: 0.74rem; }
   .tool-panel { padding: 9px 11px 12px; }
   .tool-panel .field-grid { gap: 9px; }
   .tool-panel :is(input:not([type="checkbox"]), select, textarea),
@@ -965,8 +1009,30 @@ body:has(.surface-popover[data-popover-fallback="true"]:not([hidden])) .author-w
 .surface-popover[data-popover-fallback="true"] { position: static; max-height: none; overflow: visible; }
 @media (forced-colors: active) {
   .tools-tablist button[aria-selected="true"] { border-bottom-color: Highlight; outline: 1px solid Highlight; }
-  #selection-controls button[role="radio"][aria-checked="true"] { outline: 1px solid Highlight; }
-  #selection-chooser-accidentals button[aria-pressed="true"] { outline: 1px solid Highlight; }
+  #workspace-mode-slot,
+  .selection-shortcuts,
+  #selection-chooser-accidentals,
+  .entry-basic-tools,
+  .entry-direction-choices,
+  .accidental-choices {
+    background: Canvas; box-shadow: none;
+    outline: var(--music-ui-border-width) solid GrayText; outline-offset: calc(-1 * var(--music-ui-border-width));
+  }
+  #workspace-mode-slot > button[aria-pressed="true"],
+  #selection-controls button[role="radio"][aria-checked="true"],
+  #selection-chooser-accidentals button[aria-pressed="true"],
+  .entry-basic-tools button[aria-pressed="true"],
+  .entry-direction-choices button[aria-pressed="true"],
+  .accidental-choices button[aria-pressed="true"] {
+    border-color: Highlight; outline: 2px solid Highlight; outline-offset: calc(-1 * var(--music-ui-focus-width));
+  }
+  #workspace-mode-slot > button:focus-visible,
+  #selection-controls button[role="radio"]:focus-visible,
+  #selection-chooser-accidentals button:focus-visible,
+  .entry-basic-tools button:focus-visible,
+  .entry-direction-choices button:focus-visible,
+  .accidental-choices button:focus-visible,
+  .tools-tablist button:focus-visible { outline: var(--music-ui-focus-width) dashed Highlight; outline-offset: calc(-1 * var(--music-ui-focus-width)); }
   .workspace-tools, .surface-popover { border-color: CanvasText; }
 }
 @media print {
@@ -976,3 +1042,20 @@ body:has(.surface-popover[data-popover-fallback="true"]:not([hidden])) .author-w
   body:has(#author-workbench) #page-host, body:has(#author-workbench) #page-host[hidden] { display: block !important; height: auto; min-height: 0; max-height: none; margin: 0; padding: 0; overflow: visible; }
   select::picker(select) { display: none !important; }
 }
+
+/* Listen keeps the music visible; its transport replaces writing controls. */
+.listen-tools { flex: none; padding: 8px 12px; gap: 8px; max-height: 42dvh; overflow: auto; }
+.listen-transport { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; width: 100%; }
+.listen-transport .field { width: 145px; }
+.listen-transport button { min-height: 44px; }
+#listen-time { align-self: center; min-width: 7.5em; font-variant-numeric: tabular-nums; font-size: .8rem; }
+#listen-status { flex-basis: 100%; margin: 0; }
+#listen-notices { flex-basis: 100%; margin: 0; }
+#listen-notices:empty { display: none; }
+.listen-details { font-size: .75rem; width: 100%; }
+.listen-details p { margin-block: 6px; max-width: 90ch; }
+body[data-view="listen"] .score-source-note,
+body[data-view="listen"] .keyboard-help,
+body[data-view="listen"] .keyboard-shortcuts { display: none; }
+body[data-view="listen"] #score-scroll { grid-row: 1; }
+@media (max-width: 760px) { .listen-transport { gap: 6px; } .listen-transport .field { width: 130px; } }

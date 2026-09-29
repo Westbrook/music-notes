@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local progress-report locator (the independent report is not published).
+.progress-report/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { authorActiveElement, authorControlParent, findAuthorControl, queryAuthorControl, mountAuthorFixture } from './author-fixture.js';
+import { authorActiveElement, authorControlParent, findAuthorControl, queryAuthorControl, mountAuthorFixture, releaseAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
@@ -86,10 +86,6 @@ async function visibleField(id: string, value: string): Promise<void> {
   if (element instanceof HTMLSelectElement) expect([...element.options].some(option => option.value === value && !option.disabled)).toBe(true);
   await field(id, value);
 }
-async function check(id: string, checked: boolean): Promise<void> {
-  const element = control<HTMLInputElement>(id); element.checked = checked;
-  element.dispatchEvent(new Event('change', { bubbles: true })); await flush();
-}
 async function select(id: string): Promise<void> {
   const button = queryAuthorControl<HTMLButtonElement>(document, `#event-navigator [data-source-id="${id}"]`);
   if (!button) throw new Error(`The real event navigator has no ${id} button.`);
@@ -151,7 +147,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
   workspace?.dispose(); workspace = undefined;
-  await flush(); vi.restoreAllMocks(); document.body.replaceChildren();
+  await flush(); vi.clearAllMocks(); vi.restoreAllMocks(); await releaseAuthorFixture();
 });
 
 describe('precise attached-mark selection in the real workspace', () => {
@@ -418,13 +414,11 @@ describe('Enter inserts the exact native next-entry recipe', () => {
     expect(entry()).toEqual(recipe); expect(app.session.cursor).toEqual(writer); expectNoEdit(app, source, 0);
   });
 
-  it('requires the keyboard continuation option and appends exactly once when it is enabled', async () => {
+  it('continues keyboard entry automatically and appends exactly once', async () => {
     const app = mount(fullSource); await select('full'); await startHere();
     await field('event-pitch', 'Gqf5'); await field('event-duration', 'eighth'); await field('event-dots', '1');
     const before = app.session.project.sourceHtml; const cursor = app.session.cursor;
-    await check('continuation-enabled', false); await key('Enter');
-    expectNoEdit(app, before, 0); expect(app.session.score.staves[0].measures).toHaveLength(1);
-    await check('continuation-enabled', true); await key('Enter');
+    await key('Enter');
     expect(app.session.score.staves[0].measures).toHaveLength(2); expect(app.session.revision).toBe(1);
     const note = app.session.score.staves[0].measures[1].voices[0].events[0];
     expect(pitchText(note.pitches[0])).toBe('Gqf5'); expect(note).toMatchObject({ duration: 'eighth', dots: 1 });
@@ -432,15 +426,16 @@ describe('Enter inserts the exact native next-entry recipe', () => {
     expect(app.session.canUndo).toBe(false);
   });
 
-  it.each(['final', 'partial', 'before'] as const)('does not extend or silently reinterpret a %s boundary through keyboard Enter', async boundary => {
+  it.each(['final', 'partial', 'before'] as const)('continues through a %s boundary through keyboard Enter in one undoable edit', async boundary => {
     const source = boundary === 'final' ? fullSource.replace('id="bar"', 'id="bar" end-bar="final"')
       : boundary === 'partial' ? fullSource.replace('id="bar"', 'id="bar" incomplete').replace('duration="whole"', 'duration="half"') : fullSource;
     const app = mount(source); await select('full'); await startHere();
     await field('event-duration', 'whole'); if (boundary === 'before') await field('insert-position', 'before');
-    await check('continuation-enabled', true); const before = app.session.project.sourceHtml;
-    await key('Enter'); expectNoEdit(app, before, 0);
-    expect(app.session.score.staves[0].measures).toHaveLength(1);
+    const before = app.session.project.sourceHtml;
+    await key('Enter'); expect(app.session.revision).toBe(1);
+    expect(app.session.score.staves[0].measures).toHaveLength(2);
     expect(control('continuation-review').dataset.surfaceState).not.toBe('open');
+    await click('undo'); expect(app.session.project.sourceHtml).toBe(before);
   });
 });
 

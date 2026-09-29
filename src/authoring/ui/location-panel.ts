@@ -14,7 +14,7 @@ export function locationPanel(): TemplateResult {
       </div>
       <div class="popover-body">
         <p id="location-context" class="target-context">Actions use the selected staff, bar, and voice.</p>
-        <p class="field-help" id="entry-mode-reason" hidden>Can’t resume</p>
+        <p class="field-help" id="entry-mode-reason" hidden>Your previous writing location was removed or changed. Choose Start writing here to use the location shown, or choose another staff, measure, or voice below.</p>
         <span id="entry-destination" class="entry-destination target-context" hidden></span>
         <span id="remaining-time" class="remaining-time" role="status"></span>
         <div class="local-action-grid">

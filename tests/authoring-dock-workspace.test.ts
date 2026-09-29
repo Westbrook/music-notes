@@ -5,7 +5,7 @@
  * synthetic event routing do not qualify CSS position, glyph geometry, native
  * popovers/pickers, pointer capture or touch.
  */
-import { mountAuthorFixture } from './author-fixture.js';
+import { authorActiveElement, authorControlParent, findAuthorControl, mountAuthorFixture } from './author-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthorWorkspace } from '../src/authoring/main.js';
 import { createProject } from '../src/authoring/project.js';
@@ -29,7 +29,7 @@ let sequence = 0;
 let widthDescriptor: PropertyDescriptor | undefined;
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id); if (!element) throw new Error(`Missing actual Author control #${id}.`); return element as T;
+  const element = findAuthorControl(document, id); if (!element) throw new Error(`Missing actual Author control #${id}.`); return element as T;
 }
 function available(element: HTMLElement): boolean {
   if (element.closest('[hidden],[inert],[aria-hidden="true"]') || element.matches(':disabled')) return false;
@@ -65,7 +65,9 @@ async function select(id: string, modifiers: { ctrlKey?: boolean; shiftKey?: boo
 }
 async function key(value: string, id = 'score-editor', options: KeyboardEventInit = {}): Promise<KeyboardEvent> {
   const target = el(id); expect(available(target), `#${id} must be available for keyboard input`).toBe(true); target.focus({ preventScroll: true });
-  const event = new KeyboardEvent('keydown', { key: value, bubbles: true, composed: true, cancelable: true, ...options }); target.dispatchEvent(event); await flush(); return event;
+  const event = new KeyboardEvent('keydown', { key: value, bubbles: true, composed: true, cancelable: true, ...options }); target.dispatchEvent(event);
+  if ((value === ' ' || value === 'Enter') && target instanceof HTMLButtonElement && (target.getRootNode() as ShadowRoot).host?.localName === 'music-toggle-button-group' && !event.defaultPrevented) target.click();
+  await flush(); return event;
 }
 function mount(): AuthorWorkspace {
   const values = new Map<string, string>();
@@ -116,7 +118,9 @@ async function startWriter(): Promise<void> {
 async function parkedWriter(): Promise<void> { await startWriter(); await click('select-mode'); await select('a'); }
 function expectExpanded(value: boolean): void { expect(el('edit-selected-event').getAttribute('aria-expanded')).toBe(String(value)); }
 function requireDock(id: string): void {
-  expect(el(id).closest('#workspace-dock')).toBe(el('workspace-dock')); expect(el('score-editor').contains(el(id))).toBe(false);
+  let parent: HTMLElement | null = el(id);
+  while (parent && parent.id !== 'workspace-dock') parent = authorControlParent(parent);
+  expect(parent).toBe(el('workspace-dock')); expect(el('score-editor').contains(el(id))).toBe(false);
 }
 
 beforeEach(() => {
@@ -140,7 +144,7 @@ describe('More is a repeatable pane disclosure without a musical edit', () => {
     const before = accepted(), buffered = drafts(); expect(buffered.scalarState).toBe('dirty'); expect(buffered.markState).toBe('dirty');
     const paper = el('score-editor'), host = el('score-host'), renderCount = engravingRequests();
     expect(el('author-workbench').style.getPropertyValue('--writing-frame-width')).toBe('960px');
-    await click('edit-selected-event'); expect(pane.hidden).toBe(true); expectExpanded(false); expect(document.activeElement).toBe(el('edit-selected-event'));
+    await click('edit-selected-event'); expect(pane.hidden).toBe(true); expectExpanded(false); expect(authorActiveElement(document)).toBe(el('edit-selected-event'));
     unchanged(before); expect(drafts()).toEqual(buffered); expect(el<HTMLDetailsElement>('event-details').open).toBe(true);
     await click('edit-selected-event'); expect(pane.hidden).toBe(false); expectExpanded(true); expect(panel.hidden).toBe(false);
     expect([panel.scrollTop, panel.scrollLeft, pane.scrollTop, pane.scrollLeft]).toEqual([137, 11, 29, 7]); unchanged(before); expect(drafts()).toEqual(buffered);
@@ -186,12 +190,12 @@ describe('specific editing destinations stay open-only', () => {
   it('repeating Pitches keeps the staged chord list open and focused without substituting the next-entry recipe', async () => {
     mount(); await parkedWriter(); await select('chord'); await click('selection-pitch'); await field('selected-pitches', 'C4 Eqs4 G4 Bb4');
     const before = accepted(), buffered = drafts(); await click('selection-pitch');
-    expect(el('workspace-tools').hidden).toBe(false); expect(document.activeElement).toBe(el('selected-pitches')); unchanged(before); expect(drafts()).toEqual(buffered);
+    expect(el('workspace-tools').hidden).toBe(false); expect(authorActiveElement(document)).toBe(el('selected-pitches')); unchanged(before); expect(drafts()).toEqual(buffered);
   });
   it('repeating Nominal span keeps its staged fields open and focused without prescribing slash rhythm', async () => {
     mount(); await parkedWriter(); await select('open-span'); await click('selection-value'); await field('selected-duration', 'eighth');
     const before = accepted(), buffered = drafts(); await click('selection-value');
-    expect(el('workspace-tools').hidden).toBe(false); expect(available(el('selected-nominal-span'))).toBe(true); expect(document.activeElement).toBe(el('selected-duration'));
+    expect(el('workspace-tools').hidden).toBe(false); expect(available(el('selected-nominal-span'))).toBe(true); expect(authorActiveElement(document)).toBe(el('selected-duration'));
     expect(event('open-span').rhythmic).toBe(false); unchanged(before); expect(drafts()).toEqual(buffered);
   });
   it.each(['Enter', 'double activation'] as const)('repeating %s opens or focuses Properties and never turns it into More’s close action', async route => {
@@ -207,7 +211,7 @@ describe('the bottom dock preserves entry and native control ownership', () => {
     mount(); const workbench = el('author-workbench'), dock = el('workspace-dock');
     expect(dock.parentElement).toBe(workbench); expect(workbench.lastElementChild).toBe(dock);
     expect(el('score-editor').parentElement).toBe(workbench); expect(el('workspace-tools').parentElement).toBe(workbench);
-    const columns = ['workspace-mode-slot', 'palette-musical-slots', 'palette-more-slot', 'location-trigger'];
+    const columns = ['palette-musical-slots', 'workspace-mode-slot', 'palette-more-slot', 'location-trigger'];
     expect([...dock.children].filter(child => !child.classList.contains('visually-hidden')).map(child => child.id)).toEqual(columns);
     for (const id of ['entry-toolbar', 'pointer-tools']) expect(el(id).parentElement).toBe(el('palette-musical-slots'));
     const dockControls = ['toggle-entry', 'select-mode', 'tools-toggle', 'entry-settings-trigger', 'entry-value-trigger',
@@ -252,15 +256,15 @@ describe('the bottom dock preserves entry and native control ownership', () => {
   });
   it('Escape from the focused relocated pitch handle ends preparation without clearing selection or touching the parked writer', async () => {
     mount(); await parkedWriter(); await click('edit-selected-event'); await click('selection-prepare-drag'); requireDock('drag-pitch');
-    expect(document.activeElement).toBe(el('drag-pitch')); expect(document.body.dataset.pitchDragArmed).toBe('true'); expect(available(el('drag-pitch'))).toBe(true);
+    expect(authorActiveElement(document)).toBe(el('drag-pitch')); expect(document.body.dataset.pitchDragArmed).toBe('true'); expect(available(el('drag-pitch'))).toBe(true);
     const before = accepted(); const escape = await key('Escape', 'drag-pitch');
     expect(escape.defaultPrevented).toBe(true); expect(document.body.dataset.pitchDragArmed).toBe('false'); expect(document.body.dataset.pointerGesture).toBeFalsy();
-    expect(document.activeElement).toBe(el('score-editor')); expect(el('workspace-tools').hidden).toBe(true); unchanged(before);
+    expect(authorActiveElement(document)).toBe(el('score-editor')); expect(el('workspace-tools').hidden).toBe(true); unchanged(before);
   });
-  it('dock accidental radio arrows only focus, and explicit Space changes the selected note exactly once with one Undo', async () => {
+  it('dock accidental button arrows only focus, and explicit Space changes the selected note exactly once with one Undo', async () => {
     mount(); await parkedWriter(); requireDock('selection-natural'); requireDock('selection-sharp'); const before = accepted();
-    const arrow = await key('ArrowRight', 'selection-natural'); expect(arrow.defaultPrevented).toBe(true); expect(document.activeElement).toBe(el('selection-sharp')); unchanged(before);
-    const space = await key(' ', 'selection-sharp'); expect(space.defaultPrevented).toBe(true);
+    const arrow = await key('ArrowRight', 'selection-natural'); expect(arrow.defaultPrevented).toBe(true); expect(authorActiveElement(document)).toBe(el('selection-sharp')); unchanged(before);
+    const space = await key(' ', 'selection-sharp'); expect(space.defaultPrevented).toBe(false);
     expect(event('a').pitches.map(pitchText)).toEqual(['F#4']); expect(event('b').pitches.map(pitchText)).toEqual(['G4']); expect(app!.session.revision).toBe(before.revision + 1);
     expect(app!.session.selection).toEqual(before.selection); expect(app!.session.cursor).toEqual(before.cursor); expect(recipe()).toEqual(before.recipe);
     await click('undo'); expect(app!.session.project.sourceHtml).toBe(before.source); expect(app!.session.canUndo).toBe(before.undo); expect(recipe()).toEqual(before.recipe);

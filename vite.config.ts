@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  base: mode === 'pages' ? '/music-notes/' : '/',
   plugins: [{
     name: 'third-party-notices',
     generateBundle() {
+      this.emitFile({ type: 'asset', fileName: '.nojekyll', source: '' });
       this.emitFile({
         type: 'asset',
         fileName: 'THIRD_PARTY_NOTICES.txt',
@@ -34,4 +36,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

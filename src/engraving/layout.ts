@@ -25,6 +25,8 @@ export interface SystemLayout {
 export interface LayoutOptions {
   readonly maxMeasures?: number;
   readonly justifyLast?: boolean;
+  /** Space reserved before the opening system only, excluded from its measure widths. */
+  readonly firstSystemIndent?: number;
   /** Maximum nonfinal system width / preferred width. Omit for full justification. */
   readonly maxStretch?: number;
 }
@@ -78,16 +80,17 @@ function columnFits(occupied: number, column: MeasureColumn, first: boolean, wid
  * preferences so they cannot force arbitrary amounts of music off the page.
  */
 function protectedBoundaries(
-  columns: readonly MeasureColumn[], width: number, maxMeasures: number,
+  columns: readonly MeasureColumn[], width: number, firstWidth: number, maxMeasures: number,
 ): readonly boolean[] {
   const protectedAt = Array<boolean>(columns.length + 1).fill(false);
   for (let start = 0; start < columns.length;) {
+    const available = start === 0 ? firstWidth : width;
     let end = start + 1;
-    let fits = columnFits(0, columns[start], true, width);
+    let fits = columnFits(0, columns[start], true, available);
     let minimum = columnWidth(columns[start], false, true);
     while (end < columns.length && columns[end - 1].keepWithNext
       && columns[end].breakBefore === 'auto') {
-      fits = fits && columnFits(minimum, columns[end], false, width);
+      fits = fits && columnFits(minimum, columns[end], false, available);
       minimum = addSize(minimum, columns[end].minimum);
       end++;
     }
@@ -153,6 +156,8 @@ function sizeRow(columns: readonly MeasureColumn[], target: number): readonly nu
  *
  * Each system includes only its first column's fixed `startExtra` header width;
  * this is charged in fitting, keep groups, and spacing, never to interior bars.
+ * `firstSystemIndent` reduces only the opening system's available width. Later
+ * systems, including after explicit page breaks, use the full available width.
  * Nonfinal systems fill the available width unless `maxStretch` (a factor >= 1)
  * caps their expansion beyond preferred width. The final system keeps its
  * preferred width unless `justifyLast` is true; that explicit choice overrides
@@ -176,17 +181,21 @@ export function planSystems(
   if (input.length === 0) return [];
   const columns = input.map(normalizeColumn);
   const width = positiveSize(availableWidth, MINIMUM_SIZE);
+  const indent = options.firstSystemIndent;
+  const firstWidth = indent !== undefined && Number.isFinite(indent) && indent > 0
+    ? Math.max(MINIMUM_SIZE, width - indent) : width;
   const maximum = options.maxMeasures;
   const maxMeasures = maximum !== undefined && Number.isFinite(maximum) && maximum > 0
     ? Math.max(1, Math.floor(maximum)) : columns.length;
   const maxStretch = options.maxStretch !== undefined && Number.isFinite(options.maxStretch) && options.maxStretch >= 1
     ? options.maxStretch : undefined;
-  const protectedAt = protectedBoundaries(columns, width, maxMeasures);
+  const protectedAt = protectedBoundaries(columns, width, firstWidth, maxMeasures);
   const costs = Array<number>(columns.length + 1).fill(Infinity);
   const next = Array<number>(columns.length);
   costs[columns.length] = 0;
 
   for (let start = columns.length - 1; start >= 0; start--) {
+    const rowWidth = start === 0 ? firstWidth : width;
     let minimum = 0;
     let preferred = 0;
     const limit = Math.min(columns.length, start + maxMeasures);
@@ -194,7 +203,7 @@ export function planSystems(
       const column = columns[end - 1];
       if (end > start + 1 && column.breakBefore !== 'auto') break;
       const first = end === start + 1;
-      const fits = columnFits(minimum, column, first, width);
+      const fits = columnFits(minimum, column, first, rowWidth);
       if (!first && !fits) break;
       minimum = addSize(minimum, columnWidth(column, false, first));
       preferred = addSize(preferred, columnWidth(column, true, first));
@@ -203,7 +212,7 @@ export function planSystems(
       const last = end === columns.length;
       const breaksKeep = !last && columns[end - 1].keepWithNext
         && columns[end].breakBefore === 'auto';
-      const cost = rowCost(preferred, width, end - start, last, maxStretch)
+      const cost = rowCost(preferred, rowWidth, end - start, last, maxStretch)
         + (breaksKeep ? 12 : 0) + costs[end];
       // A tie favors the earlier, fuller line and is deterministic across runs.
       if (cost <= costs[start]) {
@@ -216,13 +225,14 @@ export function planSystems(
 
   const systems: SystemLayout[] = [];
   for (let start = 0; start < columns.length;) {
+    const rowWidth = start === 0 ? firstWidth : width;
     const end = next[start];
     const row = columns.slice(start, end);
     const minimum = row.reduce((sum, column, index) => addSize(sum, columnWidth(column, false, index === 0)), 0);
     const preferred = row.reduce((sum, column, index) => addSize(sum, columnWidth(column, true, index === 0)), 0);
     const last = end === columns.length;
-    const available = !last && maxStretch !== undefined ? Math.min(width, preferred * maxStretch) : width;
-    const target = Math.max(minimum, last && !options.justifyLast ? Math.min(width, preferred) : available);
+    const available = !last && maxStretch !== undefined ? Math.min(rowWidth, preferred * maxStretch) : rowWidth;
+    const target = Math.max(minimum, last && !options.justifyLast ? Math.min(rowWidth, preferred) : available);
     const widths = sizeRow(row, target);
     systems.push({
       start,
@@ -232,7 +242,7 @@ export function planSystems(
       pageBreak: columns[start].breakBefore === 'page',
       // Every multi-column candidate already passed a fit check. A single bar
       // can overflow even when an unrepresentable giant sum saturates its width.
-      overflow: row.length === 1 && !columnFits(0, row[0], true, width),
+      overflow: row.length === 1 && !columnFits(0, row[0], true, rowWidth),
     });
     start = end;
   }

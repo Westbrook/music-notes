@@ -9,7 +9,7 @@ export function workspaceHeader(mode: ViewMode = 'write'): TemplateResult {
   return html`
     <a id="skip-to-score" class="skip-link nonprinting" href="#score-editor">Skip to the score</a>
     <header class="app-header nonprinting">
-      <div class="header-document"><a class="brand" href="/index.html" aria-label="Music Notes notation workbook">Music Notes</a>
+      <div class="header-document"><a class="brand" href=${`${import.meta.env.BASE_URL}index.html`} aria-label="Music Notes notation workbook">Music Notes</a>
         <div class="document-identity">
           <span id="document-title" class="document-name">Untitled composition</span>
           <div class="document-subline">

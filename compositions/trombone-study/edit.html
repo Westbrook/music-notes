@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Compose, read, and prepare music for paper with Music Notes. A separate authoring workspace built on readable musical HTML.">
+    <title>Trombone Study — Author</title>
+    <link rel="stylesheet" href="/src/ui/design-tokens.css">
+    <link rel="stylesheet" href="/src/authoring/author.css">
+  </head>
+<body class="author-app" data-view="write" data-entry-mode="false" data-entry-kind="note" data-tools-open="false" data-tools-expanded="false" data-tools-presentation="closed" data-entry-drag-armed="false">
+  <music-author-shell></music-author-shell>
+  <noscript><p class="noscript-notice">The authoring workspace needs JavaScript. Project files remain readable musical HTML and JSON.</p></noscript>
+  <script type="module">
+import { AuthorWorkspace } from '/src/authoring/main.ts';
+import { RecoveryStore } from '/src/authoring/storage.ts';
+import { importProject } from '/src/authoring/project.ts';
+const recovery = new RecoveryStore({ key: 'music-notes.author.recovery.v1:trombone-study-20260927' });
+const stored = recovery.load();
+try {
+ const project = stored.status === 'empty' ? importProject(await fetch('./trombone-study.music-notes.json').then(r=>{if(!r.ok)throw new Error('Cannot load the trombone project');return r.text();})) : undefined;
+ const workspace = new AuthorWorkspace({ recovery, ...(project ? {project} : {}) });
+ if(import.meta.hot)import.meta.hot.dispose(()=>workspace.dispose());
+} catch(error) {
+ const p=document.createElement('p');p.setAttribute('role','alert');p.textContent='Could not open Trombone Study: '+error.message;document.body.append(p);
+}
+</script>
+<a id="report-return" hidden href="http://127.0.0.1:4898/" style="position:fixed;right:16px;bottom:calc(170px + env(safe-area-inset-bottom));z-index:10000;background:white;color:#5131ad;border:1px solid #d1c4eb;border-radius:99px;padding:12px 16px;font:14px system-ui;text-decoration:none;box-shadow:0 2px 8px #0002">Progress Report</a><script>const flagged=new URL(location.href).searchParams.has('progress-report');document.getElementById('report-return').hidden=!flagged;for(const a of document.querySelectorAll('a[data-editor]')){if(flagged){const u=new URL(a.href);u.searchParams.set('progress-report','');a.href=u.href;}}</script></body>
+</html>

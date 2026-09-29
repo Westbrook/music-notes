@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const authorCss = readFileSync('src/authoring/author.css', 'utf8');
+const designTokensCss = readFileSync('src/ui/design-tokens.css', 'utf8');
 const workspaceCss = AuthorWorkspaceFrame.styles.cssText;
 const viewSwitchCss = AuthorViewSwitch.styles.cssText;
 const sourceEditorCss = MusicSourceEditor.styles.cssText;
@@ -66,7 +67,7 @@ function rulesFor(selector: string, stylesheet = authorCss): string[] {
 }
 
 function leafRules(stylesheet = authorCss): { selector: string; declarations: string }[] {
-  const css = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@import\s+[^;]+;/g, '');
   return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
     .map(match => ({ selector: match[1].trim(), declarations: match[2] }));
 }
@@ -174,7 +175,7 @@ describe('compact writing presentation markup', () => {
     expect(actionStyle).toMatch(/align-content:\s*center;/);
     expect(actionStyle).toMatch(/gap:\s*0;/);
     expect(declarationsFor('.palette-slot > button')).toMatch(/min-height:\s*var\(--palette-control-size\);/);
-    expect(declarationsFor('.palette-slot')).toMatch(/grid-template-rows:\s*var\(--palette-control-size\);/);
+    expect(declarationsFor('.palette-slot')).toMatch(/grid-template-rows:\s*var\(--palette-group-size\);/);
     const captionStyle = declarationsFor('#insert-event-destination');
     expect(captionStyle).toMatch(/min-width:\s*0;/);
     expect(captionStyle).toMatch(/max-width:\s*100%;/);
@@ -220,7 +221,7 @@ describe('stable writing palette structural contract', () => {
     const musical = element('palette-musical-slots');
     const more = element('palette-more-slot');
     expect(paletteGridOwners(dock).map(child => child.id)).toEqual([
-      'workspace-mode-slot', 'palette-musical-slots', 'palette-more-slot', 'location-trigger',
+      'palette-musical-slots', 'workspace-mode-slot', 'palette-more-slot', 'location-trigger',
     ]);
     expect(musical.contains(element('entry-toolbar'))).toBe(true);
     expect(musical.contains(element('selection-controls'))).toBe(true);
@@ -410,9 +411,9 @@ describe('stable writing palette structural contract', () => {
       expect(declarationsFor(selector)).toMatch(/display:\s*none;/);
     }
     expect(declarationsFor('.palette-slot > button')).toMatch(/grid-area:\s*1\s*\/\s*1;/);
-    expect(declarationsFor('.entry-direction-choices')).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(44px,\s*1fr\)\);/);
-    expect(declarationsFor('.entry-direction-choices button')).toMatch(/min-width:\s*44px;/);
-    expect(declarationsFor('.entry-direction-choices button')).toMatch(/min-height:\s*44px;/);
+    expect(declarationsFor('.entry-direction-choices')).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(var\(--music-ui-control-size\),\s*1fr\)\);/);
+    expect(declarationsFor('.entry-direction-choices button')).toMatch(/min-width:\s*var\(--music-ui-control-size\);/);
+    expect(declarationsFor('.entry-direction-choices button')).toMatch(/min-height:\s*var\(--music-ui-control-size\);/);
   });
 
   it('keeps recovery download and complete non-live guidance in Review outside the normal palette', () => {
@@ -451,7 +452,7 @@ describe('score-first authoring shell markup', () => {
     expect(entry.parentElement).toBe(element('palette-musical-slots'));
     expect(strip.parentElement).toBe(element('palette-musical-slots'));
     expect(paletteGridOwners(workspaceDock).map(child => child.id)).toEqual([
-      'workspace-mode-slot', 'palette-musical-slots', 'palette-more-slot', 'location-trigger',
+      'palette-musical-slots', 'workspace-mode-slot', 'palette-more-slot', 'location-trigger',
     ]);
     expect(workspaceDock.closest('.nonprinting')).not.toBeNull();
     expect(workspaceDock.hasAttribute('popover')).toBe(false);
@@ -553,7 +554,8 @@ describe('score-first authoring shell markup', () => {
     expect(label.tagName).toBe('SPAN');
     expect(reason.hidden).toBe(true);
     expect(label.hidden).toBe(false);
-    expect(reason.textContent?.trim()).toBe('Can’t resume');
+    expect(reason.textContent).toMatch(/previous writing location.*removed or changed/);
+    expect(reason.textContent).toMatch(/Start writing here/);
     expect(label.textContent?.trim()).toBe('Write notes');
     expect(reason.closest('.context-feedback')).toBeNull();
     expect(label.closest('.context-feedback')).toBeNull();
@@ -691,7 +693,6 @@ describe('score-first authoring shell markup', () => {
     const core = element('selection-controls');
     expect(core.getAttribute('data-selection-state')).toBe('none');
     for (const [id, choices] of [
-      ['selection-accidentals', ['selection-flat', 'selection-natural', 'selection-sharp']],
       ['selection-road-directions', ['selection-higher', 'selection-same', 'selection-lower']],
     ] as const) {
       const group = element(id);
@@ -707,6 +708,10 @@ describe('score-first authoring shell markup', () => {
         expect(radio.getAttribute('tabindex')).toBe('-1');
       }
     }
+    const accidentals = element('selection-accidentals');
+    expect(accidentals.localName).toBe('music-toggle-button-group');
+    expect(accidentals.getAttribute('label')).toBe('Accidentals');
+    expect(accidentals.getAttribute('overflow-at')).toBe('3');
     // The controller, not markup alone, must supply toolbar arrow/Space
     // behavior and its roving tab stop after a real selection.
   });
@@ -1309,7 +1314,9 @@ describe('stable writing palette CSS contract', () => {
     for (const name of ['paper', 'ink', 'chrome', 'surface', 'control-ink', 'muted', 'border', 'selection', 'selection-fill', 'insertion', 'insertion-fill', 'focus', 'error', 'error-surface', 'warning', 'warning-surface']) {
       expect(root, `Missing inherited --author-${name}`).toMatch(new RegExp(`--author-${name}:\\s*[^;]+;`));
     }
-    const forcedColors = blockFor(/@media\s*\(forced-colors:\s*active\)/);
+    const forcedColors = [...authorCss.matchAll(/@media\s*\(forced-colors:\s*active\)/g)]
+      .map(match => blockFor(/@media\s*\(forced-colors:\s*active\)/, authorCss.slice(match.index)))
+      .join('\n');
     const forcedRoot = declarationsFor(':root', forcedColors);
     for (const [name, color] of [
       ['paper', 'Canvas'], ['ink', 'CanvasText'], ['chrome', 'Canvas'], ['surface', 'Canvas'],
@@ -1396,9 +1403,12 @@ describe('score-first authoring CSS contract', () => {
     const dock = declarationsFor('#workspace-dock');
     expect(declarationsFor('::slotted([slot="palette"])', workspaceCss)).toMatch(/grid-area:\s*dock;/);
     expect(dock).toMatch(/display:\s*grid;/);
-    expect(declarationsFor('body:has(#author-workbench)')).toMatch(/--author-control-size:\s*max\(44px,\s*2\.75rem\);/);
-    expect(dock).toMatch(/--palette-control-size:\s*var\(--author-control-size\);/);
-    expect(dock).toMatch(/grid-template-rows:\s*calc\(var\(--palette-control-size\)\s*\+\s*2px\);/);
+    expect(declarationsFor(':where(:root)', designTokensCss)).toMatch(/--music-ui-control-size:\s*max\(44px,\s*2\.75rem\);/);
+    expect(declarationsFor(':where(:root)', designTokensCss)).toMatch(/--music-ui-group-padding:\s*2px;/);
+    expect(declarationsFor('body:has(#author-workbench)')).toMatch(/--author-control-size:\s*var\(--music-ui-control-size\);/);
+    expect(dock).toMatch(/--palette-control-size:\s*var\(--music-ui-control-size\);/);
+    expect(dock).toMatch(/--palette-group-size:\s*calc\(var\(--palette-control-size\)\s*\+\s*2\s*\*\s*var\(--music-ui-group-padding\)\);/);
+    expect(dock).toMatch(/grid-template-rows:\s*auto;/);
     expect(dock).toMatch(/grid-template-columns:\s*max-content\s+minmax\(max\(264px,\s*16\.5rem\),\s*1fr\)\s+max-content\s+max\(140px,\s*8\.75rem\);/);
     for (const selector of ['body:has(#author-workbench) .app-header', '#workspace-dock']) {
       const bar = declarationsFor(selector);
@@ -1406,13 +1416,14 @@ describe('score-first authoring CSS contract', () => {
       expect(bar, selector).toMatch(/padding:\s*6px\s+12px;/);
       expect(bar, selector).toMatch(/gap:\s*14px;/);
     }
-    expect(declarationsFor('button', viewSwitchCss)).toMatch(/padding:\s*3px\s+11px;/);
-    expect(declarationsFor('#workspace-mode-slot > button')).toMatch(/padding:\s*6px\s+11px;/);
+    for (const rule of [declarationsFor('button', viewSwitchCss), declarationsFor('#workspace-mode-slot > button')]) {
+      expect(rule).toMatch(/padding:\s*var\(--music-ui-control-padding-block(?:,\s*3px)?\)\s+var\(--music-ui-control-padding-inline(?:,\s*6px)?\);/);
+    }
     for (const selector of ['body:has(#author-workbench) .header-actions button', '.palette-slot > button', '#palette-more-slot > button']) {
       expect(declarationsFor(selector), selector).toMatch(/padding:\s*7px\s+9px;/);
     }
     expect(dock).not.toMatch(/overflow:\s*hidden|text-overflow:\s*ellipsis/);
-    // Native checks establish the shared 60px desktop bars and the taller
+    // Native checks establish the shared desktop bars and the taller
     // phone/text layouts; stylesheet declarations alone do not establish fit.
   });
 
@@ -1558,28 +1569,31 @@ describe('score-first authoring CSS contract', () => {
     expect(declarationsFor(':host([mode="read"])', workspaceCss)).toMatch(/grid-template-areas:\s*"score";/);
   });
 
-  it('uses the same musical columns with a container fallback that responds to width and larger root text', () => {
+  it('stacks musical controls before the mode row when width or larger text prevents a single row', () => {
     const normal = declarationsFor('#workspace-dock');
     expect(normal).toMatch(/--palette-musical-columns:\s*repeat\(3,\s*minmax\(0,\s*max-content\)\);/);
     for (const selector of ['#entry-toolbar .entry-tools', '#selection-controls']) {
       const rule = declarationsFor(selector);
       expect(rule).toMatch(/display:\s*grid;/);
-      expect(rule).toMatch(/grid-template-columns:\s*var\(--palette-musical-columns\);/);
       expect(rule).toMatch(/gap:\s*8px;/);
     }
-    expect(declarationsFor('.palette-slot')).toMatch(/grid-template-rows:\s*var\(--palette-control-size\);/);
+    expect(declarationsFor('#selection-controls')).toMatch(/grid-template-columns:\s*var\(--palette-musical-columns\);/);
+    expect(declarationsFor('#entry-toolbar .entry-tools')).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*max-content\)\) minmax\(0,\s*1fr\);/);
+    expect(element('write-tools').querySelector('[data-toggle-group-row]')?.children).toHaveLength(4);
+    expect(declarationsFor('.entry-quick-tools')).toMatch(/display:\s*flex;/);
+    expect(declarationsFor('.palette-slot')).toMatch(/grid-template-rows:\s*var\(--palette-group-size\);/);
     expect(declarationsFor('.popover-body :is(input:not([type="checkbox"]), select), .popover-body > button')).toMatch(/min-height:\s*44px;/);
-    const narrow = blockFor(/@container\s+author-workbench\s*\(width\s*<=\s*760px\)\s*or\s*\(width\s*<=\s*47\.5rem\)/);
+    const narrow = blockFor(/@container\s+author-workbench\s*\(width\s*<\s*1100px\)\s*or\s*\(width\s*<\s*68\.75rem\)/);
     const fallback = declarationsFor('#workspace-dock', narrow);
     expect(fallback).toMatch(/display:\s*flex;/);
     expect(fallback).toMatch(/flex-wrap:\s*wrap;/);
     expect(fallback).not.toMatch(/--palette-control-size\s*:/);
     expect(declarationsFor('#workspace-dock #selection-compact-context', narrow)).toMatch(/white-space:\s*normal;/);
     for (const [selector, order, flex] of [
+      ['#palette-musical-slots', -1, /flex:\s*1\s+0\s+100%;/],
       ['#workspace-mode-slot', 0, /flex:\s*0\s+0\s+auto;/],
       ['#workspace-dock > .location-trigger', 1, /flex:\s*1\s+1\s+max\(80px,\s*5rem\);/],
       ['#palette-more-slot', 2, /flex:\s*0\s+0\s+auto;/],
-      ['#palette-musical-slots', 3, /flex:\s*1\s+0\s+100%;/],
     ] as const) {
       const rule = declarationsFor(selector);
       expect(rule, selector).toMatch(new RegExp(`order:\\s*${order};`));
@@ -1588,7 +1602,7 @@ describe('score-first authoring CSS contract', () => {
     expect(narrow).not.toMatch(/data-entry-mode|data-selection-state/);
     expect(narrow).not.toMatch(/text-overflow:\s*ellipsis|overflow:\s*hidden/);
     const unsupported = blockFor(/@supports\s+not\s*\(container-type:\s*inline-size\)/);
-    const viewportFallback = blockFor(/@media\s*\(max-width:\s*760px\)\s*,\s*\(max-width:\s*47\.5rem\)/, unsupported);
+    const viewportFallback = blockFor(/@media\s*\(max-width:\s*1100px\)\s*,\s*\(max-width:\s*68\.75rem\)/, unsupported);
     expect(declarationsFor('#workspace-dock', viewportFallback)).toMatch(/display:\s*flex;/);
     expect(declarationsFor('#workspace-dock', viewportFallback)).toMatch(/flex-wrap:\s*wrap;/);
     expect(declarationsFor('#workspace-dock #selection-compact-context', viewportFallback)).toMatch(/white-space:\s*normal;/);
@@ -1598,22 +1612,16 @@ describe('score-first authoring CSS contract', () => {
     // Their fit under actual zoom and text settings remains a native check.
   });
 
-  it('reserves desktop direct corrections beside the complete Pitch route without changing musical slot ownership', () => {
+  it('gives Select and Write the same responsive quick-control allocation beside their own actions', () => {
     const desktop = blockFor(/@container\s+author-workbench\s*\(width\s*>=\s*1100px\)\s*and\s*\(width\s*>=\s*68\.75rem\)/);
-    const dock = declarationsFor('#workspace-dock', desktop);
-    expect(dock).toMatch(/grid-template-columns:\s*max-content\s+minmax\(max\(480px,\s*30rem\),\s*1fr\)\s+max-content\s+max\(180px,\s*11\.25rem\);/);
-    expect(dock).toMatch(/--palette-musical-columns:\s*minmax\(max\(264px,\s*16\.5rem\),\s*max-content\)\s+minmax\(max\(88px,\s*5\.5rem\),\s*max-content\)\s+minmax\(max\(100px,\s*6\.25rem\),\s*max-content\);/);
-    expect(declarationsFor('#selection-slot-1', desktop)).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+max\(204px,\s*12\.75rem\);/);
-    expect(declarationsFor('#selection-slot-1 > button', desktop)).toMatch(/grid-area:\s*1\s*\/\s*1;/);
-    expect(declarationsFor('.selection-direct-choices', desktop)).toMatch(/grid-area:\s*1\s*\/\s*2;/);
-    expect(declarationsFor('.selection-direct-choices', desktop)).toMatch(/display:\s*grid;/);
-    expect(rulesFor('.selection-direct-choices')[0]).toMatch(/display:\s*none;/);
+    expect(declarationsFor('#selection-controls', desktop)).toBe(declarationsFor('#entry-toolbar .entry-tools', desktop));
+    expect(declarationsFor('.selection-quick-tools', desktop)).toMatch(/grid-column:\s*auto;/);
     expect(element('selection-slot-1').contains(button('selection-pitch'))).toBe(true);
     expect(button('selection-pitch').getAttribute('popovertarget')).toBe('selection-pitch-chooser');
-    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) {
-      expect(element('selection-slot-1').contains(button(id))).toBe(true);
+    for (const id of ['selection-accidentals','selection-quick-duration','selection-quick-dots','selection-quick-attack']) {
+      expect(element('selection-quick-tools').contains(element(id))).toBe(true);
+      expect(element(id).localName).toBe('music-toggle-button-group');
     }
-    // These are available routes, not a measured four/five-action task pass.
   });
 
   it('retains full touch height for legacy note-editor direction and route controls', () => {
@@ -1655,28 +1663,34 @@ describe('score-first authoring CSS contract', () => {
     const strip = declarationsFor('#author-workbench .pointer-tools');
     expect(strip).toMatch(/display:\s*block;/);
     expect(strip).toMatch(/position:\s*static;/);
-    expect(strip).toMatch(/height:\s*var\(--palette-control-size\);/);
+    expect(strip).toMatch(/height:\s*auto;/);
     const dock = declarationsFor('#selection-controls-dock');
     expect(dock).toMatch(/position:\s*relative;/);
     expect(dock).toMatch(/width:\s*100%;/);
     expect(dock).toMatch(/min-width:\s*0;/);
     for (const rule of [dock, declarationsFor('#selection-controls')]) {
-      expect(rule).toMatch(/height:\s*var\(--palette-control-size\);/);
-      expect(rule).toMatch(/min-height:\s*var\(--palette-control-size\);/);
+      expect(rule).toMatch(/height:\s*auto;/);
+      expect(rule).toMatch(/min-height:\s*var\(--palette-group-size\);/);
     }
     expect(declarationsFor('#selection-controls')).toMatch(/display:\s*grid;/);
     for (const selector of ['.palette-slot > button', '#workspace-dock > .location-trigger', '#workspace-mode-slot > button', '#palette-more-slot > button', '.selection-shortcuts > button', '#entry-slot-action #drag-entry', '#selection-slot-3 #drag-pitch']) {
       const rule = declarationsFor(selector);
       expect(rule, selector).toMatch(/height:\s*var\(--palette-control-size\);/);
       expect(rule, selector).toMatch(/min-height:\s*var\(--palette-control-size\);/);
-      const widths = [...rule.matchAll(/min-width:\s*(\d+)px;/g)];
+      const widths = [...rule.matchAll(/min-width:\s*([^;]+);/g)];
       expect(widths.length, selector).toBeGreaterThan(0);
-      for (const [, width] of widths) expect(Number(width), selector).toBeGreaterThanOrEqual(44);
+      for (const [, width] of widths) {
+        // The shared token and its palette aliases retain the checked 44px
+        // floor while growing with root text size.
+        if (/^var\(--(?:music-ui|author|palette)-control-size\)$/.test(width.trim())) continue;
+        expect(width, selector).toMatch(/^\d+px$/);
+        expect(Number.parseFloat(width), selector).toBeGreaterThanOrEqual(44);
+      }
       expect(rule, selector).not.toMatch(/text-overflow:\s*ellipsis|line-clamp\s*:/);
     }
     for (const { declarations } of leafRules()) {
       for (const [, value] of declarations.matchAll(/--palette-control-size:\s*([^;]+)/g)) {
-        expect(value.trim()).toBe('var(--author-control-size)');
+        expect(value.trim()).toBe('var(--music-ui-control-size)');
       }
     }
   });
@@ -1684,7 +1698,7 @@ describe('score-first authoring CSS contract', () => {
   it('keeps the mode labels readable and missing-bookmark guidance outside their fixed footprint', () => {
     const entry = declarationsFor('#workspace-mode-slot > button');
     expect(entry).toMatch(/white-space:\s*nowrap;/);
-    expect(entry).toMatch(/min-width:\s*60px;/);
+    expect(entry).toMatch(/min-width:\s*var\(--music-ui-control-size\);/);
     for (const selector of ['#workspace-mode-slot > button', '#entry-mode-reason', '#entry-mode-label']) {
       for (const rule of rulesFor(selector)) {
         expect(rule).not.toMatch(/(?:text-overflow:\s*ellipsis|overflow:\s*hidden|line-clamp\s*:)/);
@@ -1794,8 +1808,8 @@ describe('score-first authoring CSS contract', () => {
     expect(group).toMatch(/display:\s*grid;/);
     expect(group).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
     const actions = declarationsFor('#selection-chooser-accidentals button');
-    expect(actions).toMatch(/min-width:\s*44px;/);
-    expect(actions).toMatch(/min-height:\s*44px;/);
+    expect(actions).toMatch(/min-width:\s*var\(--music-ui-control-size\);/);
+    expect(actions).toMatch(/min-height:\s*var\(--music-ui-control-size\);/);
     const pressed = '#selection-chooser-accidentals button[aria-pressed="true"]';
     expect(declarationsFor(pressed)).toMatch(/(?:background|border-color|outline)\s*:/);
     const forcedColors = [...authorCss.matchAll(/@media\s*\(forced-colors:\s*active\)/g)]
@@ -1822,7 +1836,7 @@ describe('score-first authoring CSS contract', () => {
 
   it('declares full touch-height targets for the persistent workspace actions', () => {
     for (const selector of ['.tools-tablist button', '#tools-hide', '#tools-expand', '#other-tools', '#back-to-properties', '.properties-actions button', '#workspace-review-slot #workspace-review-trigger']) {
-      expect(declarationsFor(selector), selector).toMatch(/min-height:\s*44px;/);
+      expect(declarationsFor(selector), selector).toMatch(/min-height:\s*(?:44px|var\(--music-ui-control-size\));/);
     }
   });
 

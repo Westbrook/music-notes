@@ -112,9 +112,7 @@ export function entrySettings(): TemplateResult {
           </div>
         </section>
         <div class="subsection">
-          <label class="check-field" for="continuation-enabled" >
-            <input id="continuation-enabled" name="continuation-enabled" type="checkbox" />Continue with Insert and keyboard</label>
-          <p class="field-help">At the end of the score. A new measure starts only after the current voice is full; pointer placement remains explicit.</p>
+          <p class="field-help">Inserting notes continues into later bars automatically. Following notes move in order, and new measures are added when needed. One Undo restores the insertion and any moved music.</p>
         </div>
       </div>
     </section>

@@ -4,7 +4,7 @@ import { AuthorViewSwitch } from '../src/authoring/ui/view-switch.js';
 import type { ViewRequestEvent } from '../src/authoring/ui/view-switch.js';
 import type { ViewMode } from '../src/authoring/types.js';
 
-const modes: readonly ViewMode[] = ['write', 'read', 'pages'];
+const modes: readonly ViewMode[] = ['write', 'read', 'listen', 'pages'];
 
 function mount(mode: ViewMode = 'write', parent: HTMLElement | ShadowRoot = document.body): AuthorViewSwitch {
   const view = document.createElement('music-view-switch');
@@ -31,7 +31,7 @@ describe('shadow Author view switch', () => {
     expect(view.shadowRoot?.mode).toBe('open');
     const group = view.shadowRoot!.querySelector('nav')!;
     expect(group.getAttribute('aria-label')).toBe('Workspace view');
-    expect(group.querySelectorAll('button')).toHaveLength(3);
+    expect(group.querySelectorAll('button')).toHaveLength(4);
     for (const [mode, label] of [['write', 'Write'], ['read', 'Read'], ['pages', 'Pages']] as const) {
       const control = button(view, mode);
       expect(control.textContent).toBe(label);

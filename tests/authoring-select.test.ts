@@ -367,12 +367,11 @@ describe('customizable native authoring selects', () => {
       }
       expect(panel.querySelector(`#selection-${kind}-error`)?.getAttribute('role')).toBe('alert');
     }
-    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) {
-      const radio = shell.getElementById(id)!;
-      expect(radio.getAttribute('type')).toBe('button');
-      expect(radio.getAttribute('role')).toBe('radio');
-      expect(radio.getAttribute('aria-checked')).toBe('false');
-      expect(radio.closest('[role="radiogroup"]')).not.toBeNull();
+    for (const id of ['selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack']) {
+      const group = shell.getElementById(id)!;
+      expect(group.localName).toBe('music-toggle-button-group');
+      expect(group.getAttribute('label')).toBeTruthy();
+      expect(group.closest('#selection-quick-tools')).not.toBeNull();
     }
     expect(shell.getElementById('workspace-feedback-label')?.getAttribute('role')).toBe('status');
     expect(shell.querySelector('button[popovertarget="note-editor"]:not([popovertargetaction="hide"])')).toBeNull();

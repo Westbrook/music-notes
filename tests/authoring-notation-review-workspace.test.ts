@@ -397,8 +397,8 @@ describe('notation notices through the actual Author workspace', () => {
     expect(committedStatus).toBeTruthy(); expect(committedStatus).not.toMatch(/Click the staff|Writing at|Writing remains active/);
     await click('select-mode'); expect(el('author-status').textContent).toBe(committedStatus); expect(accepted()).toEqual(written);
 
-    await click('toggle-entry'); await settled(); await click('entry-value-trigger'); await field('event-duration', 'whole');
-    await click('close-entry-value'); await click('toggle-entry');
+    await click('toggle-entry'); await settled(); await click('entry-settings-trigger'); await field('event-pitch', 'invalid');
+    await click('close-entry-settings'); await click('toggle-entry');
     const beforeRejected = accepted(), recipe = entryRecipe(); await key('Enter');
     expect(accepted()).toEqual(beforeRejected); expect(el('author-errors').hidden).toBe(false);
     const rejection = feedback(); expect(rejection.kind).toBe('error'); expect(rejection.text).toBeTruthy();
@@ -456,8 +456,8 @@ describe('notation notices through the actual Author workspace', () => {
 
   it('controller feedback boundary gives a current gesture the header while retaining and restoring the previous refusal in Review', async () => {
     mount(partial); await settled(); await startWriting();
-    await click('entry-value-trigger'); await field('event-duration', 'whole');
-    await click('close-entry-value'); await click('toggle-entry'); await key('Enter');
+    await click('entry-settings-trigger'); await field('event-pitch', 'invalid');
+    await click('close-entry-settings'); await click('toggle-entry'); await key('Enter');
     const refusal = feedback(); expect(refusal.kind).toBe('error'); expect(refusal.errorHidden).toBe(false); expect(refusal.error).toBeTruthy();
     const before = accepted(), recipe = entryRecipe(), boundary = pointerFeedbackBoundary();
     const proposal = 'Before F4 · Lead, bar 12, voice 1 · 0 whole-note onset. The current pointer proposal preserves the written value and identifies its exact insertion boundary.';
@@ -513,8 +513,8 @@ describe('notation notices through the actual Author workspace', () => {
 
   it('controller feedback boundary keeps the full-bar forecast after completion and leave, below previews, errors and genuine form drafts', async () => {
     mount(); await settled(); await startWriting();
-    await click('entry-settings-trigger'); await field('event-pitch', 'F4'); await click('continuation-enabled');
-    expect(el<HTMLInputElement>('continuation-enabled').checked).toBe(true);
+    await click('entry-settings-trigger'); await field('event-pitch', 'F4');
+
     await click('close-entry-settings'); await click('toggle-entry');
     for (let count = 0; count < 4; count++) await key('Enter');
     expect(app!.session.score.staves[0].measures).toHaveLength(1);

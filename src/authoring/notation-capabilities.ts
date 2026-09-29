@@ -26,9 +26,9 @@ export interface AuthoringRoute {
 }
 
 export const AUTHORING_ROUTES = {
-  entry: { path: 'Enter notes → set the recipe → Insert or Enter with the score focused', controls: ['toggle-entry', 'event-kind', 'event-duration', 'insert-event', 'score-editor'] },
+  entry: { path: 'Write notes → set Accidentals, Duration, Dots and Attack → Insert or Enter with the score focused', controls: ['toggle-entry', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'event-kind', 'event-duration', 'insert-event', 'score-editor'] },
   pitch: { path: 'Next entry → Pitch & octave; Tools → Edit → Pitch & octave', controls: ['event-pitch', 'selected-pitch'] },
-  alteration: { path: 'Next entry → Pitch alteration; Edit note → Set accidental', controls: ['event-alteration', 'note-microtone', 'note-natural'] },
+  alteration: { path: 'Write notes → Accidentals; New-note options → Pitch alteration; Edit note → Set accidental', controls: ['entry-accidentals', 'event-alteration', 'note-microtone', 'note-natural'] },
   chord: { path: 'Next entry → Chord pitches; Edit chord → Edit chord pitches → Tools → Edit', controls: ['event-pitches', 'note-advanced-edit', 'selected-pitches'] },
   selected: { path: 'Edit note → Advanced properties; Tools → Edit → Selected event', controls: ['note-advanced-edit', 'selected-kind', 'selected-duration', 'selected-dots', 'update-event'] },
   quick: { path: 'Select music → Edit note', controls: ['edit-selected-event', 'note-duration', 'note-dots'] },
@@ -36,8 +36,8 @@ export const AUTHORING_ROUTES = {
   engraving: { path: 'Next entry → New-event engraving; Tools → Edit → Accidental display, stem and beam', controls: ['event-accidental-display', 'event-stem', 'event-beam', 'selected-accidental-display', 'selected-stem', 'selected-beam'] },
   fullRest: { path: 'Next entry or Tools → Edit → Full-measure rest', controls: ['event-measure-rest', 'selected-measure-rest'] },
   attached: { path: 'Edit selected event → Attached marks; select a printed mark → Edit → its exact mark row', controls: ['edit-selected-event', 'note-attached-marks', 'event-markings-target', 'event-markings-rows'] },
-  articulation: { path: 'Tools → Edit → Attached marks → Add articulation', controls: ['add-event-articulation', 'event-markings-rows', 'apply-event-markings'] },
-  ornament: { path: 'Tools → Edit → Attached marks → Add ornament', controls: ['add-event-ornament', 'event-markings-rows', 'apply-event-markings'] },
+  articulation: { path: 'Write notes → Attack; Tools → Edit → Attached marks → Add articulation', controls: ['entry-attack', 'add-event-articulation', 'event-markings-rows', 'apply-event-markings'] },
+  ornament: { path: 'Write notes → Attack; Tools → Edit → Attached marks → Add ornament', controls: ['entry-attack', 'add-event-ornament', 'event-markings-rows', 'apply-event-markings'] },
   interval: { path: 'Tools → Edit → Attached marks → Add harmony interval', controls: ['add-event-interval', 'event-markings-rows', 'apply-event-markings'] },
   intervalChain: { path: 'Tools → Edit → Attached marks → Apply interval edits to the complete tie chain', controls: ['event-markings-tie-scope', 'event-markings-tie-help', 'apply-event-markings'] },
   ties: { path: 'Tools → Rhythm → Tie selected notes or Remove ties', controls: ['range-start', 'range-end', 'tie-events', 'clear-ties'] },

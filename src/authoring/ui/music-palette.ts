@@ -1,20 +1,25 @@
 import { phArrowDown, phArrowRight, phArrowUp, phArrowsVertical, phCheck, phCursor, phDotsThree, phHand, phLink, phMapPin, phMusicNotesPlus, phPencilSimple, phPlus, phSlidersHorizontal, phTrash } from '../../ui/icons/phosphor.js';
-import { bravuraAccidentalFlat, bravuraAccidentalNatural, bravuraAccidentalSharp, bravuraArticAccentAbove, bravuraGClef, bravuraNoteQuarterUp } from '../../ui/icons/bravura.js';
+import { bravuraArticAccentAbove, bravuraGClef, bravuraNoteQuarterUp } from '../../ui/icons/bravura.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
 import { buttonContent } from '../../ui/button-content.js';
+import '../../ui/toggle-button-group.js';
+import { ENTRY_ACCIDENTAL_OPTIONS, ENTRY_ATTACK_OPTIONS, ENTRY_DOTS_OPTIONS, ENTRY_DURATION_OPTIONS } from '../entry-palette.js';
 
 /** Persistent palette for entry recipes and accepted selection actions. */
 export function musicPalette(): TemplateResult {
   return html`
     <section slot="palette" id="workspace-dock" class="workspace-dock nonprinting" aria-label="Music palette">
-      <div id="workspace-mode-slot" class="workspace-mode-slot" role="group" aria-label="Editing mode">
-        <button id="toggle-entry" type="button" aria-pressed="false" aria-describedby="entry-destination">${buttonContent(phMusicNotesPlus, html`<span id="entry-mode-label">Write notes</span>`)}</button>
-        <button id="select-mode" type="button" aria-pressed="true">${buttonContent(phCursor, "Select")}</button>
-      </div>
       <div id="palette-musical-slots" class="palette-musical-slots">
         <div id="entry-toolbar" class="entry-toolbar" aria-label="New notes">
           <section id="write-tools" class="entry-tools" aria-label="New-note recipe">
+            <div class="entry-quick-tools" data-toggle-group-row aria-label="Quick choices for new notes">
+              <music-toggle-button-group id="entry-accidentals" label="Accidentals" .options=${ENTRY_ACCIDENTAL_OPTIONS} value="0" overflow-at="3" aria-describedby="event-alteration-status"></music-toggle-button-group>
+              <music-toggle-button-group id="entry-duration" label="Duration" .options=${ENTRY_DURATION_OPTIONS} value="quarter" overflow-at="4"></music-toggle-button-group>
+              <music-toggle-button-group id="entry-dots" label="Dots" .options=${ENTRY_DOTS_OPTIONS} value="0" overflow-at="1" toggle-off-value="0"></music-toggle-button-group>
+              <music-toggle-button-group id="entry-attack" label="Attack" .options=${ENTRY_ATTACK_OPTIONS} value="none" overflow-at="2" toggle-off-value="none" aria-describedby="entry-attack-status"></music-toggle-button-group>
+            </div>
+            <p id="entry-attack-status" class="visually-hidden" role="status" aria-live="polite"></p>
             <div id="entry-slot-options" class="palette-slot">
               <button id="entry-settings-trigger" type="button" class="entry-settings-trigger palette-action" popovertarget="entry-settings" aria-label="New note options" aria-describedby="entry-options-help entry-destination">${buttonContent(bravuraNoteQuarterUp, html`<span id="entry-settings-label" class="control-caption">Note</span><span id="entry-recipe">C4</span>`, { layout: "inline" })}</button>
               <button id="entry-direction-trigger" type="button" class="palette-action" popovertarget="entry-direction-chooser" aria-label="Direction for the next 3 roads note" aria-describedby="direction-help" hidden>${buttonContent(phArrowRight, html`<span data-control-label>Same (middle)</span>`)}</button>
@@ -32,16 +37,18 @@ export function musicPalette(): TemplateResult {
         <div id="pointer-tools" class="pointer-tools" data-selection-state="none" aria-label="Selected music">
           <div id="selection-controls-dock" class="selection-controls-dock">
             <div id="selection-controls" class="selection-controls" role="toolbar" aria-label="Selected music" aria-describedby="selection-controls-context" data-selection-placement="dock" data-selection-state="none" data-has-error="false">
+              <div id="selection-quick-tools" class="selection-quick-tools" data-toggle-group-row aria-label="Quick choices for selected notes">
+                <music-toggle-button-group id="selection-accidentals" label="Accidentals" .buttonIds=${{ '-1': 'selection-flat', '0': 'selection-natural', '1': 'selection-sharp' }} overflow-at="3"></music-toggle-button-group>
+                <music-toggle-button-group id="selection-quick-duration" label="Duration" overflow-at="4"></music-toggle-button-group>
+                <music-toggle-button-group id="selection-quick-dots" label="Dots" overflow-at="1" toggle-off-value="0"></music-toggle-button-group>
+                <music-toggle-button-group id="selection-quick-attack" label="Attack" overflow-at="2" aria-describedby="selection-attack-help"></music-toggle-button-group>
+              </div>
+              <p id="selection-attack-help" class="visually-hidden">Toggle each articulation or ornament independently. A mixed choice applies it to all selected events; None clears attacks and ornaments.</p>
               <div id="selection-slot-1" class="palette-slot selection-pitch-slot">
                 <button id="selection-pitch" type="button" class="selection-action selection-pitch-action" popovertarget="selection-pitch-chooser" hidden>${buttonContent(bravuraGClef, html`<span data-control-label>Pitch</span>`)}</button>
                 <button id="selection-shared" type="button" class="selection-action" popovertarget="selection-shared-chooser" hidden>${buttonContent(phSlidersHorizontal, html`<span data-control-label>Shared properties</span>`)}</button>
                 <button id="selection-mark-edit" type="button" class="selection-action" hidden>${buttonContent(phPencilSimple, html`<span data-control-label>Edit mark</span>`)}</button>
                 <div class="selection-direct-choices">
-                  <div id="selection-accidentals" class="selection-shortcuts" role="radiogroup" aria-label="Set absolute accidental" hidden>
-                    <button id="selection-flat" type="button" role="radio" aria-checked="false" tabindex="-1">${buttonContent(bravuraAccidentalFlat, "Flat")}</button>
-                    <button id="selection-natural" type="button" role="radio" aria-checked="false" tabindex="-1">${buttonContent(bravuraAccidentalNatural, "Natural")}</button>
-                    <button id="selection-sharp" type="button" role="radio" aria-checked="false" tabindex="-1">${buttonContent(bravuraAccidentalSharp, "Sharp")}</button>
-                  </div>
                   <div id="selection-road-directions" class="selection-shortcuts" role="radiogroup" aria-label="Relative pitch direction" hidden>
                     <button id="selection-higher" type="button" role="radio" aria-checked="false" tabindex="-1">${buttonContent(phArrowUp, "Higher")}</button>
                     <button id="selection-same" type="button" role="radio" aria-checked="false" tabindex="-1">${buttonContent(phArrowRight, "Same")}</button>
@@ -62,6 +69,10 @@ export function musicPalette(): TemplateResult {
             </div>
           </div>
         </div>
+      </div>
+      <div id="workspace-mode-slot" class="workspace-mode-slot" role="group" aria-label="Editing mode">
+        <button id="toggle-entry" type="button" aria-pressed="false" aria-describedby="entry-destination">${buttonContent(phMusicNotesPlus, html`<span id="entry-mode-label">Write notes</span>`)}</button>
+        <button id="select-mode" type="button" aria-pressed="true">${buttonContent(phCursor, "Select")}</button>
       </div>
       <div id="palette-more-slot" class="palette-more-slot">
         <button id="edit-selected-event" class="selection-action selection-more" type="button" aria-controls="workspace-tools" aria-expanded="false" aria-describedby="edit-selected-help">${buttonContent(phDotsThree, html`<span id="edit-selected-label">More</span><span id="edit-selected-value" hidden></span>`)}</button>

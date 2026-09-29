@@ -3,8 +3,8 @@ import { mountAuthorShell } from '../src/authoring/ui/author-shell.js';
 import type { AuthorShell } from '../src/authoring/ui/author-shell.js';
 
 type AuthorFixtureRoot = Document | HTMLElement;
-type AuthorControlHost = 'view-switch' | 'event-navigator' | 'source-editor';
-const controlHosts: readonly AuthorControlHost[] = ['view-switch', 'event-navigator', 'source-editor'];
+type AuthorControlHost = 'view-switch' | 'event-navigator' | 'source-editor' | 'entry-accidentals' | 'entry-duration' | 'entry-dots' | 'entry-attack' | 'selection-accidentals' | 'selection-quick-duration' | 'selection-quick-dots' | 'selection-quick-attack';
+const controlHosts: readonly AuthorControlHost[] = ['view-switch', 'event-navigator', 'source-editor', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack'];
 
 function lightControlById(root: AuthorFixtureRoot, id: string): HTMLElement | null {
   if (root.nodeType === Node.DOCUMENT_NODE) return (root as Document).getElementById(id);
@@ -97,6 +97,10 @@ export async function releaseAuthorFixture(root: HTMLElement = document.body): P
   for (const node of nodes) {
     if ('replaceChildren' in node) (node as Element | DocumentFragment).replaceChildren();
   }
+  // Yield a task after disconnection so queued observer/frame cleanup can run
+  // and weakly held DOM objects can be collected between large fixtures.
+  // Chaining only promises keeps them alive for an entire synchronous suite.
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
 
 /** Detached structure for accessibility/markup contracts without fonts or SVG. */

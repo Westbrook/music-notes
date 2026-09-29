@@ -16,6 +16,7 @@ export class ScoreViewport extends LitElement {
     .gesture-overlays { overflow: visible; }
     .author-selection { position: absolute; border: 2px solid var(--author-selection, #175c96); border-radius: 3px;
       background: var(--author-selection-fill, rgba(23,92,150,.12)); }
+    .author-playing { border-color: var(--music-ui-color-focus, #7037a0); background: rgba(112,55,160,.18); }
     .author-caret { position: absolute; width: 2px; background: var(--author-insertion, #087368);
       box-shadow: 0 0 0 2px var(--author-paper, #fff); }
     .author-measure-selection { border-style: dashed; background: transparent; }

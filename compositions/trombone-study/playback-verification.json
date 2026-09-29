@@ -1,0 +1,161 @@
+{
+  "tempoBpm": 80,
+  "source": "trombone-study.music.html",
+  "synthesis": "macOS AVAudioUnitSampler; system General MIDI trombone patch 57 (zero-based)",
+  "sampleRate": 44100,
+  "channels": 2,
+  "scoreDurationSeconds": 8.25,
+  "fileDurationSeconds": 8.9,
+  "releaseTailSeconds": 0.65,
+  "noteGate": 0.94,
+  "peakDbfs": -3.0,
+  "notes": [
+    {
+      "pitch": "G2",
+      "expectedMidi": 43,
+      "frequencyHz": 98.44,
+      "deviationCents": 7.7,
+      "onsetSeconds": 0.0,
+      "durationSeconds": 0.75
+    },
+    {
+      "pitch": "G2",
+      "expectedMidi": 43,
+      "frequencyHz": 98.44,
+      "deviationCents": 7.7,
+      "onsetSeconds": 0.75,
+      "durationSeconds": 0.75
+    },
+    {
+      "pitch": "G2",
+      "expectedMidi": 43,
+      "frequencyHz": 98.44,
+      "deviationCents": 7.7,
+      "onsetSeconds": 1.5,
+      "durationSeconds": 0.75
+    },
+    {
+      "pitch": "C3",
+      "expectedMidi": 48,
+      "frequencyHz": 131.25,
+      "deviationCents": 5.8,
+      "onsetSeconds": 3.0,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "Ab2",
+      "expectedMidi": 44,
+      "frequencyHz": 104.01,
+      "deviationCents": 3.1,
+      "onsetSeconds": 3.1875,
+      "durationSeconds": 0.5625
+    },
+    {
+      "pitch": "E3",
+      "expectedMidi": 52,
+      "frequencyHz": 164.55,
+      "deviationCents": -2.7,
+      "onsetSeconds": 3.75,
+      "durationSeconds": 0.75
+    },
+    {
+      "pitch": "Eb3",
+      "expectedMidi": 51,
+      "frequencyHz": 155.28,
+      "deviationCents": -3.1,
+      "onsetSeconds": 5.25,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "D3",
+      "expectedMidi": 50,
+      "frequencyHz": 147.0,
+      "deviationCents": 2.0,
+      "onsetSeconds": 5.4375,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "A2",
+      "expectedMidi": 45,
+      "frequencyHz": 110.25,
+      "deviationCents": 3.9,
+      "onsetSeconds": 5.625,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "B2",
+      "expectedMidi": 47,
+      "frequencyHz": 123.88,
+      "deviationCents": 5.7,
+      "onsetSeconds": 5.8125,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "F3",
+      "expectedMidi": 53,
+      "frequencyHz": 175.0,
+      "deviationCents": 3.8,
+      "onsetSeconds": 6.9375,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "C#3",
+      "expectedMidi": 49,
+      "frequencyHz": 139.56,
+      "deviationCents": 12.0,
+      "onsetSeconds": 7.125,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "Bb2",
+      "expectedMidi": 46,
+      "frequencyHz": 117.29,
+      "deviationCents": 11.1,
+      "onsetSeconds": 7.3125,
+      "durationSeconds": 0.1875
+    },
+    {
+      "pitch": "Gb2",
+      "expectedMidi": 42,
+      "frequencyHz": 92.65,
+      "deviationCents": 2.8,
+      "onsetSeconds": 7.5,
+      "durationSeconds": 0.75
+    }
+  ],
+  "rests": [
+    {
+      "onsetSeconds": 2.25,
+      "durationSeconds": 0.75,
+      "rmsDbfs": -240.0
+    },
+    {
+      "onsetSeconds": 4.5,
+      "durationSeconds": 0.75,
+      "rmsDbfs": -240.0
+    },
+    {
+      "onsetSeconds": 6.0,
+      "durationSeconds": 0.75,
+      "rmsDbfs": -240.0
+    },
+    {
+      "onsetSeconds": 6.75,
+      "durationSeconds": 0.1875,
+      "rmsDbfs": -240.0
+    }
+  ],
+  "checks": [
+    "14 notes and 4 rests match score",
+    "all 14 rendered note pitches within 35 cents of requested pitch",
+    "rests below -42 dBFS after natural release",
+    "8.25 seconds of musical time at 80 BPM",
+    "8.90-second WAV and MP3 decode without errors",
+    "No clipping; peak -3 dBFS"
+  ],
+  "artifacts": [
+    "trombone-study-80bpm.wav",
+    "trombone-study-80bpm.mp3",
+    "trombone-study-80bpm.mid"
+  ]
+}

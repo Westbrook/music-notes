@@ -2,6 +2,8 @@
 
 The application uses Lit 3.3.3, signal-polyfill 0.2.2, and signal-utils 0.21.1. Exact runtime versions and the lockfile make upgrades deliberate. Musical HTML, project files, selection identities, and transactional editing retain their existing contracts.
 
+The [design system](../DESIGN.md) documents shared UI tokens and control families. Defaults live in `src/ui/design-tokens.css`; inherited custom properties align native page controls with shadow components while preserving their local override hooks.
+
 ## Ownership
 
 | Layer | Responsibility | Must not own |
@@ -95,6 +97,16 @@ Focus and geometry use the composed-tree helpers in `src/ui/composed-dom.ts`, fo
 
 Every dynamic container has one rendering owner. Controllers may modify explicitly unbound properties or the contents of designated empty mounts; they must not replace a Lit-owned range with `textContent` or `replaceChildren`. `setPagePreflightMessage()` exists for transient preflight feedback through the same owner.
 
+## Toggle button groups
+
+`music-toggle-button-group` in `src/ui/toggle-button-group.ts` accepts an `options` array of unique `{ value, label, icon?, disabled? }` choices, a selected `value`, a group `label`, and `disabled`. Its optional `overflowAt` property (`overflow-at` attribute) caps the direct buttons; container resizing can pack additional trailing options into the native select. By default, a nonempty group retains one selection, including when the selection moves into overflow, and choosing the current value again leaves it selected. Set `toggleOffValue` (`toggle-off-value`) to enable clearing: choosing the current option again assigns that configured value and leaves the group visually inactive. This also applies to choices in overflow. User changes emit one bubbling, composed `input` and `change` pair; property updates are silent. If all choices collapse, the picker displays the first option's icon. The host fits its visible controls and observes its parent's content width for overflow decisions. `--music-toggle-button-size` controls the target size.
+
+To share available space, place groups directly inside a flex row marked `data-toggle-group-row`, with a definite available width and a CSS `gap`. Author uses this arrangement for the four quick choices. The row reserves each group's overflow trigger, then restores complete buttons from their measured widths, up to each group's cap. It chooses the smallest next addition, breaking ties in DOM order, so increasing width only adds buttons and leaves no usable space trapped in a neighbor's allocation. Hidden measurement controls provide the full option widths even after every visible button has collapsed; the hosts and their borders continue to fit only the controls currently shown.
+
+Optional groups use the native select as an action picker: its native value returns to the hidden placeholder after each committed choice, allowing the same option to generate another `change`. The current overflow choice is labeled `(selected)` and the group's label and pressed styling reflect its state. Native `input` is suppressed, and native `change` commits a choice; each resulting change to the group's value produces one event pair. Author configures Dots with `toggle-off-value="0"` and Attack with `toggle-off-value="none"`; their explicit None options remain available. Accidentals and Duration retain required selection.
+
+Author mounts these groups in `#write-tools` and registers their shadow roots as owned native control surfaces, so dismissing a picker cannot accidentally write to the score. `/tests/toggle-button-group-browser.html` checks boundaries, individual and shared-row width restoration, fractional layout, ordering, and selection. Its event diagnostics distinguish synthetic interactions from native picker opening, which requires a manual check.
+
 ## Icons and control content
 
 **Phosphor Fill** action icons and **Bravura** music glyphs are synchronous SVG definitions. Import named exports from `src/ui/icons/phosphor.ts` or `src/ui/icons/bravura.ts`; each contains only its name, view box, and paths. There is no runtime catalog, dynamic import, network request, font loading, or measurement step. Unused definitions can be removed by the bundler. The Phosphor 2.1.1 source and MIT license are recorded in the third-party notices. Bravura paths are extracted offline from the exact Bravura 1.392 font bundled with VexFlow 5.0.0, with provenance and a reproducible generator in `scripts/generate-bravura-icons.py`. Score engraving continues to use VexFlow and its font.
@@ -137,11 +149,11 @@ npm run build
 npm run check:bundle
 ```
 
-`check:bundle` totals emitted HTML, synchronous JavaScript imports, CSS, and referenced assets using per-file gzip sizes. It fails above 50 kB for the initial workbook or 630 kB for initial Author delivery, and rejects any Author chunk in the workbook's complete graph, including dynamic imports. Lazy engraving is excluded from the initial workbook figure; fonts already imported by Author are included. HTTP overhead, cache state, and browser execution time are separate measurements.
+`check:bundle` totals emitted HTML, synchronous JavaScript imports, CSS, and referenced assets using per-file gzip sizes. It fails above 50.5 kB for the initial workbook or 633 kB for initial Author delivery, and rejects any Author chunk in the workbook's complete graph, including dynamic imports. These ceilings include the responsive writing palette and shared control foundation; the shared token stylesheet adds about 0.4 kB gzip to each entry. Lazy engraving is excluded from the initial workbook figure; fonts already imported by Author are included. HTTP overhead, cache state, and browser execution time are separate measurements.
 
 `check:icons` builds a standalone button from each icon family with Vite and checks the emitted output: exactly the requested definition remains, with one synchronous chunk, no dynamic imports, and no engraving or font dependencies. Lit is external to these small fixture bundles. This verifies tree shaking against the production bundler rather than relying only on source conventions.
 
-The measured initial delivery is about **49.6 kB gzip for the workbook** and **625.6 kB for Author**, within the **50 kB / 630 kB** budgets, compared with **48.3 kB** and **606.5 kB** before icon controls. Phosphor definitions live in individual modules behind a named-export barrel, so the workbook loads only its two icons. Bravura retains original outline coordinates with static optical view boxes and lossless SVG command compression. Cached score selectors, indexed control lookup, keyed DOM updates, lazy nested-surface presentation, and disconnected subscriptions remove avoidable interaction and lifecycle work without changing engraving policy.
+The measured initial delivery is about **50.0 kB gzip for the workbook** and **632.0 kB for Author**, within the **50.5 kB / 633 kB** budgets, compared with **48.3 kB** and **606.5 kB** before icon controls. Phosphor definitions live in individual modules behind a named-export barrel, so the workbook loads only its two icons. Bravura retains original outline coordinates with static optical view boxes and lossless SVG command compression. Cached score selectors, indexed control lookup, keyed DOM updates, lazy nested-surface presentation, and disconnected subscriptions remove avoidable interaction and lifecycle work without changing engraving policy.
 
 For a repeatable comparison, build another checkout with `vite build --manifest`, then run `node scripts/check-bundle.mjs /absolute/path/to/that/dist`.
 

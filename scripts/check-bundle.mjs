@@ -6,7 +6,13 @@ import { gzipSync } from 'node:zlib';
 // The optional directory makes before/after comparisons reproducible.
 const directory = resolve(process.argv[2] ?? 'dist');
 const manifest = JSON.parse(await readFile(resolve(directory, '.vite/manifest.json'), 'utf8'));
-const budgets = { 'index.html': 50_000, 'author.html': 630_000 };
+// The responsive writing palette and shared control foundation measure about
+// 50.0 / 632.0 kB gzip (workbook / Author). The shared token sheet adds 0.4 kB;
+// Listen adds about 1.2 kB of initial UI/lifecycle code; its 4.8 kB audio
+// controller is loaded on demand. Native musical clipboard and atomic bar
+// continuation add about 3.5 kB gzip; Author measured about 636.8 kB. Matching Select quick controls and mixed
+// attack states add about 1.3 kB; Author now measures about 638.1 kB.
+const budgets = { 'index.html': 50_500, 'author.html': 638_750 };
 
 function graph(entry, includeDynamic = false, visited = new Set()) {
   if (visited.has(entry)) return visited;
@@ -41,7 +47,7 @@ for (const [entry, budget] of Object.entries(budgets)) {
     raw += content.byteLength;
     gzip += gzipSync(content).byteLength;
   }
-  console.log(`${entry}: ${(raw / 1000).toFixed(1)} kB raw, ${(gzip / 1000).toFixed(1)} kB gzip; initial budget ${(budget / 1000).toFixed(0)} kB gzip`);
+  console.log(`${entry}: ${(raw / 1000).toFixed(1)} kB raw, ${(gzip / 1000).toFixed(1)} kB gzip; initial budget ${budget / 1000} kB gzip`);
   if (gzip > budget) failed = true;
 }
 if (failed) throw new Error('An initial delivery budget was exceeded. Review the import graph and measured cost.');

@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "id": "author-project-b91472a9-1e34-4b41-aa8a-7a5e32d099f0",
+  "metadata": {
+    "title": "Trombone Study",
+    "composer": "",
+    "subtitle": "Three measures"
+  },
+  "sourceHtml": "<music-staff id=\"trombone-study\" label=\"Trombone\" clef=\"bass\" measure-numbers=\"none\" print-width=\"940\" justify-last=\"\">\n  <music-measure id=\"trombone-m1\">\n    <music-meter id=\"trombone-meter-1\" top=\"4\" bottom=\"4\"></music-meter>\n    <music-note id=\"trombone-m1-n1\" pitch=\"G2\" duration=\"quarter\"></music-note>\n    <music-note id=\"trombone-m1-n2\" pitch=\"G2\" duration=\"quarter\"></music-note>\n    <music-note id=\"trombone-m1-n3\" pitch=\"G2\" duration=\"quarter\"></music-note>\n    <music-rest id=\"trombone-m1-r1\" duration=\"quarter\"></music-rest>\n  </music-measure>\n  <music-measure id=\"trombone-m2\">\n    <music-meter id=\"trombone-meter-2\" top=\"3\" bottom=\"4\"></music-meter>\n    <music-note id=\"trombone-m2-n1\" pitch=\"C3\" duration=\"16th\" beam=\"start\"></music-note>\n    <music-note id=\"trombone-m2-n2\" pitch=\"Ab2\" duration=\"eighth\" dots=\"1\" beam=\"end\"></music-note>\n    <music-note id=\"trombone-m2-n3\" pitch=\"E3\" duration=\"quarter\"></music-note>\n    <music-rest id=\"trombone-m2-r1\" duration=\"quarter\"></music-rest>\n  </music-measure>\n  <music-measure id=\"trombone-m3\" end-bar=\"final\">\n    <music-meter id=\"trombone-meter-3\" top=\"4\" bottom=\"4\"></music-meter>\n    <music-note id=\"trombone-m3-n1\" pitch=\"Eb3\" duration=\"16th\" beam=\"start\"></music-note>\n    <music-note id=\"trombone-m3-n2\" pitch=\"D3\" duration=\"16th\" beam=\"continue\"></music-note>\n    <music-note id=\"trombone-m3-n3\" pitch=\"A2\" duration=\"16th\" beam=\"continue\"></music-note>\n    <music-note id=\"trombone-m3-n4\" pitch=\"B2\" duration=\"16th\" beam=\"end\"></music-note>\n    <music-rest id=\"trombone-m3-r1\" duration=\"quarter\"></music-rest>\n    <music-rest id=\"trombone-m3-r2\" duration=\"16th\"></music-rest>\n    <music-note id=\"trombone-m3-n5\" pitch=\"F3\" duration=\"16th\" beam=\"start\"></music-note>\n    <music-note id=\"trombone-m3-n6\" pitch=\"C#3\" duration=\"16th\" beam=\"continue\"></music-note>\n    <music-note id=\"trombone-m3-n7\" pitch=\"Bb2\" duration=\"16th\" beam=\"end\"></music-note>\n    <music-note id=\"trombone-m3-n8\" pitch=\"Gb2\" duration=\"quarter\"></music-note>\n  </music-measure>\n</music-staff>",
+  "parts": [
+    {
+      "id": "trombone-part",
+      "label": "Trombone",
+      "staffIds": [
+        "trombone-study"
+      ]
+    }
+  ],
+  "columns": [
+    {
+      "id": "author-column-02b4a8f2-3cc9-4738-9b9f-2de5bb9671b1",
+      "measureIds": [
+        "trombone-m1"
+      ]
+    },
+    {
+      "id": "author-column-37335eb0-3ef0-42b4-877c-4dca723a9a86",
+      "measureIds": [
+        "trombone-m2"
+      ]
+    },
+    {
+      "id": "author-column-79ff2fb5-5b4c-46ae-812d-73ffcf00bacc",
+      "measureIds": [
+        "trombone-m3"
+      ]
+    }
+  ],
+  "layouts": {
+    "score": {
+      "paper": "letter",
+      "orientation": "portrait",
+      "marginMm": 15,
+      "staffScale": 1,
+      "measureNumbers": "system",
+      "maxMeasures": null,
+      "justifyLast": false,
+      "breaks": {},
+      "keeps": {},
+      "reviewedTurns": {}
+    },
+    "trombone-part": {
+      "paper": "letter",
+      "orientation": "portrait",
+      "marginMm": 15,
+      "staffScale": 1,
+      "measureNumbers": "system",
+      "maxMeasures": null,
+      "justifyLast": false,
+      "breaks": {},
+      "keeps": {},
+      "reviewedTurns": {}
+    }
+  },
+  "instructionScopes": {},
+  "reviewedShortMeasures": [],
+  "pendingSource": null,
+  "updatedAt": 1790521489633
+}

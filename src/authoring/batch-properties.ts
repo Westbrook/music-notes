@@ -1,5 +1,5 @@
-import { durationTime, pitchText, validateAlteration, validateArticulationType } from '../model/index.js';
-import type { ArticulationType, MusicEvent, Score } from '../model/types.js';
+import { durationTime, pitchText, validateAlteration, validateArticulationType, validateOrnamentType } from '../model/index.js';
+import type { MusicEvent, Score } from '../model/types.js';
 import type { EventPropertyChange } from './types.js';
 
 interface Member { event: MusicEvent; staffId: string; voiceIndex: number }
@@ -7,8 +7,8 @@ interface Mutation {
   eventId: string;
   rhythmChanged: boolean;
   attributes?: readonly (readonly [string, string | null])[];
-  addArticulation?: ArticulationType;
-  removeArticulationId?: string;
+  addMark?: { kind: 'articulation' | 'ornament'; type: string };
+  removeMarkIds?: readonly string[];
 }
 interface Plan { members: readonly Member[]; mutations: readonly Mutation[] }
 
@@ -82,6 +82,13 @@ function validateChange(change: EventPropertyChange): void {
       validateArticulationType(change.value);
       requireCondition(typeof change.present === 'boolean', 'Choose explicitly whether to add or remove this articulation.');
       break;
+    case 'ornament':
+      validateOrnamentType(change.value);
+      requireCondition(typeof change.present === 'boolean', 'Choose explicitly whether to add or remove this ornament.');
+      break;
+    case 'attacks':
+      requireCondition(change.value === 'none', 'Choose None to clear articulations and ornaments.');
+      break;
     default: throw new Error('Choose a shared duration, dot count, stem, accidental display, alteration, or articulation presence.');
   }
 }
@@ -130,17 +137,24 @@ function mutationFor(event: MusicEvent, change: EventPropertyChange): Mutation |
         eventId: event.id, rhythmChanged: false,
         attributes: [['pitch', pitchText({ ...event.pitches[0], alter: change.value })], ['accidental', null]],
       };
-    case 'articulation': {
-      if (change.present) requireCondition(change.value === 'fermata'
+    case 'articulation':
+    case 'ornament': {
+      if (change.present && change.property === 'articulation') requireCondition(change.value === 'fermata'
         || event.kind !== 'rest' && (event.kind !== 'slash' || event.rhythmic),
       named + 'rests and open slashes accept only a fermata. Choose written rhythm before adding an attack or release articulation.');
-      const matches = (event.markings ?? []).filter(mark => mark.kind === 'articulation' && mark.type === change.value);
+      if (change.present && change.property === 'ornament') requireCondition(event.kind === 'note' || event.kind === 'road',
+        named + 'ornaments require a single pitched note or road event.');
+      const matches = (event.markings ?? []).filter(mark => mark.kind === change.property && mark.type === change.value);
       requireCondition(matches.length <= 1, named + 'the same articulation is repeated. Resolve the duplicate source markings before editing their presence.');
       if (change.present) return matches.length ? undefined
-        : { eventId: event.id, rhythmChanged: false, addArticulation: change.value };
+        : { eventId: event.id, rhythmChanged: false, addMark: { kind: change.property, type: change.value } };
       // Removal is meaningful even when another selected event cannot receive this
       // articulation: an absent mark stays absent, without changing event kind.
-      return matches.length ? { eventId: event.id, rhythmChanged: false, removeArticulationId: matches[0].id } : undefined;
+      return matches.length ? { eventId: event.id, rhythmChanged: false, removeMarkIds: [matches[0].id] } : undefined;
+    }
+    case 'attacks': {
+      const ids = (event.markings ?? []).filter(mark => mark.kind === 'articulation' || mark.kind === 'ornament').map(mark => mark.id);
+      return ids.length ? { eventId: event.id, rhythmChanged: false, removeMarkIds: ids } : undefined;
     }
   }
 }
@@ -188,25 +202,26 @@ export function applyEventPropertyChange(
   const prepared = plan.mutations.map(mutation => {
     const owner = sources.get(mutation.eventId)!;
     const attributes = (mutation.attributes ?? []).filter(([name, value]) => owner.getAttribute(name) !== value);
-    const remove = mutation.removeArticulationId === undefined ? undefined : sources.get(mutation.removeArticulationId);
-    if (mutation.removeArticulationId !== undefined) {
-      requireCondition(remove?.localName === 'music-articulation' && remove.parentElement === owner,
-        'The named articulation must remain a direct child of event "' + mutation.eventId + '". Select its current source again.');
-    }
+    const remove = (mutation.removeMarkIds ?? []).map(id => {
+      const mark = sources.get(id);
+      requireCondition(mark && ['music-articulation', 'music-ornament'].includes(mark.localName) && mark.parentElement === owner,
+        'The named marking must remain a direct child of event "' + mutation.eventId + '". Select its current source again.');
+      return mark;
+    });
     return { mutation, owner, attributes, remove };
   });
   const changedEventIds: string[] = [];
   const rhythmChangedEventIds: string[] = [];
   for (const { mutation, owner, attributes, remove } of prepared) {
-    if (!attributes.length && !remove && !mutation.addArticulation) continue;
+    if (!attributes.length && !remove.length && !mutation.addMark) continue;
     for (const [name, value] of attributes) {
       if (value === null) owner.removeAttribute(name);
       else owner.setAttribute(name, value);
     }
-    remove?.remove();
-    if (mutation.addArticulation) {
-      const mark = create('music-articulation');
-      mark.setAttribute('type', mutation.addArticulation);
+    remove.forEach(mark => mark.remove());
+    if (mutation.addMark) {
+      const mark = create(`music-${mutation.addMark.kind}`);
+      mark.setAttribute('type', mutation.addMark.type);
       // Standard placement is automatic. Do not add a legacy override or rewrite
       // existing marks merely because they carry old placement attributes.
       owner.append(mark);

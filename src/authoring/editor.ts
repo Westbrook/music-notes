@@ -430,7 +430,7 @@ export class EditorSession extends EventTarget {
     draft.sourceHtml = getSourceHtml(source);
     amendProject?.(draft, result);
     const prepared = this.prepare(draft, draft.sourceHtml === getSourceHtml(source) ? source : undefined);
-    const advancesWriting = ['insert-event', 'append-and-insert', 'continue-piece', 'append-measure'].includes(command.type);
+    const advancesWriting = ['insert-event', 'paste-music', 'append-and-insert', 'continue-piece', 'append-measure'].includes(command.type);
     const cursor = prepared.project.id !== this.current.project.id ? undefined
       : result.cursor !== undefined ? resolveCursor(prepared.source, result.cursor)
         : this.current.independentSelection && !advancesWriting ? preserveCursor(this.current.source, prepared.source, this.current.cursor)

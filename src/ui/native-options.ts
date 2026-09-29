@@ -8,6 +8,7 @@ export interface NativeOption {
   readonly label: string;
   readonly icon?: IconDefinition;
   readonly disabled?: boolean;
+  readonly title?: string;
 }
 
 const boundaries = new WeakMap<HTMLSelectElement, Comment>();

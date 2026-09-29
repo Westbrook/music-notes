@@ -11,6 +11,42 @@ describe('planSystems', () => {
     expect(planSystems([], 800)).toEqual([]);
   });
 
+  it('uses the opening indent only once and fits more measures on continuation systems', () => {
+    const columns = Array.from({ length: 5 }, () => column(100, 100));
+    const rows = planSystems(columns, 320, { firstSystemIndent: 120, justifyLast: true });
+    expect(rows.map(row => [row.start, row.end])).toEqual([[0, 2], [2, 5]]);
+    expect(rows.map(row => row.width)).toEqual([200, 320]);
+    expect(rows.every(row => !row.overflow)).toBe(true);
+  });
+
+  it('fits keep chains against the width of the system they can start on', () => {
+    const laterKeep = planSystems([column(100, 100), column(120, 120, { keepWithNext: true }), column(120, 120)],
+      300, { firstSystemIndent: 120 });
+    expect(laterKeep.map(row => [row.start, row.end])).toEqual([[0, 1], [1, 3]]);
+    const openingKeep = planSystems([column(100, 100, { keepWithNext: true }), column(100, 100)],
+      300, { firstSystemIndent: 120 });
+    expect(openingKeep.map(row => [row.start, row.end])).toEqual([[0, 1], [1, 2]]);
+    expect(openingKeep.every(row => !row.overflow)).toBe(true);
+  });
+
+  it('reports opening overflow without charging the indent again after line or page breaks', () => {
+    const rows = planSystems([column(240, 240), column(240, 240, { breakBefore: 'line' }), column(240, 240, { breakBefore: 'page' })],
+      300, { firstSystemIndent: 100, justifyLast: true });
+    expect(rows.map(row => row.width)).toEqual([240, 300, 300]);
+    expect(rows.map(row => row.overflow)).toEqual([true, false, false]);
+    expect(rows.map(row => row.pageBreak)).toEqual([false, false, true]);
+  });
+
+  it('ignores invalid indentation and keeps oversized indentation finite', () => {
+    const columns = [column(100, 100), column(100, 100)];
+    for (const firstSystemIndent of [undefined, 0, -1, NaN, Infinity]) {
+      expect(planSystems(columns, 300, { firstSystemIndent })).toEqual(planSystems(columns, 300));
+    }
+    const rows = planSystems(columns, 300, { firstSystemIndent: 500 });
+    expect(rows.map(row => row.overflow)).toEqual([true, false]);
+    expect(rows.every(row => Number.isFinite(row.width))).toBe(true);
+  });
+
   it('covers every shared measure column exactly once without shrinking minima', () => {
     const columns = [column(110), column(170, 220), column(90), column(200, 240), column(80)];
     const rows = planSystems(columns, 480);

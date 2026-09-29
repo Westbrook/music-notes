@@ -31,8 +31,8 @@ const ownedKeys = new Set<string>();
 const tabNames = ['rhythm', 'markings', 'measure'] as const;
 const taskNames = ['edit', ...tabNames] as const;
 const panels = { edit: 'selection-inspector', rhythm: 'passage-inspector', markings: 'annotation-inspector', measure: 'measure-inspector' } as const;
-// Header-sized controls reserve one desktop row and two phone rows. Preserve
-// actual ink, target, and no-overlap checks within the resulting score region.
+// Header-sized controls use one wide row or musical rows above the fixed mode
+// row. Preserve actual ink, target, and no-overlap checks in the score region.
 const limits = { desktopFirstInk: 241, phoneFirstInk: 261, desktopScore: 399, shortScore: 150, shortPendingScore: 139,
   target: 43.75, pinnedScore: 719 } as const;
 const tests: Test[] = [];
@@ -347,7 +347,6 @@ async function recipe(fixture: Fixture, options: { kind?: string; pitch?: string
   if (options.kind) choose(fixture, '#event-kind', options.kind);
   if (options.pitch) write(fixture, '#event-pitch', options.pitch);
   if (options.position) choose(fixture, '#insert-position', options.position);
-  if (options.continuation !== undefined) check(fixture, '#continuation-enabled', options.continuation);
   await popup(fixture, '#entry-settings-trigger', '#entry-settings', false);
   if (options.duration !== undefined || options.dots !== undefined) {
     await popup(fixture, '#entry-value-trigger', '#entry-value-chooser', true);
@@ -399,17 +398,104 @@ function overlaps(a: Box, b: Box, tolerance = 0.25): boolean {
 function inside(inner: Box, outer: Box, tolerance = 0.75): boolean {
   return inner.left >= outer.left - tolerance && inner.right <= outer.right + tolerance && inner.top >= outer.top - tolerance && inner.bottom <= outer.bottom + tolerance;
 }
-function expectedPaletteLayout(fixture: Fixture): { height: number; rows: number; rowGap: number; controlSize: number } {
+function expectedPaletteLayout(fixture: Fixture): { height: number; rows: number; rowGap: number; controlSize: number; groupPadding: number; groupSize: number; musicalHeight: number; stacked: boolean } {
   const rootSize = Number.parseFloat(fixture.view.getComputedStyle(fixture.doc.documentElement).fontSize);
   const controlSize = Math.max(44, 2.75 * rootSize);
+  const groupPadding = 2;
+  const groupSize = controlSize + 2 * groupPadding;
   const phone = fixture.view.innerWidth <= 760;
   const short = fixture.view.innerHeight <= 480;
-  const rows = field(fixture, '#author-workbench').clientWidth <= Math.max(760, 47.5 * rootSize) ? 2 : 1;
+  const stacked = field(fixture, '#author-workbench').clientWidth < Math.max(1100, 68.75 * rootSize);
+  const musicalRows = stacked && fixture.doc.body.dataset.entryMode === 'true' ? 2 : 1;
+  const musicalHeight = musicalRows * groupSize + (musicalRows - 1) * 8;
+  const rows = stacked ? musicalRows + 1 : 1;
   const rowGap = phone ? 2 : fixture.view.innerWidth <= 1099 ? 8 : 14;
   const padding = short ? 2 : phone ? 4 : 6;
-  // The mode enclosure adds two border pixels; the dock has one top divider.
-  const height = Math.max(short ? 48 : 60, controlSize + 2 + (rows - 1) * (controlSize + rowGap) + 2 * padding + 1);
-  return { height, rows, rowGap, controlSize };
+  // Tray padding surrounds full-size targets; the dock adds a top divider.
+  const contentHeight = stacked ? musicalHeight + rowGap + groupSize : groupSize;
+  const height = Math.max(short ? 48 : 60, contentHeight + 2 * padding + 1);
+  return { height, rows, rowGap, controlSize, groupPadding, groupSize, musicalHeight, stacked };
+}
+function sharedGroupDesign(fixture: Fixture): Record<string, unknown> {
+  const inspect = (name: string, group: Element, control: Element, content: Element, label: Element, icon: Element, selected: Element | null) => {
+    assert(visible(fixture, group) && visible(fixture, control) && visible(fixture, label), `${name}: the compared group, control, and label must be rendered.`);
+    const groupStyle = fixture.view.getComputedStyle(group); const controlStyle = fixture.view.getComputedStyle(control);
+    const contentStyle = fixture.view.getComputedStyle(content); const labelStyle = fixture.view.getComputedStyle(label);
+    return { name, groupHeight: box(group).height, controlHeight: box(control).height,
+      group: { padding: groupStyle.padding, radius: groupStyle.borderRadius, gap: groupStyle.columnGap, surface: groupStyle.backgroundColor },
+      control: { padding: controlStyle.padding, radius: controlStyle.borderRadius },
+      content: { direction: contentStyle.flexDirection, alignment: contentStyle.alignItems, gap: contentStyle.rowGap },
+      label: { size: labelStyle.fontSize, lineHeight: labelStyle.lineHeight, weight: labelStyle.fontWeight },
+      icon: { width: box(icon).width, height: box(icon).height },
+      selectedFill: selected ? fixture.view.getComputedStyle(selected).backgroundColor : null,
+      selectedBorder: selected ? fixture.view.getComputedStyle(selected).borderColor : null };
+  };
+  const persistent = ['#toggle-entry', '#view-write'].map(selector => {
+    const control = field(fixture, selector); const group = control.parentElement!;
+    const content = control.querySelector('music-button-content');
+    const label = content?.shadowRoot?.querySelector('.label'); const icon = content?.shadowRoot?.querySelector('svg');
+    assert(content && label && icon, `${selector}: preserve the shared icon-over-label presentation.`);
+    return inspect(selector, group, control, content, label, icon, group.querySelector('[aria-pressed="true"]'));
+  });
+  const quickGroups = [...field(fixture, '#write-tools').querySelectorAll('music-toggle-button-group')].map(host => {
+    const group = host.shadowRoot?.querySelector('.controls');
+    const control = group?.querySelector(':scope > button, :scope > .overflow-wrap > select');
+    assert(group && control, `${host.id}: render a direct choice or native overflow control.`);
+    const content = control.matches('select')
+      ? [...group.querySelectorAll('.overflow > button, .overflow-face')].find(element => visible(fixture, element)) : control;
+    const label = content?.querySelector('.control-label'); const icon = content?.querySelector('svg');
+    assert(content && label && icon, `${host.id}: retain a visible icon and label when options collapse.`);
+    return inspect(host.id, group, control, content, label, icon,
+      group.querySelector(':scope > button[aria-pressed="true"], :scope > .overflow-wrap > select[data-selected="true"]'));
+  });
+  equal(quickGroups.length, 4, 'All four writing groups participate in the shared design');
+  const reference = persistent[0]; const { controlSize, groupSize, groupPadding } = expectedPaletteLayout(fixture);
+  for (const metrics of [...persistent, ...quickGroups]) {
+    assert(Math.abs(metrics.groupHeight - groupSize) <= 0.25 && Math.abs(metrics.controlHeight - controlSize) <= 0.25,
+      `${metrics.name}: the ${groupSize}px enclosure must preserve the full ${controlSize}px control height inside its tray padding.`);
+    equal(metrics.group.padding, `${groupPadding}px`, `${metrics.name}: pad every side of the choice-group tray`);
+    for (const key of ['group', 'control', 'content', 'label', 'icon'] as const) {
+      equal(metrics[key], reference[key], `${metrics.name}: match the mode group's ${key} presentation`);
+    }
+    if (metrics.selectedFill) equal(metrics.selectedFill, reference.selectedFill, `${metrics.name}: use the shared selected fill`);
+  }
+  assert(reference.selectedFill && reference.selectedFill !== reference.group.surface && reference.selectedFill !== 'rgba(0, 0, 0, 0)',
+    'The selected state must remain distinct from the common group surface.');
+  equal(persistent[1].selectedBorder, reference.selectedBorder, 'Workspace view and editing mode use the same emphasized selected border');
+  return { persistent, quickGroups };
+}
+async function scopedGroupSizing(fixture: Fixture): Promise<Record<string, unknown>> {
+  const dock = field(fixture, '#workspace-dock');
+  const groups = [...field(fixture, '#write-tools').querySelectorAll<HTMLElement>('music-toggle-button-group')];
+  const localGroup = groups[0];
+  assert(localGroup && groups.length === 4, 'Scoped sizing must exercise all four writing groups.');
+  const originalRegionSize = dock.style.getPropertyValue('--music-ui-control-size');
+  const originalHostSize = localGroup.style.getPropertyValue('--music-toggle-button-size');
+  const viewHeight = box(field(fixture, '#view-write')).height;
+  const measurements = (override = false) => {
+    const surfaces = [{ name: 'workspace-mode-slot', group: field(fixture, '#workspace-mode-slot'), size: 60 },
+      ...groups.map(host => ({ name: host.id, group: host.shadowRoot!.querySelector<HTMLElement>('.controls')!, size: override && host === localGroup ? 68 : 60 }))];
+    return surfaces.map(({ name, group, size }) => {
+      assert(visible(fixture, group), `${name}: the scoped group must remain rendered.`);
+      const groupHeight = box(group).height;
+      const controlHeights = [...group.querySelectorAll(':scope > button, :scope > .overflow-wrap > select')].map(control => box(control).height);
+      const paddedSize = size + 2 * expectedPaletteLayout(fixture).groupPadding;
+      assert(controlHeights.length > 0 && Math.abs(groupHeight - paddedSize) <= 0.25 && controlHeights.every(height => Math.abs(height - size) <= 0.25),
+        `${name}: the padded group must preserve each control's ${size}px ${override && name === localGroup.id ? 'host override' : 'regional token'}.`);
+      return { name, groupHeight, controlHeights };
+    });
+  };
+  try {
+    dock.style.setProperty('--music-ui-control-size', '60px'); await frames(fixture); await settle(fixture);
+    const regional = measurements();
+    equal(box(field(fixture, '#view-write')).height, viewHeight, 'A footer token override must stay scoped to the footer');
+    localGroup.style.setProperty('--music-toggle-button-size', '68px'); await frames(fixture); await settle(fixture);
+    return { regional, hostOverride: measurements(true) };
+  } finally {
+    if (originalRegionSize) dock.style.setProperty('--music-ui-control-size', originalRegionSize); else dock.style.removeProperty('--music-ui-control-size');
+    if (originalHostSize) localGroup.style.setProperty('--music-toggle-button-size', originalHostSize); else localGroup.style.removeProperty('--music-toggle-button-size');
+    await frames(fixture); await settle(fixture);
+  }
 }
 function layoutMetrics(fixture: Fixture): Record<string, unknown> {
   const root = surface(fixture); const layout = root.getLayoutGeometry()!; const svgs = [...root.shadowRoot!.querySelectorAll<SVGSVGElement>(`.${layout.projection} .system-row svg`)];
@@ -648,7 +734,7 @@ tests.push({
   gate: 'UX-STATIONARY-PALETTE', name: 'More, Mode, and Location stay fixed through pane toggles and edit feedback',
   async run() {
     const observations: Record<string, unknown>[] = [];
-    for (const [width, presentation, enlargedText] of [[1500, 'side', false], [390, 'sheet', false], [390, 'sheet', true]] as const) {
+    for (const [width, presentation, enlargedText] of [[1500, 'side', false], [1000, 'sheet', false], [390, 'sheet', false], [390, 'sheet', true]] as const) {
       const fixture = await mount(`Stationary palette with ${presentation} tools${enlargedText ? ' — CSS 20px root fixture, not OS text sizing or page zoom' : ''}`, width, 660);
       if (enlargedText) { fixture.doc.documentElement.style.fontSize = '20px'; await frames(fixture); await settle(fixture); }
       await applySource(fixture, leadSource(4)); await primeRedo(fixture, 'journey-n2a');
@@ -669,14 +755,17 @@ tests.push({
       const rectangles = () => ({ dock: box(field(fixture, '#workspace-dock')), modeSlot: box(field(fixture, '#workspace-mode-slot')),
         write: box(field(fixture, '#toggle-entry')), select: box(field(fixture, '#select-mode')), moreSlot: box(field(fixture, '#palette-more-slot')),
         more: box(field(fixture, moreSelector())), location: box(field(fixture, '#location-trigger')) });
-      const baseline = rectangles(); const expectedPalette = expectedPaletteLayout(fixture); const checkpoints: Record<string, unknown>[] = [];
+      const baseline = rectangles(); const baselinePalette = expectedPaletteLayout(fixture); const checkpoints: Record<string, unknown>[] = [];
+      let groupDesign: Record<string, unknown> | undefined;
       const viewport = { left: 0, top: 0, right: width, bottom: 660, width, height: 660 };
       const checkpoint = async (label: string, expectedPresentation: 'closed' | 'side' | 'sheet' = 'closed', preserveMusic = true) => {
         await frames(fixture); await settle(fixture);
-        const current = rectangles(); let maximumDeltaPx = 0;
+        const current = rectangles(); const expectedPalette = expectedPaletteLayout(fixture); let maximumDeltaPx = 0;
         const writing = field(fixture, '#toggle-entry').getAttribute('aria-pressed') === 'true';
+        if (writing && !groupDesign) groupDesign = sharedGroupDesign(fixture);
         for (const name of Object.keys(baseline) as (keyof typeof baseline)[]) {
-          for (const dimension of ['left', 'top', 'right', 'bottom', 'width', 'height'] as const) {
+          const dimensions = name === 'dock' ? ['left', 'right', 'bottom', 'width'] as const : ['left', 'top', 'right', 'bottom', 'width', 'height'] as const;
+          for (const dimension of dimensions) {
             const delta = Math.abs(current[name][dimension] - baseline[name][dimension]); maximumDeltaPx = Math.max(maximumDeltaPx, delta);
             assert(delta <= 0.5, `${label}: ${name}.${dimension} moved ${delta}px; More, Mode, and Location must stay within 0.5 CSS px of their original rectangles.`);
           }
@@ -695,19 +784,23 @@ tests.push({
         if (enlargedText) {
           equal(fixture.view.getComputedStyle(fixture.doc.documentElement).fontSize, '20px', `${label}: retain the explicit CSS root size without shrinking text`);
         }
-        if (expectedPalette.rows === 2) {
+        if (expectedPalette.stacked) {
           const musical = box(field(fixture, '#palette-musical-slots'));
-          assert(Math.abs(musical.top - current.modeSlot.bottom - expectedPalette.rowGap) <= 0.5
-            && Math.abs(musical.height - current.write.height) <= 0.5, `${label}: the musical controls must occupy the second actual row, below the mode enclosure with the ${expectedPalette.rowGap}px header row gap.`);
-          for (const control of dockControls) assert([current.write.top, musical.top].some(top => Math.abs(box(control).top - top) <= 0.5), `${label}: each visible palette control must belong to one of the two actual rows.`);
+          assert(Math.abs(current.modeSlot.top - musical.bottom - expectedPalette.rowGap) <= 0.5
+            && Math.abs(musical.height - expectedPalette.musicalHeight) <= 0.5, `${label}: the musical controls must stay above the fixed mode row, with the ${expectedPalette.rowGap}px header row gap and ${expectedPalette.musicalHeight}px for their ${writing ? 'two writing rows' : 'selection row'}.`);
+          const rowTops = [current.write.top, musical.top + expectedPalette.groupPadding,
+            musical.bottom - expectedPalette.groupPadding - expectedPalette.controlSize];
+          for (const control of dockControls) assert(rowTops.some(top => Math.abs(box(control).top - top) <= 0.5), `${label}: each visible palette control must belong to one of the ${expectedPalette.rows} actual rows.`);
         }
         const otherMore = moreSelector() === '#tools-toggle' ? '#edit-selected-event' : '#tools-toggle';
         assert(!visible(fixture, field(fixture, otherMore)), `${label}: only the current mode's More control may occupy the reserved slot.`);
         equal(fixture.doc.body.dataset.toolsPresentation, expectedPresentation, `${label}: use the actual side pane, sheet, or closed state`);
         assert(paper.isConnected && field(fixture, '#score-editor') === paper && surface(fixture) === originalSurface, `${label}: the same paper and public notation surface must stay mounted.`);
-        for (const dimension of ['left', 'top', 'width', 'height'] as const) {
+        for (const dimension of ['left', 'top', 'width'] as const) {
           assert(Math.abs(box(paper)[dimension] - paperBounds[dimension]) <= 0.5, `${label}: the chosen paper frame's ${dimension} must not change with palette or pane state.`);
         }
+        const expectedPaperHeight = paperBounds.height - (current.dock.height - baseline.dock.height);
+        assert(Math.abs(box(paper).height - expectedPaperHeight) <= 0.5, `${label}: only the additional musical row may reduce the paper frame's height; expected ${expectedPaperHeight}px.`);
         if (expectedPresentation === 'sheet') {
           assert(paper.inert && paper.getAttribute('aria-hidden') === 'true' && !visible(fixture, paper), `${label}: a sheet keeps the same paper mounted but hides it from interaction and accessibility.`);
         } else assert(!paper.inert && paper.getAttribute('aria-hidden') !== 'true' && visible(fixture, paper), `${label}: closed or side tools must leave the paper visible and interactive.`);
@@ -733,7 +826,7 @@ tests.push({
         }
         const feedback = field(fixture, '#workspace-feedback-label');
         checkpoints.push({ label, mode: writing ? 'write' : 'select', captionInk,
-          presentation: expectedPresentation, more: moreSelector(), maximumDeltaPx, stripHeight: current.dock.height,
+          presentation: expectedPresentation, more: moreSelector(), maximumDeltaPx, stripHeight: current.dock.height, paletteRows: expectedPalette.rows,
           feedbackKind: feedback.dataset.feedbackKind, feedback: feedback.getAttribute('aria-label') ?? feedback.textContent });
       };
 
@@ -787,12 +880,13 @@ tests.push({
       assert(!field<HTMLButtonElement>(fixture, '#redo').disabled, 'One Undo restores a real Redo action.');
       const restored = snapshot(fixture); await enter(fixture); await checkpoint('Resume the preserved full-bar writer after Undo', 'closed', false);
       unchanged(fixture, restored, 'Resume the original writer without changing music or selection', false);
+      const scopedSizes = width === 1500 ? await scopedGroupSizing(fixture) : undefined;
       click(fixture, '#select-mode'); await checkpoint('Park the same writer after Undo', 'closed', false); unchanged(fixture, restored, 'Park the original writer');
-      observations.push({ viewport: [width, 660], pane: presentation, textSizing: enlargedText ? 'Explicit CSS 20px root fixture; not OS preferences, page zoom, or native accessibility qualification' : 'Default text size', baselineRectangles: baseline, paperBounds, checkpoints,
-        rectangleTolerancePx: 0.5, paletteHeightPx: expectedPalette.height, paletteRows: expectedPalette.rows, paletteHeightTolerancePx: 1, targetMinimumPx: limits.target,
+      observations.push({ viewport: [width, 660], pane: presentation, textSizing: enlargedText ? 'Explicit CSS 20px root fixture; not OS preferences, page zoom, or native accessibility qualification' : 'Default text size', baselineRectangles: baseline, paperBounds, groupDesign, scopedSizes, checkpoints,
+        rectangleTolerancePx: 0.5, baselinePaletteHeightPx: baselinePalette.height, baselinePaletteRows: baselinePalette.rows, paletteHeightTolerancePx: 1, targetMinimumPx: limits.target,
         acceptedCorrectionTransactions: 1, rejectedEditTransactions: 0, undoTransactions: 1 });
     }
-    return { detail: 'The actual More, Write, Select, and Location controls keep their rectangles through side/sheet task toggles, native choosers, overflow Review, one accepted pitch correction, and one Undo. Pure workspace changes preserve Source, selection, recipe, and the existing Redo branch.', metrics: { observations } };
+    return { detail: 'Editing mode, workspace view, and quick writing groups share their measured control and label presentation. More, Write, Select, and Location keep their rectangles through side/sheet task toggles, native choosers, overflow Review, one accepted pitch correction, and one Undo. Pure workspace changes preserve Source, selection, recipe, and the existing Redo branch.', metrics: { observations } };
   },
 });
 
@@ -1242,7 +1336,7 @@ tests.push(
       const phone = await mount('Phone useful notation budgets', 390, 660); await applySource(phone, leadSource(8)); await tools(phone, false); phone.view.scrollTo(0, 0); field(phone, '#score-scroll').scrollTop = 0; await frames(phone);
       const regular = layoutMetrics(phone); assert(Number(regular.firstInk) <= limits.phoneFirstInk, `Phone first notation must appear by y=${limits.phoneFirstInk}, received ${regular.firstInk}.`); observations.push({ fixture: 'phone', ...regular });
       await recipe(phone, { pitch: 'F4', duration: 'quarter', dots: '0' }); await enter(phone); const entry = layoutMetrics(phone);
-      assert(Math.abs((entry.strip as Box).height - expectedPaletteLayout(phone).height) <= 1, 'Phone Enter mode must retain the two rows and spacing shared with the header.'); observations.push({ fixture: 'phone enter', ...entry });
+      assert(Math.abs((entry.strip as Box).height - expectedPaletteLayout(phone).height) <= 1, 'Phone Enter mode must place both writing rows above the fixed mode row with the expected spacing.'); observations.push({ fixture: 'phone enter', ...entry });
       click(phone, '#select-mode'); await resize(phone, 390, 360); await selectEvent(phone, 'journey-n6a'); await tools(phone, false); await reveal(phone, 'journey-n6a', 0.1);
       const short = layoutMetrics(phone); assert(Number(short.usableHeight) >= limits.shortScore, `Deep short-screen Select needs at least ${limits.shortScore}px of useful score, received ${short.usableHeight}.`);
       assert(Math.abs((short.strip as Box).height - expectedPaletteLayout(phone).height) <= 1, 'Short-screen Select must use the shared header padding while retaining both palette rows.'); observations.push({ fixture: 'short deep Select', ...short });
@@ -1474,6 +1568,9 @@ tests.push(
       const missing = snapshot(fixture); click(fixture, '#toggle-entry'); await frames(fixture); await settle(fixture);
       unchanged(fixture, missing, 'Fixed Write refuses a missing writing location'); equal(entryAction.getAttribute('aria-pressed'), 'false', 'A missing bookmark must not silently start writing at the selection');
       equal(palette(fixture), parkedRecipe, 'The rejected Write request must preserve the uncommitted recipe');
+      assert(field(fixture, '#location-panel').matches(':popover-open'), 'Write must open the location chooser directly when its saved point is unavailable.');
+      assert(authorActiveElement(fixture.doc) === field(fixture, '#start-entry-here'), 'Recovery must focus the explicit Start action.');
+      click(fixture, '#close-location'); await frames(fixture);
       const feedback = field(fixture, '#workspace-feedback-label'); const status = feedback.getAttribute('aria-label') ?? feedback.textContent?.trim() ?? ''; const startLabel = label.textContent?.trim() ?? '';
       assert(visible(fixture, feedback) && /unavailable|changed|missing/i.test(status) && /location|start writing here/i.test(status), 'The persistent header must explain the unavailable writing point and its deliberate local recovery.');
       assert(visible(fixture, label) && /^write notes$/i.test(startLabel), 'Missing bookmarks must not replace the fixed Write notes mode label.');
@@ -1493,7 +1590,7 @@ tests.push(
       const resume = field<HTMLButtonElement>(fixture, '#resume-entry'); assert(!visible(fixture, resume) || resume.disabled, 'An unavailable bookmark must not remain an enabled advertised Resume action.');
       await staleActivation(fixture, '#resume-entry'); unchanged(fixture, missing, 'Stale quiet Resume for a removed writing point'); equal(palette(fixture), parkedRecipe, 'Rejected stale Resume must retain the recipe');
       await popup(fixture, '#location-trigger', '#location-panel', true); const start = field<HTMLButtonElement>(fixture, '#start-entry-here'); const namedLocation = `${start.textContent} ${field(fixture, '#location-context').textContent}`;
-      assert(visible(fixture, reason) && /can['’]t resume/i.test(reason.textContent ?? ''), 'Location must retain the complete missing-bookmark explanation beside recovery.');
+      assert(visible(fixture, reason) && /removed or changed/i.test(reason.textContent ?? '') && /Start writing here/.test(reason.textContent ?? ''), 'Location must explain the missing writing point and the action that recovers it.');
       assert(visible(fixture, start) && !start.disabled && /(?:bar|measure)\s*2(?:\D|$)/i.test(namedLocation) && namedLocation.includes('Journey lead'), `The explicit Start action must name the surviving staff and bar 2 in its visible local context; received ${JSON.stringify(namedLocation)}.`);
       click(fixture, '#start-entry-here'); await frames(fixture); await settle(fixture); equal(value(fixture, '#measure-select'), 'journey-m2', 'The explicit local Start action chooses the named surviving location'); equal(field(fixture, '#toggle-entry').getAttribute('aria-pressed'), 'true', 'Explicit Start activates entry at the chosen surviving point');
       equal(palette(fixture), parkedRecipe, 'Starting at a new named location reuses the preserved recipe'); unchanged(fixture, missing, 'Choose a replacement writing point');
@@ -1655,11 +1752,13 @@ async function visualFixture(kind: 'desktop' | 'phone' | 'short' | 'piano'): Pro
 }
 async function run(): Promise<void> {
   if (busy) return; setBusy(true); fixtures.replaceChildren(); visualFixtures.replaceChildren();
+  const gate = new URLSearchParams(window.location.search).get('gate');
+  const selectedTests = gate === null ? tests : tests.filter(test => test.gate === gate);
   for (const key of ownedKeys) localStorage.removeItem(key); ownedKeys.clear(); results.replaceChildren(); token = crypto.randomUUID(); sequence = 0; latestFixture = undefined;
   summary.dataset.state = 'running'; environment.textContent = `${navigator.userAgent}; public actual Author fixtures. Layout limits locked before implementation measurements: ${JSON.stringify(limits)}.`;
   const report: Result[] = [];
-  for (const [index, test] of tests.entries()) {
-    summary.textContent = `Running ${index + 1}/${tests.length}: ${test.gate} — ${test.name}`;
+  for (const [index, test] of selectedTests.entries()) {
+    summary.textContent = `Running ${index + 1}/${selectedTests.length}: ${test.gate} — ${test.name}`;
     const item = document.createElement('li'); item.dataset.state = 'running'; const title = document.createElement('strong'); title.textContent = `Running: ${test.gate} — ${test.name}`; item.append(title); results.append(item);
     try {
       const outcome = await test.run(); item.dataset.state = 'passed'; title.textContent = `PASS — ${test.gate}: ${test.name}`;
@@ -1672,7 +1771,9 @@ async function run(): Promise<void> {
     }
   }
   const passed = report.filter(result => result.passed).length; const failed = report.length - passed;
-  summary.dataset.state = failed ? 'failed' : 'passed'; summary.textContent = `${passed}/${tests.length} scripted workspace journeys passed${failed ? `; ${failed} failed` : ''}. Trusted input, software keyboard, a human long-session walkthrough, and PDF/print qualification are separate.`;
+  summary.dataset.state = failed || selectedTests.length === 0 ? 'failed' : 'passed';
+  summary.textContent = selectedTests.length === 0 ? `No scripted workspace journeys match gate ${JSON.stringify(gate)}.`
+    : `${passed}/${selectedTests.length} scripted workspace journeys passed${failed ? `; ${failed} failed` : ''}. Trusted input, software keyboard, a human long-session walkthrough, and PDF/print qualification are separate.`;
   let output = document.querySelector<HTMLScriptElement>('#workspace-browser-results'); if (!output) { output = document.createElement('script'); output.id = 'workspace-browser-results'; output.type = 'application/json'; document.body.append(output); }
   output.textContent = JSON.stringify({ state: summary.dataset.state, passed, failed, limits, results: report,
     notQualified: ['trusted native keyboard/pickers', 'touch/pen capture', 'software keyboard', 'twenty-minute human walkthrough', 'saved PDF and physical printing'] }, null, 2);

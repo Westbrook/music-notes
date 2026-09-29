@@ -27,6 +27,7 @@ const ANNOTATION_GAP = 8;
 const STAFF_GAP = 24;
 const INCOMING_TIE_SPACE = 20;
 const RIGHT_MARGIN = 20;
+const LABEL_X = 8;
 const Glyphs = VexFlow.Glyphs;
 const REST_GLYPH: Record<Duration, string> = {
   breve: Glyphs.restDoubleWhole, whole: Glyphs.restWhole, half: Glyphs.restHalf,
@@ -1018,14 +1019,18 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
   container.replaceChildren();
   if (!score.staves.length || !score.staves[0].measures.length) return { systems: [], hitRegions, diagnostics, systemGeometry: geometry };
   const labelsWidth = Math.max(0, ...score.staves.map((staff) => staff.label ? textWidth(staff.label) + 14 : 0));
-  const left = 12 + labelsWidth + (score.bracket === 'none' ? 0 : 20);
+  const connectorSpace = score.bracket === 'none' ? 0 : 20;
+  const firstLeft = 12 + labelsWidth + connectorSpace;
+  const continuationLeft = labelsWidth ? LABEL_X + connectorSpace : firstLeft;
   const viewportWidth = Number.isFinite(options.width) ? Math.max(1, Math.floor(options.width)) : 1;
-  const systems = planSystems(columnSizes(score), Math.max(1, viewportWidth - left - RIGHT_MARGIN), {
+  const systems = planSystems(columnSizes(score), Math.max(1, viewportWidth - continuationLeft - RIGHT_MARGIN), {
     maxMeasures: options.maxMeasures, justifyLast: options.justifyLast, maxStretch: 1.5,
+    firstSystemIndent: firstLeft - continuationLeft,
   });
   const drawnNotes = new Map<string, DrawnNote>();
   const drawnSystems: DrawnSystem[] = [];
   systems.forEach((system, systemIndex) => {
+    const left = systemIndex === 0 ? firstLeft : continuationLeft;
     const wrapper = document.createElement('div');
     wrapper.className = 'system-row';
     wrapper.dataset.systemIndex = String(systemIndex);
@@ -1127,11 +1132,12 @@ export function renderScore(container: HTMLElement, score: Score, options: Engra
       const annotations = placeAnnotations(columns, staffIndex, visibleInk(group));
       annotations.forEach(item => group.append(drawAnnotation(item, context)));
       const label = score.staves[staffIndex].label;
-      if (label) {
+      // Instrument identity belongs to the opening system, including across page breaks.
+      if (label && index === 0) {
         const labelGroup = context.openGroup('staff-label');
         const stave = columns[0].staves[staffIndex].stave;
         const center = (stave.getYForLine(0) + stave.getYForLine(stave.getNumLines() - 1)) / 2;
-        context.setFont('Academico', '13px').fillText(label, 8, center + 4);
+        context.setFont('Academico', '13px').fillText(label, LABEL_X, center + 4);
         context.closeGroup();
         group.append(labelGroup);
       }

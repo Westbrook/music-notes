@@ -75,7 +75,7 @@ const tools: readonly WorkspaceTool[] = ['edit', ...generalTools];
 const toolLabels: Record<WorkspaceTool, string> = { edit: 'Properties', rhythm: 'Relationships', markings: 'Instructions', measure: 'Measure' };
 
 function isViewMode(value: string | undefined): value is ViewMode {
-  return value === 'write' || value === 'read' || value === 'pages';
+  return value === 'write' || value === 'read' || value === 'listen' || value === 'pages';
 }
 
 function presentation(state: Pick<WorkspaceToolsState, 'mode' | 'open' | 'expanded' | 'panePlacement'>): WorkspaceToolsPresentation {

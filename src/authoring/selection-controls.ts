@@ -4,7 +4,9 @@ import { durationIcon, eventIcon, markingIcon } from '../ui/notation-icons.js';
 import { setControlLabel, setControlIcon } from '../ui/control-content.js';
 import { formatRational, harmonyIntervalText, pitchDescription, pitchText, validateAlteration } from '../model/index.js';
 import type { ArticulationType, Duration, EventMarking, MusicEvent, PitchDirection, Score, Step } from '../model/types.js';
-import { composedAncestors } from '../ui/composed-dom.js';
+import { composedAncestors, composedContains } from '../ui/composed-dom.js';
+import type { MusicToggleButtonGroup } from '../ui/toggle-button-group.js';
+import { ENTRY_ACCIDENTAL_OPTIONS, ENTRY_ATTACK_OPTIONS, ENTRY_DOTS_OPTIONS, entryAttack, entryDurationOptions } from './entry-palette.js';
 import { analyzeEventPropertyChange } from './batch-properties.js';
 import { asControlScope } from './control-scope.js';
 import type { ControlRoot, ControlScope } from './control-scope.js';
@@ -79,6 +81,7 @@ const accidentals = [['selection-flat', -1], ['selection-natural', 0], ['selecti
 const chooserAccidentals = accidentals.map(([id, alter]) => [id.replace('selection-', 'selection-chooser-'), alter] as const);
 const directions = [['selection-higher', 'higher'], ['selection-same', 'same'], ['selection-lower', 'lower']] as const;
 const staleMessage = 'The selected music changed. Choose the current control again before applying this edit.';
+const quickGroups = ['selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack'] as const;
 const heldMessage = 'Properties is holding another target. Return to that target or discard its draft before using this action.';
 
 function binding(state: SelectionControlsState): Binding {
@@ -159,6 +162,8 @@ export class SelectionControls {
   private disposed = false;
   private errorMessage = '';
   private errorSurface?: SurfaceName;
+  private readonly releaseRoots: (() => void)[] = [];
+  private quickKey = '';
 
   constructor(options: SelectionControlsOptions, root: ControlRoot = document) {
     this.options = options;
@@ -166,6 +171,11 @@ export class SelectionControls {
     this.document = this.scope.document;
     this.toolbar = this.el('selection-controls');
     this.rendered = binding(options.state());
+    for (const id of quickGroups) {
+      const group = this.el(id) as MusicToggleButtonGroup;
+      group.mount();
+      this.releaseRoots.push(this.scope.register(group.shadowRoot!));
+    }
     for (const name of surfaceNames) enhanceSelects(this.panel(name));
     this.ensureAlterations('selection-alteration');
     this.ensureAlterations('selection-shared-alteration');
@@ -266,6 +276,7 @@ export class SelectionControls {
     this.invalidateActivation(); this.close(); this.abort.abort(); this.surfaces.dispose(); this.disposed = true;
     for (const timer of this.cleanupTimers) clearTimeout(timer);
     this.cleanupTimers.clear();
+    this.releaseRoots.forEach(release => release());
   }
 
   private el(id: string): HTMLElement {
@@ -342,7 +353,27 @@ export class SelectionControls {
     this.toolbar.addEventListener('keydown', event => this.rove(event), { signal });
     this.toolbar.addEventListener('focusin', () => this.tabStops(), { signal });
 
-    for (const [id, alter] of accidentals) this.listen(id, 'click', () => this.changeProperty({ property: 'alter', value: alter, ties: 'reject' }, undefined, this.button(id)));
+    for (const id of quickGroups) {
+      const group = this.el(id) as MusicToggleButtonGroup;
+      const capture = (event: Event): void => {
+        if (event instanceof PointerEvent && (event.button !== 0 || !event.isPrimary)) return;
+        if (event instanceof KeyboardEvent && !['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+        if (group.disabled) return;
+        this.activation = { element: group, binding: this.rendered, cancelled: false };
+      };
+      group.addEventListener('pointerdown', capture, { capture: true, signal });
+      group.addEventListener('keydown', capture, { capture: true, signal });
+      group.addEventListener('change', event => {
+        if (event.target !== group) return;
+        // A rejected edit must restore the accepted value even when the score
+        // revision did not change. Other workspace refreshes can reuse it.
+        this.quickKey = '';
+        try {
+          const value = (event as CustomEvent<{ value?: string }>).detail?.value ?? group.value;
+          this.changeProperty(this.quickChange(id, value, this.options.state()), undefined, group);
+        } catch (error) { this.fail(error instanceof Error ? error.message : String(error)); this.refresh(); }
+      }, { signal });
+    }
     for (const [id, alter] of chooserAccidentals) this.listen(id, 'click', () => this.changeProperty({ property: 'alter', value: alter, ties: 'reject' }, 'pitch', this.button(id)));
     for (const [id, direction] of directions) this.listen(id, 'click', () => this.changeDirection(direction, undefined, this.button(id)));
     for (const name of surfaceNames) {
@@ -548,7 +579,7 @@ export class SelectionControls {
 
   private changeProperty(change: EventPropertyChange, name?: SurfaceName, element?: HTMLElement): void {
     const state = this.guard(name, element);
-    if (!state) return;
+    if (!state) { this.refresh(); return; }
     const reason = writingReason(state) ?? selectionReason(state)
       ?? (state.activeMarkingId ? 'Select the parent event to change its musical values.' : undefined);
     const analysis = analyzeEventPropertyChange(state.score, state.eventIds, change);
@@ -557,6 +588,46 @@ export class SelectionControls {
     }
     if (!analysis.changedEventIds.length) { this.clearError(); this.refresh(); this.options.success?.(); return; }
     this.perform({ type: 'set-events-property', eventIds: [...state.eventIds], change }, name);
+  }
+
+  private quickChange(id: string, value: string, state: SelectionControlsState): EventPropertyChange {
+    if (id === 'selection-accidentals') return { property: 'alter', value: validateAlteration(Number(value)), ties: 'reject' };
+    if (id === 'selection-quick-duration') return { property: 'duration', value: value as Duration };
+    if (id === 'selection-quick-dots') return { property: 'dots', value: Number(value) };
+    const attack = entryAttack(value);
+    if (!attack) return { property: 'attacks', value: 'none' };
+    const present = !state.events.every(event => event.markings?.some(mark => mark.kind === attack.kind && mark.type === attack.type));
+    return attack.kind === 'articulation' ? { property: 'articulation', value: attack.type, present }
+      : { property: 'ornament', value: attack.type, present };
+  }
+
+  private renderQuick(state: SelectionControlsState, events: readonly MusicEvent[]): void {
+    const key = binding(state).key;
+    if (this.quickKey === key) return;
+    this.quickKey = key;
+    const values = [common(events.flatMap(event => event.pitches.map(pitch => pitch.alter))),
+      common(events.map(event => event.duration)), common(events.map(event => event.dots)), ''];
+    const options = [ENTRY_ACCIDENTAL_OPTIONS, entryDurationOptions(!!events.length && events.every(event => event.kind === 'rest')), ENTRY_DOTS_OPTIONS, ENTRY_ATTACK_OPTIONS];
+    quickGroups.forEach((id, index) => {
+      const group = this.el(id) as MusicToggleButtonGroup;
+      group.value = values[index]; group.mixed = values[index] === ''; group.notifyUnchanged = true;
+      group.options = options[index].map(option => {
+        const reason = this.propertyReason(state, this.quickChange(id, option.value, state));
+        return { ...option, disabled: !!reason, title: reason ?? option.label };
+      });
+      group.disabled = group.options.every(option => option.disabled);
+      group.title = group.disabled ? this.propertyReason(state, this.quickChange(id, options[index][0].value, state)) ?? '' : '';
+      if (id === 'selection-quick-attack') {
+        group.choiceStates = Object.fromEntries(ENTRY_ATTACK_OPTIONS.map(option => {
+          const attack = entryAttack(option.value);
+          const count = events.filter(event => attack ? event.markings?.some(mark => mark.kind === attack.kind && mark.type === attack.type)
+            : !event.markings?.some(mark => mark.kind === 'articulation' || mark.kind === 'ornament')).length;
+          return [option.value, !count ? 'false' : count === events.length ? 'true' : 'mixed'];
+        }));
+      }
+      group.mount();
+    });
+    this.el('selection-quick-tools').hidden = !!state.activeMarkingId || !!state.pitchDragArmed || !events.length;
   }
 
   private changeDirection(value: PitchDirection, name?: SurfaceName, element?: HTMLElement): void {
@@ -613,7 +684,7 @@ export class SelectionControls {
     else this.fail(error instanceof Error ? error.message : String(error ?? 'The change could not be applied.'), name);
     if (active && next.target === before.target) {
       const openSurface = surfaceNames.find(surface => this.surfaces.isOpen(this.panel(surface).id) && this.panel(surface).contains(active));
-      if (this.usable(active) && (this.toolbar.contains(active) || openSurface)) {
+      if (this.usable(active) && (composedContains(this.toolbar, active) || openSurface)) {
         if (this.scope.activeElement !== active) active.focus({ preventScroll: true });
       } else if (openSurface) {
         const counterpart = active.id === 'selection-add-articulation' ? this.button('selection-remove-articulation')
@@ -703,7 +774,7 @@ export class SelectionControls {
 
   private render(state: SelectionControlsState): void {
     const active = this.scope.activeElement as HTMLElement | null;
-    const hadFocus = !!active && this.toolbar.contains(active);
+    const hadFocus = !!active && composedContains(this.toolbar, active);
     const valid = !selectionReason(state);
     const event = valid && state.eventIds.length === 1 ? state.event : undefined;
     const events = valid ? state.events : [];
@@ -744,12 +815,8 @@ export class SelectionControls {
     this.button('selection-value').setAttribute('aria-label', single && event.measureRest ? 'Value follows the meter'
       : nominalSpan ? 'Edit open slash nominal span in Properties' : group ? `Value for ${state.eventIds.length} selected events: ${writtenValue}` : `Value: ${writtenValue}`);
     this.button('selection-value').title = rhythmReason ?? 'Change the selected music’s written value and dots.';
-    this.el('selection-accidentals').hidden = !single || event?.kind !== 'note';
+    this.renderQuick(state, state.activeMarkingId ? [] : events);
     this.el('selection-road-directions').hidden = !single || event?.kind !== 'road';
-    for (const [id, alter] of accidentals) {
-      this.setButton(id, single && event?.kind === 'note', alterationReason);
-      this.button(id).setAttribute('aria-checked', String(single && event?.kind === 'note' && event.pitches[0]?.alter === alter));
-    }
     for (const [id, direction] of directions) {
       this.setButton(id, single && event?.kind === 'road', baseReason ?? roadReason(event, direction));
       this.button(id).setAttribute('aria-checked', String(single && event?.kind === 'road' && event.pitchDirection === direction));
@@ -893,25 +960,31 @@ export class SelectionControls {
     }
   }
 
-  private usable(element: HTMLElement): boolean {
+  private usable(element: HTMLElement, visibility?: Map<Element, boolean>): boolean {
     if (!element.isConnected || element.matches(':disabled')) return false;
     for (const ancestor of [element, ...composedAncestors(element)]) {
-      if (ancestor.matches('[hidden], [inert], [aria-hidden="true"]')) return false;
-      const style = this.document.defaultView?.getComputedStyle(ancestor);
-      if (style?.display === 'none' || style?.visibility === 'hidden') return false;
+      let visible = visibility?.get(ancestor);
+      if (visible === undefined) {
+        const style = this.document.defaultView?.getComputedStyle(ancestor);
+        visible = !ancestor.matches('[hidden], [inert], [aria-hidden="true"]') && style?.display !== 'none' && style?.visibility !== 'hidden';
+        visibility?.set(ancestor, visible);
+      }
+      if (!visible) return false;
     }
     return true;
   }
 
   private toolbarButtons(): HTMLButtonElement[] {
-    return [...this.toolbar.querySelectorAll<HTMLButtonElement>('button')].filter(button => this.usable(button));
+    const visibility = new Map<Element, boolean>();
+    return [...quickGroups.flatMap(id => [...this.el(id).shadowRoot!.querySelectorAll<HTMLButtonElement>('.controls > button')]),
+      ...this.toolbar.querySelectorAll<HTMLButtonElement>('button')].filter(button => this.usable(button, visibility));
   }
 
   private tabStops(): void {
     const buttons = this.toolbarButtons();
     const focused = this.scope.activeElement;
     const current = buttons.find(button => button === focused) ?? buttons.find(button => button.tabIndex === 0) ?? buttons[0];
-    for (const button of this.toolbar.querySelectorAll<HTMLButtonElement>('button')) button.tabIndex = button === current ? 0 : -1;
+    for (const button of buttons) button.tabIndex = button === current ? 0 : -1;
   }
 
   private rove(event: KeyboardEvent): void {

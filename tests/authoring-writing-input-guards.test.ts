@@ -113,7 +113,10 @@ describe('Source cannot silently replace an active writing destination', () => {
     const recovery = el('workspace-feedback-label'); expect(recovery.closest('[hidden]')).toBeNull();
     expect(recovery.textContent).toMatch(/writing|destination|unavailable|location/i);
     await click('toggle-entry'); expect(accepted()).toEqual(afterApply);
-    expect(el('author-errors').textContent).toMatch(/Location.*Start writing here/);
+    expect(el('author-errors').hidden).toBe(true);
+    expect(el('location-panel').dataset.surfaceState).toBe('open');
+    expect(authorActiveElement(document)).toBe(el('start-entry-here'));
+    expect(el('entry-mode-reason').textContent).toMatch(/Start writing here/);
   });
 
   it('retains a valid writer through an unrelated accepted Source edit', async () => {
@@ -130,6 +133,34 @@ describe('Source cannot silently replace an active writing destination', () => {
 });
 
 describe('a transient surface suspends score input without changing Writing', () => {
+  it.each(['entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack'])(
+    'owns the %s shadow picker and keeps its dismissal press from reaching the score', async id => {
+      await mountWriting();
+      const picker = el(id).shadowRoot?.querySelector<HTMLSelectElement>('select');
+      expect(picker).not.toBeNull();
+      let open = true;
+      const matches = picker!.matches.bind(picker);
+      // Mock the native open state, not the browser's picker or dismissal timing.
+      vi.spyOn(picker!, 'matches').mockImplementation(selector => selector === ':open' ? open : matches(selector));
+      const before = accepted();
+      await key('Enter'); expect(accepted()).toEqual(before);
+      const escape = await key('Escape');
+      expect(escape.defaultPrevented).toBe(false); expect(accepted()).toEqual(before);
+
+      pointer('pointerdown', true);
+      open = false;
+      pointer('pointerup', true); notation('c', true); await flush();
+      expect(el('toggle-entry').getAttribute('aria-pressed')).toBe('true');
+      expect(accepted()).toEqual(before);
+
+      pointer('pointerdown', true); pointer('pointerup', true); notation('c', true); await flush();
+      expect(el('select-mode').getAttribute('aria-pressed')).toBe('true');
+      expect(app!.session.selection.ids).toContain('c');
+      expect(app!.session.project.sourceHtml).toBe(before.source);
+      expect(app!.session.revision).toBe(before.revision);
+    },
+  );
+
   it('Escape from deliberately returned score focus closes the entry-value fallback without changing music or tool', async () => {
     await mountWriting(); await click('entry-value-trigger');
     const panel = el('entry-value-chooser'); expect(panel.dataset.popoverFallback).toBe('true'); expect(panel.hidden).toBe(false);

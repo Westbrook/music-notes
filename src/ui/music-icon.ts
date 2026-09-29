@@ -2,6 +2,7 @@ import { css, LitElement } from 'lit';
 import type { TemplateResult } from 'lit';
 import { iconGraphic } from './icon-graphics.js';
 import type { IconDefinition } from './icon-definition.js';
+import './design-tokens.css';
 
 export type { IconDefinition } from './icon-definition.js';
 
@@ -12,8 +13,8 @@ export class MusicIcon extends LitElement {
   static override styles = css`
     :host {
       display: inline-block;
-      width: var(--music-icon-size, 1.25rem);
-      height: var(--music-icon-size, 1.25rem);
+      width: var(--music-icon-size, var(--music-ui-icon-size));
+      height: var(--music-icon-size, var(--music-ui-icon-size));
       flex: none;
       line-height: 0;
       vertical-align: -0.15em;

@@ -2,7 +2,7 @@
 
 Music notation written in readable HTML, rendered as SVG in the browser. Custom elements are the source data; a separate score model preserves musical structure and exact timing. VexFlow 5.0.0 supplies engraving primitives and locally bundled music fonts. No font CDN is required.
 
-This is a source project, not a published npm package. The notation workbook demonstrates the renderer; a separate **Author** workspace supports composition, reading, and page preparation using the same musical DOM and engraving system. Playback is not implemented.
+This is a source project, not a published npm package. The notation workbook demonstrates the renderer; a separate **Author** workspace supports composition, reading, and page preparation using the same musical DOM and engraving system. **Listen** plays the current accepted score in the browser and downloads the same synthesized audio as a WAV file.
 
 The [third-party notices](THIRD_PARTY_NOTICES.md) preserve the renderer and bundled font licenses. Production builds include a copy as `THIRD_PARTY_NOTICES.txt`.
 
@@ -19,7 +19,7 @@ Open `/index.html` for the notation workbook or `/author.html` for Author. They 
 
 The workbook contains eleven original studies: pitch spelling, 7/8, 15/8, 5/4, mixed and nested tuplets, improvisation notation, piano voices, ensemble layout, quarter-tones with a single-line rhythm part, **3 roads music**, and articulations with relative interval harmonies. The ensemble shows the same music twice: first with automatic wrapping, then with optional author-chosen line and page breaks, for twelve score views in total.
 
-Author opens recovered local work or a blank staff. **Write** offers explicit pitch and rhythm entry, voices, tuplets, harmony, performance instructions, and undo/redo. **Read** hides entry controls and holds the reading width until you refit it. **Pages** composes the selected score or part into paper-sized pages with independent layout settings and human page-turn review. Parts retain authored pitches; no transposition is implied. See the [Author workspace guide](docs/author-workspace.md) for the controls, recovery, source editing, and printing workflow.
+Author opens recovered local work or a blank staff. **Write** offers explicit pitch and rhythm entry, voices, tuplets, harmony, performance instructions, and undo/redo. **Read** hides entry controls and holds the reading width until you refit it. **Listen** adds play/pause, stop, starting tempo, note highlighting and WAV download. **Pages** composes the selected score or part into paper-sized pages with independent layout settings and human page-turn review. Parts retain authored pitches; no transposition is implied. See the [Author workspace guide](docs/author-workspace.md) for the controls, recovery, source editing, and printing workflow.
 
 In Write, the fixed **Write notes / Select** controls share a compact palette. **Write notes** resumes the saved writing destination without replacing the selected music or an unapplied Properties draft. Click the staff to place a single pitched note or an ordinary rest; prepare the drag handle in note options when you want to drag instead. Ordinary rests work on pitched, rhythm and three-roads staves without inventing a pitch. Full-measure rests, chords, rhythm notes, road notes and slashes retain explicit Insert / Enter routes. The preview and musical boundary are validated before one undoable edit.
 
@@ -32,6 +32,40 @@ Routine notation notices stay in **Review**, so completing a bar does not move t
 The selected-event editor also offers **Attached marks**. Add or remove articulations, ornaments, and three-roads interval harmonies, then apply the draft as one undoable change. These children stay with their event through duplication, source edits, and compatible event conversions.
 
 Author attempts local recovery saves after a short pause in editing. Saves use Web Locks to coordinate cooperating tabs; browsers without that coordination do not silently fall back to unsafe autosaving. Storage failures and conflicts remain visible. **Download project** keeps a portable copy, including layout settings and unapplied source drafts. Browser storage is not a backup.
+
+## GitHub Pages
+
+The source lives on `main`; the generated site is published from the root of
+`gh-pages` in [Westbrook/music-notes](https://github.com/Westbrook/music-notes).
+The [workbook](https://westbrook.github.io/music-notes/) and
+[Author](https://westbrook.github.io/music-notes/author.html) remain separate entries.
+
+```sh
+npm ci
+npm run build:pages
+npm run check:bundle
+npx playwright install chromium
+npm run test:pages:browser
+```
+
+The `pages` build mode sets Vite's base to `/music-notes/`, including asset URLs
+and Author's workbook links. Ordinary `npm run dev` and `npm run build` keep the
+root base. The production browser check serves `dist` at the project prefix,
+uses isolated browser storage, and checks navigation, engraving and WAV export.
+
+After running the relevant repository checks and committing the source to `main`:
+
+```sh
+git push origin main
+npm run deploy:pages
+```
+
+`deploy:pages` rebuilds the site, checks bundle budgets, and uses the pinned
+`gh-pages` tool to commit and push `dist` to `origin/gh-pages`. It preserves
+deployment history and includes `.nojekyll`. Only built assets are published;
+tests, local compositions and the independent progress report are not site routes.
+GitHub **Settings → Pages** must use **Deploy from a branch**, `gh-pages`, `/ (root)`.
+Publishing requires Git access to `git@github.com:Westbrook/music-notes.git`.
 
 ## Write a measure
 
@@ -97,7 +131,9 @@ Exact musical validation → system planning → VexFlow SVG
 
 Author's Lit components live in `src/authoring/ui`; its entry point is `src/authoring/bootstrap.ts`. The workbook toolbar, view switch, Source editor, navigator, and score viewport own shadow roots with explicit properties and events. Workspace and panel frames arrange complete caller-owned regions through named slots. The top-level shell, Properties/shared selection controls, musical source, and physical pages retain their native logical boundaries.
 
-Editor transactions, workspace choices, form drafts, and workbook controls use independent `signal-polyfill` and `signal-utils` stores with readonly selectors. `SignalController` connects views and releases subscriptions on disconnect. `ControlScope` registers only owned control roots; composed focus/geometry helpers and public score projection snapshots preserve interaction across slots and shadow roots. Native controls and measured score nodes retain their identities across updates. See [UI and state architecture](docs/ui-state-architecture.md) for component APIs and reuse. Initial delivery is about **48.3 kB gzip for the workbook** and **606.5 kB for Author**, within the **50 kB / 630 kB** build budgets.
+Editor transactions, workspace choices, form drafts, and workbook controls use independent `signal-polyfill` and `signal-utils` stores with readonly selectors. `SignalController` connects views and releases subscriptions on disconnect. `ControlScope` registers only owned control roots; composed focus/geometry helpers and public score projection snapshots preserve interaction across slots and shadow roots. Native controls and measured score nodes retain their identities across updates. See [UI and state architecture](docs/ui-state-architecture.md) for component APIs and reuse. Initial delivery is about **50.0 kB gzip for the workbook** and **633.2 kB for Author**, within the **50.5 kB / 634 kB** build budgets.
+
+The [design system](DESIGN.md) defines shared control tokens, choice-group styling, responsive behavior, and accessibility conventions for future UI work.
 
 When embedding the notation library, edit source attributes or component properties to change music. Do not edit the generated SVG. Canonical score serialization keeps musical values and IDs, not the original HTML formatting or all application metadata; download an Author project to retain the complete document.
 
@@ -127,4 +163,9 @@ Open `/tests/three-roads-browser.html` for the three-road line spacing, slash he
 
 Open `/tests/event-markings-browser.html` and select **Run event marking checks** for articulation and ornament glyphs, head-relative harmony figures, dense combinations, source edits, ties, parts, and responsive/print geometry. The [markings guide](docs/event-markings.md) explains the notation and its limits; the final workbook study shows the new HTML elements in use.
 
-Current limits include playback, instrument transposition, cross-staff beams, independent polymeter, arbitrary microtonal tuning beyond the supported quarter-tone spellings, tuplets spanning barlines, general slurs, arbitrary graphical notation, and automatic page-turn optimization. Author uses native browser printing, not a direct PDF generator. Inspect final pages with the intended paper, margins, and playing tempo before performing.
+Current limits include instrument transposition, cross-staff beams, independent polymeter, arbitrary microtonal tuning beyond the supported quarter-tone spellings, tuplets spanning barlines, general slurs, arbitrary graphical notation, and automatic page-turn optimization. Author uses native browser printing, not a direct PDF generator. Inspect final pages with the intended paper, margins, and playing tempo before performing.
+
+
+Listen uses current accepted music from the selected score or part, including the authored octaves, rather than a prior export or recovery snapshot. Pending Source and form drafts must be applied or discarded in Write first. Its portable brass-like synthesizer supports notes, chords, rests, quarter-tones, ties, tuplets, written tempo changes, dynamics and basic articulation. It plays written measures once; repeat expansion, ornament/fermata performance, and unspecified rhythm/slash/three-roads pitch interpretations are not included. Playback details disclose these limits. WAV exports and playback share one rendered buffer; no rendering service or remote sound assets are used. The audio controller loads on demand (about 4.8 kB gzip).
+
+For the isolated Listen browser check, start the dev server on 127.0.0.1:5173, run `npx playwright install chromium` once, then `npm run test:listen:browser`. Playwright is pinned to 1.62.1 and uses its matching browser builds. Set `LISTEN_TEST_BROWSER=firefox` or `LISTEN_TEST_BROWSER=webkit` to run the same check in those engines after installing them with Playwright. The fixture uses memory-only recovery. `LISTEN_TEST_URL` changes the server URL; `LISTEN_TEST_OUTPUT` changes the evidence directory (default `/tmp/music-notes-listen-browser`). The script exercises the real controls, verifies the octave in the WAV, changes tempo, checks draft guards and cache invalidation, and checks desktop/mobile layout.

@@ -96,11 +96,6 @@ async function setField(id: string, value: string): Promise<void> {
   actions.push(`field:${id}`); element.value = value;
   element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); await flush();
 }
-async function setCheck(id: string, checked: boolean): Promise<void> {
-  const element = control<HTMLInputElement>(id); await disclose(element); expect(available(element), `#${id} is an available checkbox`).toBe(true);
-  if (element.checked !== checked) { element.click(); await flush(); }
-  expect(element.checked).toBe(checked);
-}
 async function deliverStaleField(element: HTMLSelectElement | HTMLInputElement, value: string): Promise<void> {
   // Deliberate stale-event stress. Ordinary helpers above require available UI.
   actions.push(`stale-field:${element.id}`); element.value = value;
@@ -132,7 +127,9 @@ async function externalToggleSelection(id: string): Promise<void> {
 async function key(name: string, id = 'score-editor', options: KeyboardEventInit = {}): Promise<KeyboardEvent> {
   const element = control(id); element.focus({ preventScroll: true });
   const event = new KeyboardEvent('keydown', { key: name, bubbles: true, composed: true, cancelable: true, ...options });
-  actions.push(`key:${id}:${name}`); element.dispatchEvent(event); await flush(); return event;
+  actions.push(`key:${id}:${name}`); element.dispatchEvent(event);
+  if ((name === ' ' || name === 'Enter') && element instanceof HTMLButtonElement && (element.getRootNode() as ShadowRoot).host?.localName === 'music-toggle-button-group' && !event.defaultPrevented) element.click();
+  await flush(); return event;
 }
 function exactSelection() { return app!.session.selection; }
 function selectedIds(): string[] { return [...exactSelection().ids]; }
@@ -301,7 +298,7 @@ describe('direct common actions use accepted music, never the next-entry recipe'
   });
   it('a microtonal note reports its real alteration with none of the three ordinary shortcuts selected', async () => {
     await width(390); mount(selectionSource.replace('id="a" pitch="F4"', 'id="a" pitch="Fqs4"')); await chooseSource('a'); const before = accepted();
-    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) expect(control(id).getAttribute('aria-checked')).toBe('false');
+    for (const id of ['selection-flat', 'selection-natural', 'selection-sharp']) expect(control(id).getAttribute('aria-pressed')).toBe('false');
     expect(control('selection-controls-context').textContent).toMatch(/quarter|qs|½/i);
     await click('selection-pitch'); expect(control<HTMLSelectElement>('selection-alteration').value).toBe('0.5');
     expect([...control<HTMLSelectElement>('selection-alteration').options].map(option => option.value).filter(Boolean)).toEqual(['-2', '-1.5', '-1', '-0.5', '0', '0.5', '1', '1.5', '2']); noEdit(before);
@@ -423,7 +420,7 @@ describe('exact membership reaches atomic shared actions and lifecycle guards', 
 async function prepareWriting(dirty: boolean): Promise<object> {
   mount(writingSource()); await chooseSource('writing-placeholder'); await startHere(); await click('entry-settings-trigger'); await setField('event-kind', 'note');
   await setField('event-pitch', 'Fqs4'); await setField('insert-position', 'after');
-  await setCheck('continuation-enabled', true); await click('close-entry-settings');
+  await click('close-entry-settings');
   await click('entry-value-trigger'); await setField('event-duration', 'quarter'); await setField('event-dots', '0'); await click('close-entry-value'); await click('select-mode');
   await properties('writing-note-8'); if (dirty) await setField('selected-pitch', 'Gqf4'); return entryRecipe();
 }

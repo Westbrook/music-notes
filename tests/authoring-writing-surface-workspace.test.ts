@@ -245,7 +245,6 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
     expect(allEvents()).toEqual([]); expect(app!.session.source.querySelector('music-rest')).toBeNull();
     expect(app!.session.score.staves[0].measures.every(measure => measure.incomplete && measure.voices.length === 1)).toBe(true);
     expect(el<HTMLSelectElement>('insert-position').value).toBe('after');
-    expect(el<HTMLInputElement>('continuation-enabled').checked).toBe(false);
     const initial = accepted(), checkpoints = [initial.source], eventIds: string[] = [], expectedPitches: string[] = [];
     const insertionTargets: ReturnType<typeof historyTarget>[] = [];
     actions.length = 0; await click('toggle-entry'); writing(true); noEdit(initial); expect(authorActiveElement(document)).toBe(el('score-editor'));
@@ -350,7 +349,7 @@ describe('keyboard writing uses existing empty bars and accepted transactions', 
       onset: item.onset, time: item.time, measureRest: item.measureRest, pitches: item.pitches.map(pitchText) });
     mount(emptyBars(8)); expect(allEvents()).toEqual([]); expect(app!.session.source.querySelector('music-rest')).toBeNull();
     expect(app!.session.score.staves[0].measures.every(bar => bar.incomplete && bar.voices.length === 1 && !bar.voices[0].events.length)).toBe(true);
-    expect(el<HTMLSelectElement>('insert-position').value).toBe('after'); expect(el<HTMLInputElement>('continuation-enabled').checked).toBe(false);
+    expect(el<HTMLSelectElement>('insert-position').value).toBe('after');
     const initial = accepted(), checkpoints = [initial.source], ids: string[] = [], expected: object[][] = bars.map(() => []);
     const insertionTargets: ReturnType<typeof historyTarget>[] = [];
     const originalIds = new Set([app!.session.source.id, ...[...app!.session.source.querySelectorAll('[id]')].map(node => node.id)]);
@@ -535,9 +534,18 @@ describe('correction and explicit recovery preserve the saved writing owner', ()
     await click('toggle-entry'); writing(false); noEdit(before); expect(recipe()).toEqual(palette); expect(app!.session.selection).toEqual(selection);
     expect(el('entry-mode-reason').hidden).toBe(false); expect(el('entry-mode-reason').textContent).toMatch(/resume|unavailable|changed/i);
     expect(el('toggle-entry').textContent).toMatch(/Write notes/i);
-    await click('location-trigger'); expect(available(el('start-entry-here'))).toBe(true); await click('start-entry-here'); writing(true);
+    expect(el('location-panel').dataset.surfaceState).toBe('open');
+    expect(authorActiveElement(document)).toBe(el('start-entry-here'));
+    expect(el('author-errors').hidden).toBe(true);
+    await click('close-location'); writing(false); noEdit(before);
+    await click('toggle-entry'); expect(el('location-panel').dataset.surfaceState).toBe('open');
+    expect(authorActiveElement(document)).toBe(el('start-entry-here'));
+    expect(available(el('start-entry-here'))).toBe(true); await click('start-entry-here'); writing(true);
     noEdit(before, false); expect(recipe()).toEqual(palette); expect(app!.session.selection).toEqual(selection);
     expect(app!.session.cursor).toEqual({ staffId: 'lead', measureId: 'bar-b', voiceIndex: 0, eventId: 'b' });
+    expect(el('location-panel').dataset.surfaceState).toBe('closed');
+    expect(authorActiveElement(document)).toBe(el('score-editor'));
+    await click('select-mode'); await click('toggle-entry'); writing(true);
   });
 
   it('pending Source preserves Write intent through views but blocks entry without applying or discarding either draft', async () => {

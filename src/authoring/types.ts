@@ -1,6 +1,6 @@
 import type { ArticulationType, Clef, Diagnostic, Duration, MarkingPlacement, OrnamentType, PitchAlteration, PitchDirection, Score, StaffNotation } from '../model/types.js';
 
-export type ViewMode = 'write' | 'read' | 'pages';
+export type ViewMode = 'write' | 'read' | 'listen' | 'pages';
 export type PaperSize = 'letter' | 'a4';
 export type BreakChoice = 'auto' | 'line' | 'page';
 
@@ -46,6 +46,11 @@ export interface Cursor {
   eventId?: string;
 }
 
+/** One optional marking to add when writing an event; existing markings are retained. */
+export type EventAttackInput =
+  | { kind: 'articulation'; type: ArticulationType }
+  | { kind: 'ornament'; type: OrnamentType };
+
 export interface EventInput {
   kind: 'note' | 'chord' | 'rest' | 'slash' | 'rhythm' | 'road';
   /** Required for a road event; absent for every other kind. */
@@ -59,6 +64,7 @@ export interface EventInput {
   accidentalDisplay: 'auto' | 'always' | 'courtesy';
   stem: 'auto' | 'up' | 'down';
   beam: 'auto' | 'start' | 'continue' | 'end' | 'none';
+  attack?: EventAttackInput;
 }
 
 /** One accepted-value change across an exact selection, without borrowing mixed fields. */
@@ -68,7 +74,9 @@ export type EventPropertyChange =
   | { property: 'stem'; value: EventInput['stem'] }
   | { property: 'accidentalDisplay'; value: EventInput['accidentalDisplay'] }
   | { property: 'alter'; value: PitchAlteration; ties: 'reject' }
-  | { property: 'articulation'; value: ArticulationType; present: boolean };
+  | { property: 'articulation'; value: ArticulationType; present: boolean }
+  | { property: 'ornament'; value: OrnamentType; present: boolean }
+  | { property: 'attacks'; value: 'none' };
 
 export interface AnnotationInput {
   kind: 'tempo' | 'dynamics' | 'direction' | 'harmony' | 'rehearsal';
@@ -104,7 +112,8 @@ export interface MeasureInput {
 }
 
 export type AuthorCommand =
-  | { type: 'insert-event'; cursor: Cursor; value: EventInput; position: 'before' | 'after' | 'replace' }
+  | { type: 'insert-event'; cursor: Cursor; value: EventInput; position: 'before' | 'after' | 'replace'; flow?: boolean }
+  | { type: 'paste-music'; cursor: Cursor; text: string; position: 'before' | 'after' }
   | { type: 'append-and-insert'; cursor: Cursor; value: EventInput; position: 'before' | 'after' | 'replace' }
   | { type: 'continue-piece'; cursor: Cursor; value: EventInput; position: 'before' | 'after' | 'replace'; confirmation: 'final-to-single' }
   | { type: 'update-event'; eventId: string; value: EventInput; fields?: readonly (keyof EventInput)[] }
