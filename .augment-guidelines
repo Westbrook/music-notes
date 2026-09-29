@@ -1,0 +1,7 @@
+# Music Notes development guidance
+
+Follow [AGENTS.md](AGENTS.md) for repository instructions and verification commands.
+The detailed musical, engraving, lifecycle, and editing contracts formerly kept
+here now live in [docs/development.md](docs/development.md). Read its relevant
+sections when changing those behaviors. Keep guidance in those canonical files
+instead of duplicating it here.
