@@ -1,15 +1,15 @@
 {
-  "_author-ui-0IbhEtv8.js": {
-    "file": "assets/author-ui-0IbhEtv8.js",
+  "_author-ui-Csy0d5s_.js": {
+    "file": "assets/author-ui-Csy0d5s_.js",
     "name": "author-ui",
     "imports": [
       "_ui-runtime-DZIFwxVs.js",
-      "_button-content-D6qi9d6w.js",
-      "_source-feedback-DIXeQSxQ.js"
+      "_button-content-Cd98Nkdi.js",
+      "_source-feedback-X8EHr6hQ.js"
     ]
   },
-  "_button-content-D6qi9d6w.js": {
-    "file": "assets/button-content-D6qi9d6w.js",
+  "_button-content-Cd98Nkdi.js": {
+    "file": "assets/button-content-Cd98Nkdi.js",
     "name": "button-content",
     "imports": [
       "_ui-runtime-DZIFwxVs.js"
@@ -26,30 +26,30 @@
     "file": "assets/notation-fonts-BN8TYhU_.js",
     "name": "notation-fonts"
   },
-  "_readonly-signal-C6IA7k3L.js": {
-    "file": "assets/readonly-signal-C6IA7k3L.js",
+  "_readonly-signal-D0Iz3__i.js": {
+    "file": "assets/readonly-signal-D0Iz3__i.js",
     "name": "readonly-signal",
     "imports": [
       "_ui-runtime-DZIFwxVs.js",
-      "_button-content-D6qi9d6w.js"
+      "_button-content-Cd98Nkdi.js"
     ],
     "dynamicImports": [
       "src/engraving/render.ts"
     ]
   },
-  "_semantics-CVDDZoVH.js": {
-    "file": "assets/semantics-CVDDZoVH.js",
+  "_semantics-CA6SIlYz.js": {
+    "file": "assets/semantics-CA6SIlYz.js",
     "name": "semantics",
     "imports": [
       "_notation-fonts-BN8TYhU_.js",
-      "_button-content-D6qi9d6w.js"
+      "_button-content-Cd98Nkdi.js"
     ]
   },
-  "_source-feedback-DIXeQSxQ.js": {
-    "file": "assets/source-feedback-DIXeQSxQ.js",
+  "_source-feedback-X8EHr6hQ.js": {
+    "file": "assets/source-feedback-X8EHr6hQ.js",
     "name": "source-feedback",
     "imports": [
-      "_button-content-D6qi9d6w.js",
+      "_button-content-Cd98Nkdi.js",
       "_ui-runtime-DZIFwxVs.js"
     ]
   },
@@ -58,17 +58,17 @@
     "name": "ui-runtime"
   },
   "author.html": {
-    "file": "assets/author-IBzKg9A7.js",
+    "file": "assets/author-CAfJZ0yZ.js",
     "name": "author",
     "src": "author.html",
     "isEntry": true,
     "imports": [
-      "_readonly-signal-C6IA7k3L.js",
-      "_button-content-D6qi9d6w.js",
-      "_source-feedback-DIXeQSxQ.js",
-      "_author-ui-0IbhEtv8.js",
+      "_readonly-signal-D0Iz3__i.js",
+      "_button-content-Cd98Nkdi.js",
+      "_source-feedback-X8EHr6hQ.js",
+      "_author-ui-Csy0d5s_.js",
       "_ui-runtime-DZIFwxVs.js",
-      "_semantics-CVDDZoVH.js",
+      "_semantics-CA6SIlYz.js",
       "_notation-fonts-BN8TYhU_.js"
     ],
     "dynamicImports": [
@@ -80,13 +80,13 @@
     ]
   },
   "index.html": {
-    "file": "assets/workbook-n7KVVtT9.js",
+    "file": "assets/workbook-DluaKof6.js",
     "name": "workbook",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_readonly-signal-C6IA7k3L.js",
-      "_button-content-D6qi9d6w.js",
+      "_readonly-signal-D0Iz3__i.js",
+      "_button-content-Cd98Nkdi.js",
       "_ui-runtime-DZIFwxVs.js"
     ],
     "css": [
@@ -94,29 +94,29 @@
     ]
   },
   "src/authoring/listen-controller.ts": {
-    "file": "assets/listen-controller-CwpIcdXA.js",
+    "file": "assets/listen-controller-DyszHcMH.js",
     "name": "listen-controller",
     "src": "src/authoring/listen-controller.ts",
     "isDynamicEntry": true,
     "imports": [
       "author.html",
-      "_button-content-D6qi9d6w.js",
-      "_readonly-signal-C6IA7k3L.js",
+      "_button-content-Cd98Nkdi.js",
+      "_readonly-signal-D0Iz3__i.js",
       "_ui-runtime-DZIFwxVs.js",
-      "_source-feedback-DIXeQSxQ.js",
-      "_author-ui-0IbhEtv8.js",
-      "_semantics-CVDDZoVH.js",
+      "_source-feedback-X8EHr6hQ.js",
+      "_author-ui-Csy0d5s_.js",
+      "_semantics-CA6SIlYz.js",
       "_notation-fonts-BN8TYhU_.js"
     ]
   },
   "src/engraving/render.ts": {
-    "file": "assets/render-DF-uiCnJ.js",
+    "file": "assets/render-C5vK8TPS.js",
     "name": "render",
     "src": "src/engraving/render.ts",
     "isDynamicEntry": true,
     "imports": [
-      "_semantics-CVDDZoVH.js",
-      "_button-content-D6qi9d6w.js",
+      "_semantics-CA6SIlYz.js",
+      "_button-content-Cd98Nkdi.js",
       "_notation-fonts-BN8TYhU_.js",
       "_ui-runtime-DZIFwxVs.js"
     ]
