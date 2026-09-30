@@ -798,8 +798,6 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 .location-panel .cursor-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
 .location-panel .cursor-controls .field { min-width: 0; max-width: none; }
 .location-panel select { min-height: 44px; padding: 7px 8px; font-size: 0.8rem; }
-.entry-basic-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.entry-basic-tools button { min-height: var(--music-ui-control-size); }
 .entry-direction-choices { display: grid; grid-template-columns: repeat(3, minmax(var(--music-ui-control-size), 1fr)); }
 .entry-direction-choices button { min-height: var(--music-ui-control-size); }
 
@@ -808,7 +806,6 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 #workspace-mode-slot,
 .selection-shortcuts,
 #selection-chooser-accidentals,
-.entry-basic-tools,
 .entry-direction-choices,
 .accidental-choices {
   gap: var(--music-ui-group-gap); padding: var(--music-ui-group-padding); border: 0;
@@ -818,7 +815,6 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 #workspace-mode-slot > button,
 .selection-shortcuts > button,
 #selection-chooser-accidentals button,
-.entry-basic-tools button,
 .entry-direction-choices button,
 .accidental-choices button {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -831,7 +827,6 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 #workspace-mode-slot > button:hover:not(:disabled):not([aria-pressed="true"]),
 .selection-shortcuts > button:hover:not(:disabled):not([aria-checked="true"]),
 #selection-chooser-accidentals button:hover:not(:disabled):not([aria-pressed="true"]),
-.entry-basic-tools button:hover:not(:disabled):not([aria-pressed="true"]),
 .entry-direction-choices button:hover:not(:disabled):not([aria-pressed="true"]),
 .accidental-choices button:hover:not(:disabled):not([aria-pressed="true"]) {
   border-color: var(--music-ui-color-divider); background: var(--music-ui-color-active);
@@ -839,7 +834,6 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 #workspace-mode-slot > button[aria-pressed="true"],
 .selection-shortcuts > button[aria-checked="true"],
 #selection-chooser-accidentals button[aria-pressed="true"],
-.entry-basic-tools button[aria-pressed="true"],
 .entry-direction-choices button[aria-pressed="true"],
 .accidental-choices button[aria-pressed="true"] {
   border-color: var(--music-ui-color-border); background: var(--music-ui-color-active); box-shadow: none;
@@ -848,13 +842,11 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 #workspace-mode-slot > button:disabled,
 .selection-shortcuts > button:disabled,
 #selection-chooser-accidentals button:disabled,
-.entry-basic-tools button:disabled,
 .entry-direction-choices button:disabled,
 .accidental-choices button:disabled { opacity: var(--music-ui-disabled-opacity); cursor: not-allowed; }
 #workspace-mode-slot > button:focus-visible,
 .selection-shortcuts > button:focus-visible,
 #selection-chooser-accidentals button:focus-visible,
-.entry-basic-tools button:focus-visible,
 .entry-direction-choices button:focus-visible,
 .accidental-choices button:focus-visible { outline: var(--music-ui-focus-width) solid var(--music-ui-color-focus); outline-offset: calc(-1 * var(--music-ui-focus-width)); }
 .entry-value-chooser .popover-body { gap: 12px; }
@@ -1012,7 +1004,6 @@ body:has(.surface-popover[data-popover-fallback="true"]:not([hidden])) .author-w
   #workspace-mode-slot,
   .selection-shortcuts,
   #selection-chooser-accidentals,
-  .entry-basic-tools,
   .entry-direction-choices,
   .accidental-choices {
     background: Canvas; box-shadow: none;
@@ -1021,7 +1012,6 @@ body:has(.surface-popover[data-popover-fallback="true"]:not([hidden])) .author-w
   #workspace-mode-slot > button[aria-pressed="true"],
   #selection-controls button[role="radio"][aria-checked="true"],
   #selection-chooser-accidentals button[aria-pressed="true"],
-  .entry-basic-tools button[aria-pressed="true"],
   .entry-direction-choices button[aria-pressed="true"],
   .accidental-choices button[aria-pressed="true"] {
     border-color: Highlight; outline: 2px solid Highlight; outline-offset: calc(-1 * var(--music-ui-focus-width));
@@ -1029,7 +1019,6 @@ body:has(.surface-popover[data-popover-fallback="true"]:not([hidden])) .author-w
   #workspace-mode-slot > button:focus-visible,
   #selection-controls button[role="radio"]:focus-visible,
   #selection-chooser-accidentals button:focus-visible,
-  .entry-basic-tools button:focus-visible,
   .entry-direction-choices button:focus-visible,
   .accidental-choices button:focus-visible,
   .tools-tablist button:focus-visible { outline: var(--music-ui-focus-width) dashed Highlight; outline-offset: calc(-1 * var(--music-ui-focus-width)); }

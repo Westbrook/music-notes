@@ -280,7 +280,7 @@ describe('customizable native authoring selects', () => {
     expect(shell.getElementById('drag-entry')?.contains(shell.getElementById('drag-entry-value'))).toBe(true);
     expect(shell.getElementById('drag-entry')?.closest('#entry-toolbar')).not.toBeNull();
     expect(shell.getElementById('drag-entry')?.hidden).toBe(true);
-    for (const id of ['prepare-entry-drag', 'entry-choose-note', 'entry-choose-rest']) {
+    for (const id of ['prepare-entry-drag']) {
       const action = shell.getElementById(id);
       expect(action?.tagName).toBe('BUTTON');
       expect(action?.getAttribute('type')).toBe('button');

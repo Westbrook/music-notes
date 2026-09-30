@@ -15,10 +15,6 @@ export function entrySettings(): TemplateResult {
       </div>
       <div class="popover-body">
         <p id="entry-options-help" class="field-help">These options belong to new music. Selecting or correcting an event leaves them unchanged.</p>
-        <div class="entry-basic-tools" role="group" aria-label="Choose a basic writing tool">
-          <button id="entry-choose-note" type="button" aria-pressed="true">${buttonContent(bravuraNoteQuarterUp, html`<span data-control-label>Note</span>`)}</button>
-          <button id="entry-choose-rest" type="button" aria-pressed="false">${buttonContent(bravuraRestQuarter, "Rest")}</button>
-        </div>
         <label class="field" for="event-kind">Event type<select id="event-kind" name="event-kind" class="author-select" >
             <button type="button"><selectedcontent></selectedcontent></button>
             ${nativeOptionTemplate({ value: "note", label: "Note", icon: bravuraNoteQuarterUp })}

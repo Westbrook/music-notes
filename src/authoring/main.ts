@@ -1,5 +1,5 @@
 import { phArrowDown, phArrowRight, phArrowUp, phMusicNotes } from '../ui/icons/phosphor.js';
-import { bravuraNoteQuarterUp, bravuraNoteheadSlashHorizontalEnds, bravuraNoteheadSlashWhiteWhole, bravuraRestWholeLegerLine } from '../ui/icons/bravura.js';
+import { bravuraNoteQuarterUp, bravuraNoteheadSlashHorizontalEnds, bravuraNoteheadSlashWhiteWhole, bravuraRestWholeLegerLine, bravuraRestQuarter } from '../ui/icons/bravura.js';
 import { durationIcon } from '../ui/notation-icons.js';
 import { setControlLabel, setControlIcon } from '../ui/control-content.js';
 import '../components/index.js';
@@ -192,7 +192,7 @@ export class AuthorWorkspace {
     this.controlScope = new ControlScope(shell);
     // Only explicitly owned UI roots participate in control discovery. The
     // score viewport's imported musical source remains outside this scope.
-    for (const id of ['view-switch', 'event-navigator', 'source-editor', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack']) {
+    for (const id of ['view-switch', 'event-navigator', 'source-editor', 'entry-kind', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack']) {
       const root = shell.querySelector<HTMLElement>(`#${id}`)?.shadowRoot;
       if (root) this.controlScope.register(root);
     }
@@ -1419,10 +1419,13 @@ export class AuthorWorkspace {
     this.el('entry-value-field-label').textContent = nominal ? 'Nominal span' : 'Written value';
     this.el('entry-value-trigger').setAttribute('aria-label', measureRest ? `Full-measure rest follows ${location.measure.meter.display}`
       : `${nominal ? 'Nominal span' : 'Written value'} for new ${kind === 'rest' ? 'rests' : 'notes'}: ${durationName}, ${dots} dots`);
-    setControlLabel(this.el('entry-choose-note'), notation === 'three-roads' ? '3 roads note' : notation === 'rhythm' ? 'Rhythm note' : 'Note');
-    setControlIcon(this.el('entry-choose-note'), notation === 'three-roads' ? bravuraNoteheadSlashHorizontalEnds : bravuraNoteQuarterUp);
-    this.el('entry-choose-note').setAttribute('aria-pressed', String(kind === defaultEntryKind[notation]));
-    this.el('entry-choose-rest').setAttribute('aria-pressed', String(kind === 'rest' && !measureRest));
+    const entryKind = this.el<MusicToggleButtonGroup>('entry-kind');
+    entryKind.options = [
+      { value: 'note', label: notation === 'three-roads' ? '3 roads note' : notation === 'rhythm' ? 'Rhythm note' : 'Note', icon: notation === 'three-roads' ? bravuraNoteheadSlashHorizontalEnds : bravuraNoteQuarterUp },
+      { value: 'rest', label: 'Rest', icon: bravuraRestQuarter },
+    ];
+    entryKind.value = kind === defaultEntryKind[notation] ? 'note' : kind === 'rest' && !measureRest ? 'rest' : '';
+    entryKind.choiceStates = { note: entryKind.value === 'note' ? 'true' : 'false', rest: entryKind.value === 'rest' ? 'true' : 'false' };
     const handle = this.el<HTMLButtonElement>('drag-entry');
     const ordinaryRest = kind === 'rest' && !measureRest;
     const supportsPlacement = pitchedStaff && kind === 'note' || ordinaryRest;
@@ -1473,6 +1476,7 @@ export class AuthorWorkspace {
       this.entryPaletteKind = kind;
     }
     attack.disabled = !enabled;
+    this.el<MusicToggleButtonGroup>('entry-kind').disabled = !enabled;
     for (const [groupId, fieldId] of [['entry-accidentals', 'event-alteration'], ['entry-duration', 'event-duration'], ['entry-dots', 'event-dots']] as const) {
       const group = this.el<MusicToggleButtonGroup>(groupId);
       const field = this.el<HTMLSelectElement>(fieldId);
@@ -1629,8 +1633,11 @@ export class AuthorWorkspace {
     this.on('toggle-entry', 'click', () => this.activateWriting());
     this.on('resume-entry', 'click', () => this.startEntry(true));
     this.on('start-entry-here', 'click', () => this.startEntry(false));
-    this.on('entry-choose-note', 'click', () => this.chooseEntryKind(false));
-    this.on('entry-choose-rest', 'click', () => this.chooseEntryKind(true));
+    this.on('entry-kind', 'change', event => {
+      const group = this.el<MusicToggleButtonGroup>('entry-kind');
+      if (group.disabled) return;
+      this.chooseEntryKind((event as CustomEvent<{ value: string }>).detail.value === 'rest');
+    });
     for (const direction of ['higher', 'same', 'lower']) this.on(`entry-direction-${direction}`, 'click', () => {
       this.staffInteraction.cancel('recipe'); this.setValue('event-direction', direction);
       this.syncEntryVisibility(); this.invalidateOffers(); this.surfaces.close('entry-direction-chooser');

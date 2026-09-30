@@ -283,7 +283,8 @@ describe('stable writing palette structural contract', () => {
     const options = element('entry-settings');
     for (const id of ['entry-choose-note', 'entry-choose-rest']) {
       const choice = button(id);
-      expect(options.contains(choice)).toBe(true);
+      expect(options.contains(choice)).toBe(false);
+      expect(choice.getRootNode()).toBe(element('entry-kind').shadowRoot);
       expect(['true', 'false']).toContain(choice.getAttribute('aria-pressed'));
       expect(choice.getAttribute('role')).toBeNull();
     }
@@ -1579,7 +1580,7 @@ describe('score-first authoring CSS contract', () => {
     }
     expect(declarationsFor('#selection-controls')).toMatch(/grid-template-columns:\s*var\(--palette-musical-columns\);/);
     expect(declarationsFor('#entry-toolbar .entry-tools')).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*max-content\)\) minmax\(0,\s*1fr\);/);
-    expect(element('write-tools').querySelector('[data-toggle-group-row]')?.children).toHaveLength(4);
+    expect(element('write-tools').querySelector('[data-toggle-group-row]')?.children).toHaveLength(5);
     expect(declarationsFor('.entry-quick-tools')).toMatch(/display:\s*flex;/);
     expect(declarationsFor('.palette-slot')).toMatch(/grid-template-rows:\s*var\(--palette-group-size\);/);
     expect(declarationsFor('.popover-body :is(input:not([type="checkbox"]), select), .popover-body > button')).toMatch(/min-height:\s*44px;/);

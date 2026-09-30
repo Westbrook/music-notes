@@ -3,8 +3,8 @@ import { mountAuthorShell } from '../src/authoring/ui/author-shell.js';
 import type { AuthorShell } from '../src/authoring/ui/author-shell.js';
 
 type AuthorFixtureRoot = Document | HTMLElement;
-type AuthorControlHost = 'view-switch' | 'event-navigator' | 'source-editor' | 'entry-accidentals' | 'entry-duration' | 'entry-dots' | 'entry-attack' | 'selection-accidentals' | 'selection-quick-duration' | 'selection-quick-dots' | 'selection-quick-attack';
-const controlHosts: readonly AuthorControlHost[] = ['view-switch', 'event-navigator', 'source-editor', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack'];
+type AuthorControlHost = 'view-switch' | 'event-navigator' | 'source-editor' | 'entry-kind' | 'entry-accidentals' | 'entry-duration' | 'entry-dots' | 'entry-attack' | 'selection-accidentals' | 'selection-quick-duration' | 'selection-quick-dots' | 'selection-quick-attack';
+const controlHosts: readonly AuthorControlHost[] = ['view-switch', 'event-navigator', 'source-editor', 'entry-kind', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack'];
 
 function lightControlById(root: AuthorFixtureRoot, id: string): HTMLElement | null {
   if (root.nodeType === Node.DOCUMENT_NODE) return (root as Document).getElementById(id);

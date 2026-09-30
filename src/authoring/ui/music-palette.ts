@@ -1,5 +1,5 @@
 import { phArrowDown, phArrowRight, phArrowUp, phArrowsVertical, phCheck, phCursor, phDotsThree, phHand, phLink, phMapPin, phMusicNotesPlus, phPencilSimple, phPlus, phSlidersHorizontal, phTrash } from '../../ui/icons/phosphor.js';
-import { bravuraArticAccentAbove, bravuraGClef, bravuraNoteQuarterUp } from '../../ui/icons/bravura.js';
+import { bravuraArticAccentAbove, bravuraGClef, bravuraNoteQuarterUp, bravuraRestQuarter } from '../../ui/icons/bravura.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
 import { buttonContent } from '../../ui/button-content.js';
@@ -14,6 +14,7 @@ export function musicPalette(): TemplateResult {
         <div id="entry-toolbar" class="entry-toolbar" aria-label="New notes">
           <section id="write-tools" class="entry-tools" aria-label="New-note recipe">
             <div class="entry-quick-tools" data-toggle-group-row aria-label="Quick choices for new notes">
+              <music-toggle-button-group id="entry-kind" label="Note or rest" .options=${[{ value: 'note', label: 'Note', icon: bravuraNoteQuarterUp }, { value: 'rest', label: 'Rest', icon: bravuraRestQuarter }]} .buttonIds=${{ note: 'entry-choose-note', rest: 'entry-choose-rest' }} value="note" overflow-at="2"></music-toggle-button-group>
               <music-toggle-button-group id="entry-accidentals" label="Accidentals" .options=${ENTRY_ACCIDENTAL_OPTIONS} value="0" overflow-at="3" aria-describedby="event-alteration-status"></music-toggle-button-group>
               <music-toggle-button-group id="entry-duration" label="Duration" .options=${ENTRY_DURATION_OPTIONS} value="quarter" overflow-at="4"></music-toggle-button-group>
               <music-toggle-button-group id="entry-dots" label="Dots" .options=${ENTRY_DOTS_OPTIONS} value="0" overflow-at="1" toggle-off-value="0"></music-toggle-button-group>
