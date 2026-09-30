@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   add, compare, divide, durationTime, equals, formatRational, keyAlterations, meterBoundaries, meterTime,
-  multiply, parseDuration, parseMeter, parsePitch, pitchPosition, pitchText, rational, subtract, toNumber,
+  multiply, parseDuration, parseMeter, parsePitch, pitchPosition, middleLinePitch, pitchText, rational, subtract, toNumber,
   validateClef, validateKey, validateScore,
 } from '../src/model/index';
 import type { Duration, Measure, MusicEvent, Score, Staff, Tuplet, Voice } from '../src/model/index';
@@ -148,6 +148,16 @@ describe('written durations and absolute pitches', () => {
     expect(pitchPosition(parsePitch('C-1'), 'treble')).toBe(-37);
     expect(validateClef(' Alto ')).toBe('alto');
     expect(() => validateClef('percussion')).toThrow();
+  });
+
+  it('resolves middle-line absolute spellings for clefs and key signatures', () => {
+    expect(pitchText(middleLinePitch('treble'))).toBe('B4');
+    expect(pitchText(middleLinePitch('bass'))).toBe('D3');
+    expect(pitchText(middleLinePitch('alto'))).toBe('C4');
+    expect(pitchText(middleLinePitch('tenor'))).toBe('A3');
+    expect(pitchText(middleLinePitch('treble', 'F'))).toBe('Bb4');
+    expect(pitchText(middleLinePitch('alto', 'D'))).toBe('C#4');
+    expect(() => middleLinePitch('treble', 'not-a-key')).toThrow();
   });
 
   it('validates standard major/minor keys and supplies their diatonic alterations', () => {

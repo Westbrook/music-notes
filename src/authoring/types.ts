@@ -144,7 +144,7 @@ export type AuthorCommand =
   | { type: 'unwrap-tuplet'; tupletId: string }
   | { type: 'tie-events'; eventIds: string[] }
   | { type: 'clear-ties'; eventIds: string[] }
-  | { type: 'convert-events'; eventIds: string[]; kind: 'note' | 'rest' | 'slash' | 'rhythm' | 'road'; rhythmic: boolean; pitch: string; pitchDirection?: PitchDirection };
+  | { type: 'convert-events'; eventIds: string[]; kind: 'note' | 'rest' | 'slash' | 'rhythm' | 'road'; rhythmic: boolean; pitch: string; pitchPlacement?: 'staff-middle'; pitchDirection?: PitchDirection };
 
 export interface EditResult { selectionId?: string; cursor?: Cursor; message: string; copiedIds?: Record<string, string> }
 export interface ProjectionResult { source: Element; score: Score; diagnostics: readonly Diagnostic[]; profile: LayoutProfile; label: string }

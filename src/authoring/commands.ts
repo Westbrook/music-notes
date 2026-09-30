@@ -2,7 +2,7 @@ import { readScore } from '../dom/index.js';
 import type { ReadScoreResult } from '../dom/index.js';
 import {
   add, compare, durationTime, formatRational, meterBoundaries, meterTime, multiply,
-  parseMeter, parsePitch, pitchText, rational, subtract, validateAlteration, validateClef, validateKey, validatePitchDirection,
+  parseMeter, parsePitch, pitchText, middleLinePitch, rational, subtract, validateAlteration, validateClef, validateKey, validatePitchDirection,
   validateArticulationType, validateOrnamentType,
 } from '../model/index.js';
 import type { Annotation, Duration, Measure, Meter, MusicEvent, Rational, Staff, Voice } from '../model/types.js';
@@ -1087,7 +1087,9 @@ function clearTies(context: EditContext, ids: readonly string[]): EditResult {
 
 function convertEvents(context: EditContext, command: Extract<AuthorCommand, { type: 'convert-events' }>): EditResult {
   const selected = context.selected(command.eventIds);
-  if (command.kind === 'note') parsePitch(command.pitch);
+  requireCondition(command.pitchPlacement === undefined || command.pitchPlacement === 'staff-middle' && command.kind === 'note' && command.pitch === '',
+    'Middle-line placement applies only to pitched-note conversion without an explicit pitch.');
+  if (command.kind === 'note' && command.pitchPlacement === undefined) parsePitch(command.pitch);
   if (command.kind === 'road') {
     requireCondition(command.pitchDirection !== undefined, 'Choose Higher, Same, or Lower explicitly before converting to road events.');
     validatePitchDirection(command.pitchDirection);
@@ -1115,7 +1117,7 @@ function convertEvents(context: EditContext, command: Extract<AuthorCommand, { t
   for (const location of selected) {
     const event = location.event;
     context.replaceEvent(location, {
-      kind: command.kind, pitch: command.pitch, pitches: '', duration: event.duration, dots: event.dots,
+      kind: command.kind, pitch: command.pitchPlacement === 'staff-middle' ? pitchText(middleLinePitch(location.measure.clef, location.measure.key)) : command.pitch, pitches: '', duration: event.duration, dots: event.dots,
       ...(command.kind === 'road' ? { pitchDirection: command.pitchDirection } : {}),
       rhythmic: command.kind === 'slash' && command.rhythmic, measureRest: event.measureRest && command.kind === 'rest',
       accidentalDisplay: event.pitches[0]?.display ?? 'auto', stem: event.stem,
@@ -1127,6 +1129,7 @@ function convertEvents(context: EditContext, command: Extract<AuthorCommand, { t
     : command.kind === 'rest' ? 'Converted to written silence, preserving exact duration.'
       : command.kind === 'rhythm' ? 'Converted to rhythm notes: the written durations are specified without pitches.'
         : command.kind === 'road' ? `Converted to ${command.pitchDirection} road events, preserving written rhythm without choosing pitches.`
+        : command.pitchPlacement === 'staff-middle' ? 'Converted to middle-line notes using each measure’s clef and key, preserving written rhythm.'
         : 'Converted to the explicitly entered pitch, preserving written rhythm.' };
 }
 

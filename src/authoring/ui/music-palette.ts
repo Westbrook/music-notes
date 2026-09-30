@@ -39,6 +39,7 @@ export function musicPalette(): TemplateResult {
           <div id="selection-controls-dock" class="selection-controls-dock">
             <div id="selection-controls" class="selection-controls" role="toolbar" aria-label="Selected music" aria-describedby="selection-controls-context" data-selection-placement="dock" data-selection-state="none" data-has-error="false">
               <div id="selection-quick-tools" class="selection-quick-tools" data-toggle-group-row aria-label="Quick choices for selected notes">
+                <music-toggle-button-group id="selection-kind" label="Note or rest" overflow-at="2"></music-toggle-button-group>
                 <music-toggle-button-group id="selection-accidentals" label="Accidentals" .buttonIds=${{ '-1': 'selection-flat', '0': 'selection-natural', '1': 'selection-sharp' }} overflow-at="3"></music-toggle-button-group>
                 <music-toggle-button-group id="selection-quick-duration" label="Duration" overflow-at="4"></music-toggle-button-group>
                 <music-toggle-button-group id="selection-quick-dots" label="Dots" overflow-at="1" toggle-off-value="0"></music-toggle-button-group>

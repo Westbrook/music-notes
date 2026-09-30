@@ -100,6 +100,13 @@ export function pitchPosition(pitch: Pitch, clef: Clef = 'treble'): number {
   return pitch.octave * 7 + STEPS.indexOf(pitch.step) - CLEF_BOTTOM[validateClef(clef)];
 }
 
+/** Middle staff line under the resolved clef and key, with absolute spelling. */
+export function middleLinePitch(clef: Clef, key = 'C'): Pitch {
+  const position = CLEF_BOTTOM[validateClef(clef)] + 4;
+  const step = STEPS[position % 7];
+  return { step, octave: Math.floor(position / 7), alter: keyAlterations(key)[step], display: 'auto' };
+}
+
 export function validateClef(text: string): Clef {
   if (typeof text !== 'string') throw new TypeError('Clef must be treble, bass, alto, or tenor.');
   const clef = text.trim().toLowerCase();

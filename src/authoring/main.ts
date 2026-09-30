@@ -192,7 +192,7 @@ export class AuthorWorkspace {
     this.controlScope = new ControlScope(shell);
     // Only explicitly owned UI roots participate in control discovery. The
     // score viewport's imported musical source remains outside this scope.
-    for (const id of ['view-switch', 'event-navigator', 'source-editor', 'entry-kind', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack']) {
+    for (const id of ['view-switch', 'event-navigator', 'source-editor', 'entry-kind', 'entry-accidentals', 'entry-duration', 'entry-dots', 'entry-attack', 'selection-kind', 'selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack']) {
       const root = shell.querySelector<HTMLElement>(`#${id}`)?.shadowRoot;
       if (root) this.controlScope.register(root);
     }

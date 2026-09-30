@@ -11,8 +11,9 @@ const manifest = JSON.parse(await readFile(resolve(directory, '.vite/manifest.js
 // Listen adds about 1.2 kB of initial UI/lifecycle code; its 4.8 kB audio
 // controller is loaded on demand. Native musical clipboard and atomic bar
 // continuation add about 3.5 kB gzip; Author measured about 636.8 kB. Matching Select quick controls and mixed
-// attack states add about 1.3 kB; Author now measures about 638.1 kB.
-const budgets = { 'index.html': 50_500, 'author.html': 638_750 };
+// attack states add about 1.3 kB. Select Note/Rest conversion with per-measure
+// middle-line defaults adds about 0.9 kB; Author now measures about 639.1 kB.
+const budgets = { 'index.html': 50_500, 'author.html': 639_500 };
 
 function graph(entry, includeDynamic = false, visited = new Set()) {
   if (visited.has(entry)) return visited;

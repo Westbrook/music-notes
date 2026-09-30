@@ -197,3 +197,9 @@ These are Chromium/local-browser checks. Screen-reader combinations, other brows
 - Real controls report SVG opacity **0.8** and label opacity **1**. The 390px phone fixture retains **44px controls**, a **101px palette**, and **451px usable score height** in its score view. The expanded tool layout was visually inspected.
 - Both optimized production entry points render their Phosphor/Bravura control paths; Author starts with the correct quarter-note recipe. Bravura control artwork has no runtime font dependency.
 - Long workspace tests now release Lit render ranges during fixture cleanup before unlinking their DOM. This removes test-spy retention without changing production teardown, assertions, or heap limits.
+
+## Select Note/Rest palette
+
+The Select Note/Rest group uses the existing guarded selection controller and atomic `convert-events` transaction. Existing notes retain their pitches when a mixed selection is changed to notes; only rests and slashes are converted. The explicit `pitchPlacement: 'staff-middle'` command option resolves each event's measure clef and key independently inside one transaction. The model's `middleLinePitch` shares the existing clef reference table and returns absolute spelling. Rhythm staves stay pitchless; three-roads conversion explicitly selects Same. No chooser opens, and no conversion reads or modifies the next-entry recipe.
+
+Current initial delivery is about 50.1 kB gzip for the workbook and 639.1 kB for Author, within the 50.5 kB and 639.5 kB budgets.

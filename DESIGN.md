@@ -135,7 +135,7 @@ groups. Maintain a visible gap between separate groups.
 | `music-view-switch` | Write / Read / Pages; stable top-level navigation |
 | `music-toggle-button-group` | Responsive musical choices with native overflow |
 | `.selection-shortcuts` | Direct accidentals and road directions for selected music |
-| `#entry-kind` | Note / Rest before Accidentals in the quick entry palette |
+| `#entry-kind`, `#selection-kind` | Note / Rest before Accidentals in the entry and Select palettes |
 | `.entry-direction-choices` | Relative pitch direction within the writing chooser |
 | `.accidental-choices`, `#selection-chooser-accidentals` | Full accidental choices; retain readable grid layouts |
 

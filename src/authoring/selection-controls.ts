@@ -1,5 +1,5 @@
 import { phPencilSimple, phSlidersHorizontal } from '../ui/icons/phosphor.js';
-import { bravuraGClef, bravuraNoteheadSlashWhiteWhole, bravuraRestWholeLegerLine } from '../ui/icons/bravura.js';
+import { bravuraNoteQuarterUp, bravuraRestQuarter, bravuraNoteheadSlashHorizontalEnds, bravuraGClef, bravuraNoteheadSlashWhiteWhole, bravuraRestWholeLegerLine } from '../ui/icons/bravura.js';
 import { durationIcon, eventIcon, markingIcon } from '../ui/notation-icons.js';
 import { setControlLabel, setControlIcon } from '../ui/control-content.js';
 import { formatRational, harmonyIntervalText, pitchDescription, pitchText, validateAlteration } from '../model/index.js';
@@ -7,6 +7,7 @@ import type { ArticulationType, Duration, EventMarking, MusicEvent, PitchDirecti
 import { composedAncestors, composedContains } from '../ui/composed-dom.js';
 import type { MusicToggleButtonGroup } from '../ui/toggle-button-group.js';
 import { ENTRY_ACCIDENTAL_OPTIONS, ENTRY_ATTACK_OPTIONS, ENTRY_DOTS_OPTIONS, entryAttack, entryDurationOptions } from './entry-palette.js';
+import { assertEventMarkingsCompatible } from './event-markings-commands.js';
 import { analyzeEventPropertyChange } from './batch-properties.js';
 import { asControlScope } from './control-scope.js';
 import type { ControlRoot, ControlScope } from './control-scope.js';
@@ -81,7 +82,9 @@ const accidentals = [['selection-flat', -1], ['selection-natural', 0], ['selecti
 const chooserAccidentals = accidentals.map(([id, alter]) => [id.replace('selection-', 'selection-chooser-'), alter] as const);
 const directions = [['selection-higher', 'higher'], ['selection-same', 'same'], ['selection-lower', 'lower']] as const;
 const staleMessage = 'The selected music changed. Choose the current control again before applying this edit.';
-const quickGroups = ['selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack'] as const;
+const propertyGroups = ['selection-accidentals', 'selection-quick-duration', 'selection-quick-dots', 'selection-quick-attack'] as const;
+const quickGroups = ['selection-kind', ...propertyGroups] as const;
+const isNote = (event: MusicEvent): boolean => ['note', 'chord', 'rhythm', 'road'].includes(event.kind);
 const heldMessage = 'Properties is holding another target. Return to that target or discard its draft before using this action.';
 
 function binding(state: SelectionControlsState): Binding {
@@ -370,7 +373,8 @@ export class SelectionControls {
         this.quickKey = '';
         try {
           const value = (event as CustomEvent<{ value?: string }>).detail?.value ?? group.value;
-          this.changeProperty(this.quickChange(id, value, this.options.state()), undefined, group);
+          if (id === 'selection-kind') this.changeKind(value, group);
+          else this.changeProperty(this.quickChange(id, value, this.options.state()), undefined, group);
         } catch (error) { this.fail(error instanceof Error ? error.message : String(error)); this.refresh(); }
       }, { signal });
     }
@@ -605,10 +609,11 @@ export class SelectionControls {
     const key = binding(state).key;
     if (this.quickKey === key) return;
     this.quickKey = key;
+    this.renderKind(state, events);
     const values = [common(events.flatMap(event => event.pitches.map(pitch => pitch.alter))),
       common(events.map(event => event.duration)), common(events.map(event => event.dots)), ''];
     const options = [ENTRY_ACCIDENTAL_OPTIONS, entryDurationOptions(!!events.length && events.every(event => event.kind === 'rest')), ENTRY_DOTS_OPTIONS, ENTRY_ATTACK_OPTIONS];
-    quickGroups.forEach((id, index) => {
+    propertyGroups.forEach((id, index) => {
       const group = this.el(id) as MusicToggleButtonGroup;
       group.value = values[index]; group.mixed = values[index] === ''; group.notifyUnchanged = true;
       group.options = options[index].map(option => {
@@ -628,6 +633,63 @@ export class SelectionControls {
       group.mount();
     });
     this.el('selection-quick-tools').hidden = !!state.activeMarkingId || !!state.pitchDragArmed || !events.length;
+  }
+
+  private noteKind(state: SelectionControlsState): 'note' | 'rhythm' | 'road' {
+    const staff = state.score.staves.find(staff => staff.measures.some(measure => measure.voices.some(voice => voice.events.some(event => event.id === state.event?.id))));
+    return staff?.notation === 'rhythm' ? 'rhythm' : staff?.notation === 'three-roads' ? 'road' : 'note';
+  }
+
+  private kindMembers(state: SelectionControlsState, value: string): readonly MusicEvent[] {
+    return state.events.filter(event => value === 'rest' ? event.kind !== 'rest' : !isNote(event));
+  }
+
+  private kindReason(state: SelectionControlsState, value: string): string | undefined {
+    const reason = writingReason(state) ?? selectionReason(state)
+      ?? (state.activeMarkingId ? 'Select the parent event to change its kind.' : undefined);
+    if (reason) return reason;
+    if (value !== 'note' && value !== 'rest') return 'Choose Note or Rest.';
+    const scope = analyzeEventPropertyChange(state.score, state.eventIds, { property: 'articulation', value: 'fermata', present: false });
+    if (!scope.eligible) return scope.reason;
+    for (const event of this.kindMembers(state, value)) {
+      if (event.tie !== 'none') return 'Clear the connected tie chain before changing notes to rests.';
+      if (event.measureRest) return 'Choose an explicit written duration in Properties before changing a full-measure rest to a note.';
+      try { assertEventMarkingsCompatible(event, { kind: value === 'rest' ? 'rest' : this.noteKind(state), rhythmic: false }); }
+      catch (error) { return error instanceof Error ? error.message : String(error); }
+    }
+    return undefined;
+  }
+
+  private renderKind(state: SelectionControlsState, events: readonly MusicEvent[]): void {
+    const group = this.el('selection-kind') as MusicToggleButtonGroup;
+    const kind = this.noteKind(state);
+    group.options = [
+      { value: 'note', label: kind === 'road' ? '3 roads note' : kind === 'rhythm' ? 'Rhythm note' : 'Note', icon: kind === 'road' ? bravuraNoteheadSlashHorizontalEnds : bravuraNoteQuarterUp },
+      { value: 'rest', label: 'Rest', icon: bravuraRestQuarter },
+    ].map(option => ({ ...option, disabled: !!this.kindReason(state, option.value), title: this.kindReason(state, option.value) ?? option.label }));
+    group.value = common(events.map(event => isNote(event) ? 'note' : event.kind === 'rest' ? 'rest' : ''));
+    group.mixed = false;
+    group.choiceStates = Object.fromEntries(['note', 'rest'].map(value => {
+      const count = events.filter(event => value === 'note' ? isNote(event) : event.kind === 'rest').length;
+      return [value, count === 0 ? 'false' : count === events.length ? 'true' : 'mixed'];
+    }));
+    group.disabled = group.options.every(option => option.disabled);
+    group.title = group.disabled ? this.kindReason(state, 'note') ?? '' : '';
+    group.mount();
+  }
+
+  private changeKind(value: string, group: MusicToggleButtonGroup): void {
+    const state = this.guard(undefined, group);
+    if (!state) { this.refresh(); return; }
+    const reason = this.kindReason(state, value);
+    if (reason) { this.fail(reason); this.refresh(); return; }
+    const members = this.kindMembers(state, value);
+    if (!members.length) { this.clearError(); this.refresh(); this.options.success?.(); return; }
+    const kind = value === 'rest' ? 'rest' : this.noteKind(state);
+    this.perform({ type: 'convert-events', eventIds: members.map(event => event.id), kind, rhythmic: false, pitch: '',
+      ...(kind === 'note' ? { pitchPlacement: 'staff-middle' as const } : {}),
+      ...(kind === 'road' ? { pitchDirection: 'same' as const } : {}),
+    });
   }
 
   private changeDirection(value: PitchDirection, name?: SurfaceName, element?: HTMLElement): void {
