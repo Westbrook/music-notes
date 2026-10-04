@@ -12,7 +12,7 @@ describe('slotted Author frame boundaries', () => {
     const frame = document.getElementById('author-workbench') as AuthorWorkspaceFrame;
     expect(frame).toBeInstanceOf(AuthorWorkspaceFrame);
     expect(frame.shadowRoot).not.toBeNull();
-    for (const [slotName, id] of [['score', 'score-editor'], ['tools', 'workspace-tools'], ['palette', 'workspace-dock']]) {
+    for (const [slotName, id] of [['score', 'score-editor'], ['tools', 'workspace-tools'], ['palette', 'workspace-dock'], ['listen', 'listen-tools'], ['read', 'read-tools']]) {
       const region = document.getElementById(id)!;
       const slot = frame.shadowRoot!.querySelector<HTMLSlotElement>(`slot[name="${slotName}"]`)!;
       expect(region.parentElement).toBe(frame);

@@ -7,11 +7,7 @@ import { buttonContent } from '../../ui/button-content.js';
 export function pageTools(): TemplateResult {
   return html`
     <section id="pages-tools" class="pages-tools nonprinting" aria-label="Paper and publishing" hidden="">
-      <div class="page-controls mode-panel">
-        <div>
-          <p class="panel-kicker">Make room for the performance</p>
-          <p class="field-help">Set the paper, inspect every page, then print or save as PDF.</p>
-        </div>
+      <div class="page-controls">
         <button id="print-score" type="button" class="primary-button">${buttonContent(phPrinter, 'Print / Save as PDF')}</button>
       </div>
       <div class="tool-disclosures page-disclosures">
@@ -106,11 +102,13 @@ export function pageTools(): TemplateResult {
       </div>
       <section class="preflight-panel" aria-label="Publication checks">
         <div id="page-preflight" role="status"></div>
-        <label class="check-field" for="ack-layout-warnings">
-          <input id="ack-layout-warnings" name="ack-layout-warnings" type="checkbox"> I have inspected the reported layout warnings on these pages.</label>
-        <label class="check-field" for="print-draft">
-          <input id="print-draft" name="print-draft" type="checkbox"> Print a clearly marked draft if musical work remains</label>
-        <p class="field-help">A print request opens the browser dialog; it does not confirm that a PDF was saved. Match the preview’s paper settings and turn off browser headers and footers.</p>
+        <details class="print-options"><summary>Print options</summary>
+          <label class="check-field" for="ack-layout-warnings">
+            <input id="ack-layout-warnings" name="ack-layout-warnings" type="checkbox"> I have inspected the reported layout warnings on these pages.</label>
+          <label class="check-field" for="print-draft">
+            <input id="print-draft" name="print-draft" type="checkbox"> Print a clearly marked draft if musical work remains</label>
+          <p class="field-help">A print request opens the browser dialog; it does not confirm that a PDF was saved. Match the preview’s paper settings and turn off browser headers and footers.</p>
+        </details>
       </section>
     </section>
   `;

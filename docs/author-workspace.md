@@ -5,7 +5,7 @@ Open `/author.html` after starting the development server with `npm run dev`. Au
 | View | Purpose |
 | --- | --- |
 | **Write** | Enter and revise music, select events or measures, and open focused controls for voices, tuplets, and instructions. The writing frame keeps its width when tools open or close. |
-| **Read** | Hide entry controls and keep the current reading width stable. Use Previous/Next to move between systems, Go to measure, or **Refit this window** to recalculate wrapping. |
+| **Read** | Hide entry controls and keep the current reading width stable. Use the bottom dock’s Previous/Next controls to move between systems, Go to measure, or **Refit this window** to recalculate wrapping. |
 | **Listen** | Play or pause the current accepted score/part, stop, change starting tempo, follow note highlights, and download the audio as WAV. |
 | **Pages** | Compose the full score or selected part into Letter or A4 page boxes, adjust its layout, review turns, and request native printing. |
 
@@ -172,7 +172,7 @@ A recovery warning persists in the header through navigation and routine editing
 
 ## Listen and download audio
 
-Choose **Listen** in the view switch. **Play** prepares the currently accepted score or selected part and starts browser audio; it becomes **Pause**, then **Resume**. **Stop** returns to the beginning. Leaving Listen stops playback. A highlight follows the written event without changing the editing selection or saved writing destination.
+Choose **Listen** in the view switch. Its controls occupy the same bottom dock as the writing palette, with a compact row on wide screens and wrapping controls on narrow screens. Status and playback notices remain visible; **Playback details** expands in the dock. **Play** prepares the currently accepted score or selected part and starts browser audio; it becomes **Pause**, then **Resume**. **Stop** returns to the beginning. Leaving Listen stops playback. A highlight follows the written event without changing the editing selection or saved writing destination.
 
 No separate save or export is needed. Listen reads the accepted editor model, including its current octaves. Apply or discard pending Source and form edits in Write before listening. Local recovery and a downloaded project are separate from playback: recovery does not update earlier exported score/audio files. Changes to music, part, or tempo discard prepared audio, and a late render cannot start after Stop or leaving Listen.
 
@@ -182,7 +182,7 @@ The portable sound is a synthesized brass-like approximation, not the macOS inst
 
 ## Prepare pages and print
 
-Select the full score or desired part, then open **Pages**. Each has its own paper, orientation, margins, staff scale, measure numbering, maximum-measures preference, final-system justification, and boundary choices. Automatic wrapping remains the default. **Lines & page boundaries** can start a measure on a new line or page and prefer keeping it with the next measure. Explicit boundaries and actual fit take precedence over keep preferences.
+Select the full score or desired part, then open **Pages**. The bottom dock keeps Print and publication status visible, with expandable paper, boundary, page-turn, and **Print options** controls. The page preview scrolls independently above it. Each has its own paper, orientation, margins, staff scale, measure numbering, maximum-measures preference, final-system justification, and boundary choices. Automatic wrapping remains the default. **Lines & page boundaries** can start a measure on a new line or page and prefer keeping it with the next measure. Explicit boundaries and actual fit take precedence over keep preferences.
 
 Pages measures the engraving and composes complete SVG systems into paper-sized boxes with a title, running header, and page numbers. These same page elements are used for printing. This is distinct from the workbook's 680px fixed-width view, which does not compose physical pages.
 

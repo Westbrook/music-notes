@@ -42,7 +42,7 @@ The reusable stores create no global application instances. `AuthorViewState`, `
 | Component | Public delivery contract |
 | --- | --- |
 | `music-workbook-toolbar` | Inject `.model: WorkbookState`. Its `actions` and `links` slots follow the owned preview/print controls; `sourceHref` supplies fallback link content. Local labels, help, status, and unique default IDs share its shadow root. |
-| `music-workspace-frame` | Slots `score`, `tools`, and `palette` arrange caller-owned regions. `.mode` and `.toolsPresentation` reflect `mode` and `tools-presentation`; presentation is `closed`, `side`, or `sheet`. The frame adds no scroll owner. |
+| `music-workspace-frame` | Slots `score`, `tools`, `palette`, `listen`, and `read` arrange caller-owned regions. Palette, Listen, and Read share the bottom dock area in their respective modes. `.mode` and `.toolsPresentation` reflect `mode` and `tools-presentation`; presentation is `closed`, `side`, or `sheet`. The frame adds no scroll owner. |
 | `music-panel-frame` | Slots `header`, `body`, and `footer` frame a native region. The assigned body remains its scroll owner; the caller keeps dialog/popover semantics. |
 | `music-view-switch` | `.mode` supplies the accepted mode. `view-request` carries `{ mode }`; the coordinator performs the transition before publishing the new mode. |
 | `music-source-editor` | `renderState({ documentId, value, status, readOnly })` supplies the view. `source-change` and `source-apply` carry `{ value }`; `source-revert` requests discard. Native fields, labels, descriptions, and feedback share its shadow root. |

@@ -33,15 +33,15 @@ export function authorShellTemplate(mode: ViewMode = 'write'): TemplateResult {
   return html`
     ${workspaceHeader(mode)}
     <main class="author-workspace">
-      ${readingTools()}
-      ${listeningTools()}
-      ${pageTools()}
       <music-workspace-frame id="author-workbench" class="author-workbench" .mode=${mode} tools-presentation="closed">
         ${scoreFrame()}
         ${writingTools()}
+        ${readingTools()}
+        ${listeningTools()}
         ${musicPalette()}
       </music-workspace-frame>
       <div id="page-host" class="page-host" aria-label="Physical page preview" hidden></div>
+      ${pageTools()}
     </main>
     ${actionConfirmation()}
     ${workspaceReview()}

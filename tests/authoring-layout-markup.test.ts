@@ -1567,7 +1567,8 @@ describe('score-first authoring CSS contract', () => {
     }
     expect(button('location-trigger').contains(element('palette-owner-label'))).toBe(true);
     expect(declarationsFor('::slotted([slot="score"])', workspaceCss)).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\);/);
-    expect(declarationsFor(':host([mode="read"])', workspaceCss)).toMatch(/grid-template-areas:\s*"score";/);
+    expect(declarationsFor('::slotted([slot="read"])', workspaceCss)).toMatch(/grid-area:\s*dock;/);
+    expect(declarationsFor(':host(:not([mode="read"])) ::slotted([slot="read"])', workspaceCss)).toMatch(/display:\s*none\s*!important;/);
   });
 
   it('stacks musical controls before the mode row when width or larger text prevents a single row', () => {

@@ -17,11 +17,17 @@ try {
   const requests = []; page.on('request', request => requests.push(request.url()));
   await page.goto(`${base}/tests/authoring-listen-browser.html`);
   await page.waitForSelector('body[data-author-ready="true"][data-render-state="ready"]');
+  const writingDock = await page.locator('#workspace-dock').boundingBox();
   const accepted = await page.locator('music-staff#trombone-study').evaluate(el => el.outerHTML);
   const music = await page.locator('music-staff#trombone-study').evaluate(el => el.innerHTML);
   phase = 'enter Listen';
   await page.getByRole('button', { name: 'Listen', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#listen-status').textContent.startsWith('Ready'));
+  const listeningDock = await page.locator('#listen-tools').boundingBox();
+  assert.equal(listeningDock.x, writingDock.x);
+  assert.equal(listeningDock.width, writingDock.width);
+  assert.ok(Math.abs(listeningDock.y + listeningDock.height - writingDock.y - writingDock.height) <= 1);
+  assert.ok(Math.abs(listeningDock.height - writingDock.height) <= 2, 'Desktop docks should have matching compact heights');
   assert.equal(await page.locator('#listen-tempo').inputValue(), '80');
   phase = 'transport';
   await page.locator('#listen-play').click();
@@ -71,6 +77,26 @@ try {
   assert.ok(await page.getByRole('button', { name: 'Listen', exact: true }).isVisible());
   assert.ok(await page.locator('#listen-download').isVisible());
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    for (const expanded of [false, true]) {
+      if (expanded) await page.locator('.listen-details summary').click();
+      const geometry = await page.evaluate(() => {
+        const dock = document.querySelector('#listen-tools');
+        const bounds = dock.getBoundingClientRect();
+        const frame = document.querySelector('#author-workbench').getBoundingClientRect();
+        const score = document.querySelector('#score-editor').getBoundingClientRect();
+        return { bottom: bounds.bottom, frameBottom: frame.bottom, scoreBottom: score.bottom, top: bounds.top,
+          width: bounds.width, frameWidth: frame.width, overflow: dock.scrollWidth > dock.clientWidth };
+      });
+      assert.equal(geometry.bottom, geometry.frameBottom, 'Listen stays in the bottom dock row');
+      assert.equal(geometry.width, geometry.frameWidth);
+      assert.ok(geometry.scoreBottom <= geometry.top + 1, 'Dock must not overlap the score');
+      assert.equal(geometry.overflow, false, 'Controls and expanded details must fit the dock width');
+      if (expanded) await page.locator('.listen-details summary').click();
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   phase = 'return to Write';
   await page.getByRole('button', { name: 'Write', exact: true }).click();
   assert.equal(await page.locator('music-staff#trombone-study').evaluate(el => el.innerHTML), music);
@@ -167,6 +193,6 @@ try {
   assert.equal(await page.locator('music-staff#five-four').evaluate(el => el.innerHTML), fiveFourMusic);
   assert.equal(requests.some(url => !url.startsWith(base) && !url.startsWith('blob:')), false);
   assert.deepEqual(errors, []);
-  const result = { engine, browser: browser.version(), passed: true, checks: ['current G3 pitch in WAV', 'play/pause/resume/stop', 'highlighting', 'tempo and download duration', 'music unchanged by Listen', 'pending Source blocks playback', 'applied source invalidates audio', 'mobile controls and no page overflow', 'incomplete and empty measures play', 'WAV contains exact silent gaps and aligned later notes', 'no highlight during padded silence', 'reported 1/2 of 5/4 notation notice allows playback and WAV download', 'no external audio requests', 'no browser errors'] };
+  const result = { engine, browser: browser.version(), passed: true, checks: ['current G3 pitch in WAV', 'play/pause/resume/stop', 'highlighting', 'tempo and download duration', 'music unchanged by Listen', 'pending Source blocks playback', 'applied source invalidates audio', 'mobile controls and no page overflow', 'matching desktop dock height and bottom alignment', 'responsive dock and expanded details stay below the score', 'incomplete and empty measures play', 'WAV contains exact silent gaps and aligned later notes', 'no highlight during padded silence', 'reported 1/2 of 5/4 notation notice allows playback and WAV download', 'no external audio requests', 'no browser errors'] };
   await writeFile(`${output}/result.json`, JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } finally { await browser.close(); }

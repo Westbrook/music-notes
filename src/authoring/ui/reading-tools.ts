@@ -6,7 +6,7 @@ import { buttonContent } from '../../ui/button-content.js';
 /** Native navigation controls for the reading view. */
 export function readingTools(): TemplateResult {
   return html`
-    <section id="read-tools" class="read-tools mode-panel nonprinting" aria-label="Reading controls" hidden="">
+    <section slot="read" id="read-tools" class="read-tools nonprinting" aria-label="Reading controls" hidden="">
       <div>
         <p class="panel-kicker">Stay with the music</p>
         <p id="read-location" class="field-help" role="status">Reading at authored pitch.</p>

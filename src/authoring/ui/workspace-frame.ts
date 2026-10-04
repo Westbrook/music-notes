@@ -57,7 +57,7 @@ export class AuthorWorkspaceFrame extends LitElement {
     }
     ::slotted([slot="score"]:focus-visible) { outline-offset: -3px; }
     ::slotted([slot="tools"]) { grid-area: score; justify-self: start; z-index: 1; }
-    ::slotted([slot="palette"]) { grid-area: dock; }
+    ::slotted([slot="palette"]), ::slotted([slot="listen"]), ::slotted([slot="read"]) { grid-area: dock; }
     /* The sheet hides its same-width paper without changing engraving width. */
     :host([tools-presentation="sheet"]) ::slotted([slot="score"]) { visibility: hidden; pointer-events: none; }
     :host([tools-presentation="side"]) ::slotted([slot="tools"]) {
@@ -66,10 +66,11 @@ export class AuthorWorkspaceFrame extends LitElement {
     }
     :host([tools-presentation="sheet"]) ::slotted([slot="tools"]) { width: 100%; margin-inline-start: 0; }
     :host([tools-presentation="closed"]) ::slotted([slot="tools"]) { display: none !important; }
-    :host([mode="read"]), :host([mode="listen"]) { grid-template-rows: minmax(0, 1fr); grid-template-areas: "score"; }
     :host([mode="listen"]) ::slotted([slot="score"]) { width: min(960px, 100%); }
     :host(:not([mode="write"])) ::slotted([slot="tools"]),
     :host(:not([mode="write"])) ::slotted([slot="palette"]) { display: none !important; }
+    :host(:not([mode="listen"])) ::slotted([slot="listen"]) { display: none !important; }
+    :host(:not([mode="read"])) ::slotted([slot="read"]) { display: none !important; }
     @media (forced-colors: active) {
       ::slotted([slot="score"]) { border-color: CanvasText; }
     }
@@ -77,7 +78,7 @@ export class AuthorWorkspaceFrame extends LitElement {
   `;
 
   protected override render(): TemplateResult {
-    return html`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot>`;
+    return html`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`;
   }
 
   /** Commit initial slots before controller and fixture binding. */
