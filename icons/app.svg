@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Music Notes</title>
+  <defs>
+    <linearGradient id="ink" x2="1" y2="1">
+      <stop stop-color="#49315f"/>
+      <stop offset="1" stop-color="#20252b"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#ink)" d="M0 0h512v512H0z"/>
+  <g stroke="#fff8ec" stroke-opacity=".16" stroke-width="5" stroke-linecap="round">
+    <path d="M112 192h288M112 232h288M112 272h288M112 312h288M112 352h288"/>
+  </g>
+  <g fill="#fff8ec">
+    <path d="M204 177 355 143v49l-151 34z"/>
+    <path d="M204 177h17v149h-17zM338 160h17v133h-17z"/>
+    <ellipse cx="185" cy="327" rx="37" ry="27" transform="rotate(-23 185 327)"/>
+    <ellipse cx="319" cy="294" rx="37" ry="27" transform="rotate(-23 319 294)"/>
+  </g>
+</svg>

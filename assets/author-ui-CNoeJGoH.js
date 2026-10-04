@@ -1,4 +1,4 @@
-import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Oe,f as be,S as He}from"./button-content-Cd98Nkdi.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as U,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as F,a9 as I,aa as ct,ab as dt,ac as ve,ad as ut,ae as pt,af as bt,ag as ht,ah as vt,ai as De,aj as J,ak as me,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./source-feedback-X8EHr6hQ.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
+import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Ue,f as be,S as He}from"./button-content-DK5Fi-Iu.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as O,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as I,a9 as F,aa as ct,ab as dt,ac as ve,ad as ut,ae as pt,af as bt,ag as ht,ah as vt,ai as De,aj as J,ak as me,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./offline-status-jkT5tb3B.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
     :host {
       box-sizing: border-box;
       display: grid;
@@ -216,7 +216,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
   `}function Ct(){return o`
     <section id="pages-tools" class="pages-tools nonprinting" aria-label="Paper and publishing" hidden="">
       <div class="page-controls">
-        <button id="print-score" type="button" class="primary-button">${e(Oe,"Print / Save as PDF")}</button>
+        <button id="print-score" type="button" class="primary-button">${e(Ue,"Print / Save as PDF")}</button>
       </div>
       <div class="tool-disclosures page-disclosures">
         <details id="paper-inspector" class="inspector"><summary>Paper &amp; spacing</summary>
@@ -319,7 +319,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         </details>
       </section>
     </section>
-  `}const fe="Staff, measure, voice, and event navigation";function Fe(i){const a=new Set(i.selectedIds);return o`
+  `}const fe="Staff, measure, voice, and event navigation";function Ie(i){const a=new Set(i.selectedIds);return o`
     ${P(i.measure.voices,n=>n.id,(n,u)=>o`
       <div class="event-voice-group">
         <p class="field-help">Voice ${u+1}</p>
@@ -337,8 +337,8 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
     ${P(i.measure.annotations,n=>n.id,n=>o`
       <button type="button" data-source-id=${n.id}>${e(n.kind==="dynamics"?Re:n.kind==="tempo"?c:N,`${n.kind}: ${n.text||n.bpm} · at ${be(n.onset)}`,{layout:"inline"})}</button>
     `)}
-  `}function re(i){if(!i.isConnected)return null;const a=i.getRootNode();return"host"in a&&re(a.host)!==a.host?null:a.activeElement??null}function Ie(i){const a=re(i);return a&&i.contains(a)&&a.dataset.sourceId?{element:a,sourceId:a.dataset.sourceId}:void 0}function Ue(i,a,n){if(!a||!i.isConnected)return;if(i.contains(a.element)){re(i)!==a.element&&a.element.focus({preventScroll:!0});return}([...i.querySelectorAll("button[data-source-id]")].find(s=>s.dataset.sourceId===a.sourceId)??i.querySelector("button")??n)?.focus({preventScroll:!0})}const B=class B extends m{constructor(){super(...arguments),this.navigationLabel=fe,this.navigate=a=>{const u=a.composedPath().find(s=>s instanceof Element&&s.localName==="button"&&this.renderRoot.contains(s))?.dataset.sourceId;u&&this.dispatchEvent(new CustomEvent("navigate-request",{bubbles:!0,composed:!0,detail:{sourceId:u,shiftKey:a.shiftKey===!0,metaKey:a.metaKey===!0,ctrlKey:a.ctrlKey===!0,altKey:a.altKey===!0}}))}}renderState(a,n){this.fallbackFocus=n,this.state=a,this.requestUpdate(),this.performUpdate()}willUpdate(){this.focused=Ie(this.renderRoot)}updated(){Ue(this.renderRoot,this.focused,this.fallbackFocus??this.renderRoot.querySelector("nav")??void 0),this.focused=void 0}render(){return o`<nav role="navigation" aria-label=${this.navigationLabel||fe}
-      tabindex="-1" @click=${this.navigate}>${this.state?Fe(this.state):$e}</nav>`}};B.properties={state:{attribute:!1},navigationLabel:{attribute:"aria-label"}},B.styles=w`
+  `}function re(i){if(!i.isConnected)return null;const a=i.getRootNode();return"host"in a&&re(a.host)!==a.host?null:a.activeElement??null}function Fe(i){const a=re(i);return a&&i.contains(a)&&a.dataset.sourceId?{element:a,sourceId:a.dataset.sourceId}:void 0}function Oe(i,a,n){if(!a||!i.isConnected)return;if(i.contains(a.element)){re(i)!==a.element&&a.element.focus({preventScroll:!0});return}([...i.querySelectorAll("button[data-source-id]")].find(s=>s.dataset.sourceId===a.sourceId)??i.querySelector("button")??n)?.focus({preventScroll:!0})}const B=class B extends m{constructor(){super(...arguments),this.navigationLabel=fe,this.navigate=a=>{const u=a.composedPath().find(s=>s instanceof Element&&s.localName==="button"&&this.renderRoot.contains(s))?.dataset.sourceId;u&&this.dispatchEvent(new CustomEvent("navigate-request",{bubbles:!0,composed:!0,detail:{sourceId:u,shiftKey:a.shiftKey===!0,metaKey:a.metaKey===!0,ctrlKey:a.ctrlKey===!0,altKey:a.altKey===!0}}))}}renderState(a,n){this.fallbackFocus=n,this.state=a,this.requestUpdate(),this.performUpdate()}willUpdate(){this.focused=Fe(this.renderRoot)}updated(){Oe(this.renderRoot,this.focused,this.fallbackFocus??this.renderRoot.querySelector("nav")??void 0),this.focused=void 0}render(){return o`<nav role="navigation" aria-label=${this.navigationLabel||fe}
+      tabindex="-1" @click=${this.navigate}>${this.state?Ie(this.state):$e}</nav>`}};B.properties={state:{attribute:!1},navigationLabel:{attribute:"aria-label"}},B.styles=w`
     :host {
       display: block;
       min-width: 0;
@@ -411,7 +411,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         outline: var(--music-ui-focus-width) dashed Highlight;
       }
     }
-  `;let O=B;customElements.get("music-event-navigator")||customElements.define("music-event-navigator",O);const ge=new WeakSet;function _t(i,a,n){if(i instanceof O){i.renderState(a,n);return}const u=Ie(i);ge.has(i)||(i.replaceChildren(),ge.add(i)),ke(Fe(a),i),Ue(i,u,n)}const de=class de extends m{constructor(){super(...arguments),this.onScroll=a=>{const n=a.composedPath()[0];!this.isConnected||!(n instanceof HTMLElement)||this.dispatchEvent(new CustomEvent("notation-viewport-change",{bubbles:!0,composed:!0,detail:{scroller:n,layout:this.surface?.getLayoutGeometry()}}))}}mount(){this.performUpdate()}get scoreMount(){return this.mount(),this.renderRoot.querySelector(".score-mount")}get overlayMount(){return this.mount(),this.renderRoot.querySelector(".author-overlays")}get previewMount(){return this.mount(),this.renderRoot.querySelector(".gesture-overlays")}get surface(){return this.scoreMount.querySelector("music-system,music-staff,music-measure")??void 0}getNativeControlBounds(){return this.isConnected?(this.mount(),[...this.renderRoot.querySelectorAll("slot")].flatMap(a=>a.assignedElements({flatten:!0})).filter(a=>a instanceof HTMLElement&&a.getClientRects().length>0).map(a=>a.getBoundingClientRect()).filter(a=>a.width>0&&a.height>0)):[]}render(){return o`
+  `;let U=B;customElements.get("music-event-navigator")||customElements.define("music-event-navigator",U);const ge=new WeakSet;function _t(i,a,n){if(i instanceof U){i.renderState(a,n);return}const u=Fe(i);ge.has(i)||(i.replaceChildren(),ge.add(i)),ke(Ie(a),i),Oe(i,u,n)}const de=class de extends m{constructor(){super(...arguments),this.onScroll=a=>{const n=a.composedPath()[0];!this.isConnected||!(n instanceof HTMLElement)||this.dispatchEvent(new CustomEvent("notation-viewport-change",{bubbles:!0,composed:!0,detail:{scroller:n,layout:this.surface?.getLayoutGeometry()}}))}}mount(){this.performUpdate()}get scoreMount(){return this.mount(),this.renderRoot.querySelector(".score-mount")}get overlayMount(){return this.mount(),this.renderRoot.querySelector(".author-overlays")}get previewMount(){return this.mount(),this.renderRoot.querySelector(".gesture-overlays")}get surface(){return this.scoreMount.querySelector("music-system,music-staff,music-measure")??void 0}getNativeControlBounds(){return this.isConnected?(this.mount(),[...this.renderRoot.querySelectorAll("slot")].flatMap(a=>a.assignedElements({flatten:!0})).filter(a=>a instanceof HTMLElement&&a.getClientRects().length>0).map(a=>a.getBoundingClientRect()).filter(a=>a.width>0&&a.height>0)):[]}render(){return o`
       <slot name="actions" part="actions" data-author-input="native"></slot>
       <div class="score-mount" part="score" @scroll=${this.onScroll}></div>
       <div class="author-overlays" part="selection" aria-hidden="true"></div>
@@ -820,8 +820,8 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
             <button type="button"><selectedcontent></selectedcontent></button>
             ${t({value:"treble",label:"Treble",icon:se})}
             ${t({value:"bass",label:"Bass",icon:Ne})}
-            ${t({value:"alto",label:"Alto",icon:U})}
-            ${t({value:"tenor",label:"Tenor",icon:U})}
+            ${t({value:"alto",label:"Alto",icon:O})}
+            ${t({value:"tenor",label:"Tenor",icon:O})}
           </select>
         </label>
         <label class="field" for="measure-end-bar">Ending barline<select id="measure-end-bar" name="measure-end-bar" class="author-select">
@@ -948,9 +948,9 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
                 <button id="selection-mark-edit" type="button" class="selection-action" hidden>${e(N,o`<span data-control-label>Edit mark</span>`)}</button>
                 <div class="selection-direct-choices">
                   <div id="selection-road-directions" class="selection-shortcuts" role="radiogroup" aria-label="Relative pitch direction" hidden>
-                    <button id="selection-higher" type="button" role="radio" aria-checked="false" tabindex="-1">${e(F,"Higher")}</button>
+                    <button id="selection-higher" type="button" role="radio" aria-checked="false" tabindex="-1">${e(I,"Higher")}</button>
                     <button id="selection-same" type="button" role="radio" aria-checked="false" tabindex="-1">${e(d,"Same")}</button>
-                    <button id="selection-lower" type="button" role="radio" aria-checked="false" tabindex="-1">${e(I,"Lower")}</button>
+                    <button id="selection-lower" type="button" role="radio" aria-checked="false" tabindex="-1">${e(F,"Lower")}</button>
                   </div>
                 </div>
               </div>
@@ -1131,9 +1131,16 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         <button id="download-project" type="button">${e(De,"Download project",{layout:"inline"})}</button>
         <button id="export-html" type="button">${e(ae,"Export musical HTML",{layout:"inline"})}</button>
         <p class="field-help">Local recovery stays on this device. Download a project for a portable copy.</p>
+        <details class="install-help">
+          <summary>Install Music Notes</summary>
+          <p class="field-help">On iPad or iPhone, open this page in Safari, choose Share → Add to Home Screen, leave Open as Web App on if shown, then tap Add. Launch Music Notes from that icon for a workspace without browser tabs or an address bar.</p>
+          <p class="field-help">On other devices, use your browser’s Install app command if available. To move existing work from Safari, Download project here, then use Open project in the installed app.</p>
+          <p class="field-help">Open the installed app online once and wait for offline setup below. Then you can reopen, compose, listen, and export without a connection. Keep downloaded project backups; the system can clear website storage.</p>
+          <music-offline-status class="field-help"></music-offline-status>
+        </details>
       </div>
     </section>
-  `}function Ft(){return o`
+  `}function It(){return o`
     <section id="score-setup" class="surface-popover score-setup nonprinting" popover="auto" aria-labelledby="score-setup-heading">
       <div class="popover-heading">
         <h2 id="score-setup-heading">Score setup</h2>
@@ -1167,8 +1174,8 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
                 <button type="button"><selectedcontent></selectedcontent></button>
                 ${t({value:"treble",label:"Treble",icon:se})}
                 ${t({value:"bass",label:"Bass",icon:Ne})}
-                ${t({value:"alto",label:"Alto",icon:U})}
-                ${t({value:"tenor",label:"Tenor",icon:U})}
+                ${t({value:"alto",label:"Alto",icon:O})}
+                ${t({value:"tenor",label:"Tenor",icon:O})}
               </select>
             </label>
             <label class="field" for="staff-key">Initial key<input id="staff-key" name="staff-key" type="text" value="C">
@@ -1204,7 +1211,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         </section>
       </div>
     </section>
-  `}function It(){return o`
+  `}function Ft(){return o`
     <section id="source-panel" class="surface-popover source-panel nonprinting" popover="auto" aria-labelledby="source-heading">
       <music-panel-frame>
         <div slot="header" class="popover-heading">
@@ -1216,7 +1223,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         </div>
       </music-panel-frame>
     </section>
-  `}function Ut(){return o`
+  `}function Ot(){return o`
     <section id="location-panel" class="surface-popover location-panel nonprinting" popover="auto" aria-labelledby="location-heading">
       <div class="popover-heading">
         <h2 id="location-heading">Location & actions</h2>
@@ -1269,7 +1276,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         <p class="field-help">Add measure inserts an aligned bar across all staves, including hidden parts.</p>
       </div>
     </section>
-  `}function Ot(){return o`
+  `}function Ut(){return o`
     <section id="entry-settings" class="surface-popover entry-settings nonprinting" popover="auto" aria-labelledby="entry-settings-heading">
       <div class="popover-heading">
         <h2 id="entry-settings-heading">New-note options</h2>
@@ -1291,9 +1298,9 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         <p id="entry-placement-help" class="field-help">Choose a value, then point at the staff to place a single pitched note or an ordinary rest. Rest placement also works on rhythm and 3 roads staves. Insert here or Enter uses the exact writing destination; a full-measure rest remains an explicit whole-voice choice.</p>
         <label id="direction-field" class="field inline-road-direction" for="event-direction" hidden>Pitch direction<select id="event-direction" name="event-direction" class="author-select" aria-describedby="direction-help">
             <button type="button"><selectedcontent></selectedcontent></button>
-            ${t({value:"higher",label:"Higher (top)",icon:F})}
+            ${t({value:"higher",label:"Higher (top)",icon:I})}
             ${t({value:"same",label:"Same (middle)",icon:d,selected:!0})}
-            ${t({value:"lower",label:"Lower (bottom)",icon:I})}
+            ${t({value:"lower",label:"Lower (bottom)",icon:F})}
             ${y("same")}
           </select>
         </label>
@@ -1419,9 +1426,9 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
       </div>
       <div class="popover-body">
         <div class="entry-direction-choices" role="group" aria-label="Choose a relative pitch direction">
-          <button id="entry-direction-higher" type="button" aria-pressed="false" data-direction="higher">${e(F,"Higher (top)")}</button>
+          <button id="entry-direction-higher" type="button" aria-pressed="false" data-direction="higher">${e(I,"Higher (top)")}</button>
           <button id="entry-direction-same" type="button" aria-pressed="true" data-direction="same">${e(d,"Same (middle)")}</button>
-          <button id="entry-direction-lower" type="button" aria-pressed="false" data-direction="lower">${e(I,"Lower (bottom)")}</button>
+          <button id="entry-direction-lower" type="button" aria-pressed="false" data-direction="lower">${e(F,"Lower (bottom)")}</button>
         </div>
         <p class="field-help">Relative to the previous main pitch in this voice, including across rests and barlines. A tied continuation stays Same.</p>
         <button id="entry-direction-options" type="button" class="quiet-button" popovertarget="entry-settings">${e(M,"Other note options…")}</button>
@@ -1522,9 +1529,9 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
           <label id="selection-direction-field" class="field" for="selection-direction">Relative pitch direction<select id="selection-direction" name="selection-direction" class="author-select" aria-describedby="selection-pitch-help">
               <button type="button"><selectedcontent></selectedcontent></button>
               <option value="">Mixed</option>
-              ${t({value:"higher",label:"Higher (top)",icon:F})}
+              ${t({value:"higher",label:"Higher (top)",icon:I})}
               ${t({value:"same",label:"Same (middle)",icon:d})}
-              ${t({value:"lower",label:"Lower (bottom)",icon:I})}
+              ${t({value:"lower",label:"Lower (bottom)",icon:F})}
             </select>
           </label>
         </div>
@@ -1628,9 +1635,9 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         <p id="note-editor-context" class="note-editor-context">Select a note on the staff.</p>
         <label id="note-direction-field" class="field" for="note-direction" hidden>Pitch direction<select id="note-direction" name="note-direction" class="author-select" aria-describedby="note-direction-help">
             <button type="button"><selectedcontent></selectedcontent></button>
-            ${t({value:"higher",label:"Higher (top)",icon:F})}
+            ${t({value:"higher",label:"Higher (top)",icon:I})}
             ${t({value:"same",label:"Same (middle)",icon:d,selected:!0})}
-            ${t({value:"lower",label:"Lower (bottom)",icon:I})}
+            ${t({value:"lower",label:"Lower (bottom)",icon:F})}
             ${y("same")}
           </select>
         </label>
@@ -1779,12 +1786,12 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
     ${Qt()}
     ${Gt()}
     ${Mt()}
-    ${Ut()}
     ${Ot()}
+    ${Ut()}
     ${Ht()}
     ${Lt()}
-    ${Ft()}
     ${It()}
+    ${Ft()}
     ${Wt()}
     ${Bt()}
     ${zt()}
