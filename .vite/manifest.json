@@ -1,6 +1,6 @@
 {
-  "_author-ui-Csy0d5s_.js": {
-    "file": "assets/author-ui-Csy0d5s_.js",
+  "_author-ui-DlJcs95-.js": {
+    "file": "assets/author-ui-DlJcs95-.js",
     "name": "author-ui",
     "imports": [
       "_ui-runtime-DZIFwxVs.js",
@@ -58,7 +58,7 @@
     "name": "ui-runtime"
   },
   "author.html": {
-    "file": "assets/author-CAfJZ0yZ.js",
+    "file": "assets/author-DlMYiJQH.js",
     "name": "author",
     "src": "author.html",
     "isEntry": true,
@@ -66,7 +66,7 @@
       "_readonly-signal-D0Iz3__i.js",
       "_button-content-Cd98Nkdi.js",
       "_source-feedback-X8EHr6hQ.js",
-      "_author-ui-Csy0d5s_.js",
+      "_author-ui-DlJcs95-.js",
       "_ui-runtime-DZIFwxVs.js",
       "_semantics-CA6SIlYz.js",
       "_notation-fonts-BN8TYhU_.js"
@@ -76,7 +76,7 @@
       "src/authoring/listen-controller.ts"
     ],
     "css": [
-      "assets/author-ZNJMBixo.css"
+      "assets/author-CA3v0ABZ.css"
     ]
   },
   "index.html": {
@@ -94,7 +94,7 @@
     ]
   },
   "src/authoring/listen-controller.ts": {
-    "file": "assets/listen-controller-DyszHcMH.js",
+    "file": "assets/listen-controller-DszCtkcX.js",
     "name": "listen-controller",
     "src": "src/authoring/listen-controller.ts",
     "isDynamicEntry": true,
@@ -104,7 +104,7 @@
       "_readonly-signal-D0Iz3__i.js",
       "_ui-runtime-DZIFwxVs.js",
       "_source-feedback-X8EHr6hQ.js",
-      "_author-ui-Csy0d5s_.js",
+      "_author-ui-DlJcs95-.js",
       "_semantics-CA6SIlYz.js",
       "_notation-fonts-BN8TYhU_.js"
     ]

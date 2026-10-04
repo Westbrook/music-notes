@@ -1,4 +1,4 @@
-import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Oe,f as be,S as He}from"./button-content-Cd98Nkdi.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as U,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as F,a9 as I,aa as ct,ab as dt,ac as ve,ad as ut,ae as pt,af as bt,ag as ht,ah as vt,ai as De,aj as J,ak as me,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./source-feedback-X8EHr6hQ.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
+import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Oe,f as be,S as He}from"./button-content-Cd98Nkdi.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as U,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as F,a9 as I,aa as ct,ab as dt,ac as ve,ad as ut,ae as pt,af as bt,ag as ht,ah as vt,ai as De,aj as J,ak as me,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./source-feedback-X8EHr6hQ.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
     :host {
       box-sizing: border-box;
       display: grid;
@@ -37,7 +37,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
     }
     ::slotted([slot="score"]:focus-visible) { outline-offset: -3px; }
     ::slotted([slot="tools"]) { grid-area: score; justify-self: start; z-index: 1; }
-    ::slotted([slot="palette"]) { grid-area: dock; }
+    ::slotted([slot="palette"]), ::slotted([slot="listen"]), ::slotted([slot="read"]) { grid-area: dock; }
     /* The sheet hides its same-width paper without changing engraving width. */
     :host([tools-presentation="sheet"]) ::slotted([slot="score"]) { visibility: hidden; pointer-events: none; }
     :host([tools-presentation="side"]) ::slotted([slot="tools"]) {
@@ -46,10 +46,11 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
     }
     :host([tools-presentation="sheet"]) ::slotted([slot="tools"]) { width: 100%; margin-inline-start: 0; }
     :host([tools-presentation="closed"]) ::slotted([slot="tools"]) { display: none !important; }
-    :host([mode="read"]), :host([mode="listen"]) { grid-template-rows: minmax(0, 1fr); grid-template-areas: "score"; }
     :host([mode="listen"]) ::slotted([slot="score"]) { width: min(960px, 100%); }
     :host(:not([mode="write"])) ::slotted([slot="tools"]),
     :host(:not([mode="write"])) ::slotted([slot="palette"]) { display: none !important; }
+    :host(:not([mode="listen"])) ::slotted([slot="listen"]) { display: none !important; }
+    :host(:not([mode="read"])) ::slotted([slot="read"]) { display: none !important; }
     @media (forced-colors: active) {
       ::slotted([slot="score"]) { border-color: CanvasText; }
     }
@@ -174,26 +175,28 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
       </div>
     </header>
   `}function xt(){return o`
-    <section id="listen-tools" class="listen-tools mode-panel nonprinting" aria-label="Listening controls" hidden>
+    <section slot="listen" id="listen-tools" class="listen-tools nonprinting" aria-label="Listening controls" hidden>
       <div class="listen-transport">
         <button id="listen-play" type="button" disabled>Play</button>
         <button id="listen-stop" type="button" disabled>Stop</button>
         <output id="listen-time" aria-label="Playback position" aria-live="off">0:00 / 0:00</output>
-        <label class="field" for="listen-tempo">Starting tempo ♩ / min
+        <label class="field" for="listen-tempo"><span>Starting tempo<br>♩ / min</span>
           <input id="listen-tempo" type="number" min="20" max="300" step="1" value="80" inputmode="numeric" aria-describedby="listen-tempo-help">
         </label>
         <button id="listen-score-tempo" type="button" class="quiet-button">Use score tempo</button>
         <button id="listen-download" type="button" disabled>Download WAV</button>
       </div>
-      <p id="listen-status" class="field-help" role="status">Preparing Listen…</p>
-      <p id="listen-notices" class="field-help"></p>
-      <details class="listen-details"><summary>Playback details</summary>
-        <p id="listen-tempo-help">Tempo changes keep their proportions. Without a written tempo, playback starts at 80 BPM. Tempo controls affect playback only.</p>
-        <p>Plays the current score or selected part using a synthesized brass-like sound. WAV downloads contain the same audio. Sound stays in this browser.</p>
-      </details>
+      <div class="listen-feedback">
+        <p id="listen-status" class="field-help" role="status">Preparing Listen…</p>
+        <p id="listen-notices" class="field-help"></p>
+        <details class="listen-details"><summary>Playback details</summary>
+          <p id="listen-tempo-help">Tempo changes keep their proportions. Without a written tempo, playback starts at 80 BPM. Tempo controls affect playback only.</p>
+          <p>Plays the current score or selected part using a synthesized brass-like sound. WAV downloads contain the same audio. Sound stays in this browser.</p>
+        </details>
+      </div>
     </section>
   `}function St(){return o`
-    <section id="read-tools" class="read-tools mode-panel nonprinting" aria-label="Reading controls" hidden="">
+    <section slot="read" id="read-tools" class="read-tools nonprinting" aria-label="Reading controls" hidden="">
       <div>
         <p class="panel-kicker">Stay with the music</p>
         <p id="read-location" class="field-help" role="status">Reading at authored pitch.</p>
@@ -212,11 +215,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
     </section>
   `}function Ct(){return o`
     <section id="pages-tools" class="pages-tools nonprinting" aria-label="Paper and publishing" hidden="">
-      <div class="page-controls mode-panel">
-        <div>
-          <p class="panel-kicker">Make room for the performance</p>
-          <p class="field-help">Set the paper, inspect every page, then print or save as PDF.</p>
-        </div>
+      <div class="page-controls">
         <button id="print-score" type="button" class="primary-button">${e(Oe,"Print / Save as PDF")}</button>
       </div>
       <div class="tool-disclosures page-disclosures">
@@ -311,11 +310,13 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
       </div>
       <section class="preflight-panel" aria-label="Publication checks">
         <div id="page-preflight" role="status"></div>
-        <label class="check-field" for="ack-layout-warnings">
-          <input id="ack-layout-warnings" name="ack-layout-warnings" type="checkbox"> I have inspected the reported layout warnings on these pages.</label>
-        <label class="check-field" for="print-draft">
-          <input id="print-draft" name="print-draft" type="checkbox"> Print a clearly marked draft if musical work remains</label>
-        <p class="field-help">A print request opens the browser dialog; it does not confirm that a PDF was saved. Match the preview’s paper settings and turn off browser headers and footers.</p>
+        <details class="print-options"><summary>Print options</summary>
+          <label class="check-field" for="ack-layout-warnings">
+            <input id="ack-layout-warnings" name="ack-layout-warnings" type="checkbox"> I have inspected the reported layout warnings on these pages.</label>
+          <label class="check-field" for="print-draft">
+            <input id="print-draft" name="print-draft" type="checkbox"> Print a clearly marked draft if musical work remains</label>
+          <p class="field-help">A print request opens the browser dialog; it does not confirm that a PDF was saved. Match the preview’s paper settings and turn off browser headers and footers.</p>
+        </details>
       </section>
     </section>
   `}const fe="Staff, measure, voice, and event navigation";function Fe(i){const a=new Set(i.selectedIds);return o`
@@ -1765,15 +1766,15 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
   `}const ye="music-workspace-frame, music-panel-frame, music-view-switch, music-score-viewport, music-source-editor, music-toggle-button-group";function Yt(i="write"){return o`
     ${kt(i)}
     <main class="author-workspace">
-      ${St()}
-      ${xt()}
-      ${Ct()}
       <music-workspace-frame id="author-workbench" class="author-workbench" .mode=${i} tools-presentation="closed">
         ${qt()}
         ${Et()}
+        ${St()}
+        ${xt()}
         ${Dt()}
       </music-workspace-frame>
       <div id="page-host" class="page-host" aria-label="Physical page preview" hidden></div>
+      ${Ct()}
     </main>
     ${Qt()}
     ${Gt()}
