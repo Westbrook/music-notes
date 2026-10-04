@@ -91,10 +91,14 @@ export function createPopoverPositioner(options: PopoverPositionOptions): Popove
     const width = document.documentElement.clientWidth || window.innerWidth;
     const height = document.documentElement.clientHeight || window.innerHeight;
     const visual = window.visualViewport;
-    const left = Math.max(0, visual?.offsetLeft ?? 0) + margin;
-    const top = Math.max(0, visual?.offsetTop ?? 0) + margin;
-    const right = Math.min(width, (visual?.offsetLeft ?? 0) + (visual?.width ?? width)) - margin;
-    const bottom = Math.min(height, (visual?.offsetTop ?? 0) + (visual?.height ?? height)) - margin;
+    const style = window.getComputedStyle(document.documentElement);
+    const safe = (side: string): number => Math.max(0, Number.parseFloat(style.getPropertyValue(`--music-ui-safe-${side}`)) || 0);
+    // Intersect system-safe layout bounds with the visual viewport. A keyboard
+    // or pinch zoom may already inset it; do not add the system inset twice.
+    const left = Math.max(safe('left'), visual?.offsetLeft ?? 0) + margin;
+    const top = Math.max(safe('top'), visual?.offsetTop ?? 0) + margin;
+    const right = Math.min(width - safe('right'), (visual?.offsetLeft ?? 0) + (visual?.width ?? width)) - margin;
+    const bottom = Math.min(height - safe('bottom'), (visual?.offsetTop ?? 0) + (visual?.height ?? height)) - margin;
     return [left, top, right, bottom].every(Number.isFinite) && right > left && bottom > top
       ? { left, top, right, bottom, width: right - left, height: bottom - top } : undefined;
   };

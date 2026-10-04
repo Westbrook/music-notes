@@ -1,6 +1,10 @@
 /* Shared UI defaults. Keep this file declarations-only; see /DESIGN.md.
    Zero specificity lets a page or a scoped theme override these values. */
 :where(:root) {
+  --music-ui-safe-top: env(safe-area-inset-top, 0px);
+  --music-ui-safe-right: env(safe-area-inset-right, 0px);
+  --music-ui-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --music-ui-safe-left: env(safe-area-inset-left, 0px);
   --music-ui-color-paper: #fff;
   --music-ui-color-surface: #f7f8fa;
   --music-ui-color-ink: #303942;

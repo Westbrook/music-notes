@@ -5,6 +5,7 @@ import { html } from 'lit';
 import type { TemplateResult } from 'lit';
 import { buttonContent } from '../../ui/button-content.js';
 import './source-editor.js';
+import '../../ui/offline-status.js';
 
 /** Composition metadata and portable project file actions. */
 export function documentMenu(): TemplateResult {
@@ -40,6 +41,13 @@ export function documentMenu(): TemplateResult {
         <button id="download-project" type="button">${buttonContent(phDownloadSimple, 'Download project', { layout: 'inline' })}</button>
         <button id="export-html" type="button">${buttonContent(phCode, 'Export musical HTML', { layout: 'inline' })}</button>
         <p class="field-help">Local recovery stays on this device. Download a project for a portable copy.</p>
+        <details class="install-help">
+          <summary>Install Music Notes</summary>
+          <p class="field-help">On iPad or iPhone, open this page in Safari, choose Share → Add to Home Screen, leave Open as Web App on if shown, then tap Add. Launch Music Notes from that icon for a workspace without browser tabs or an address bar.</p>
+          <p class="field-help">On other devices, use your browser’s Install app command if available. To move existing work from Safari, Download project here, then use Open project in the installed app.</p>
+          <p class="field-help">Open the installed app online once and wait for offline setup below. Then you can reopen, compose, listen, and export without a connection. Keep downloaded project backups; the system can clear website storage.</p>
+          <music-offline-status class="field-help"></music-offline-status>
+        </details>
       </div>
     </section>
   `;

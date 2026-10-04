@@ -77,6 +77,14 @@ layout wrap or pack choices into overflow as targets grow.
 
 ## Applying and overriding tokens
 
+The `--music-ui-safe-top/right/bottom/left` tokens read the corresponding
+`env(safe-area-inset-*, 0px)` values. Edge-to-edge pages use them once around
+their main content; viewport-positioned popovers and dialogs apply their own
+bounds because they escape that content box. Author's border-box `100dvh`
+frame includes the padding, leaving every bottom dock above the Home indicator.
+Print styles remove screen insets. Override the tokens in browser fixtures to
+exercise nonzero safe areas without claiming physical-device qualification.
+
 Author loads the declaration-only sheet before its page styles in `author.html`:
 
 ```html

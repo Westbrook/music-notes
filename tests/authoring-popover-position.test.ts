@@ -43,6 +43,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   controllers.splice(0).forEach(controller => controller.dispose());
+  for (const side of ['top', 'right', 'bottom', 'left']) document.documentElement.style.removeProperty(`--music-ui-safe-${side}`);
   document.body.replaceChildren(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   for (const [object, key, descriptor] of descriptors.splice(0)) {
     if (descriptor) Object.defineProperty(object, key, descriptor); else Reflect.deleteProperty(object, key);
@@ -144,6 +145,20 @@ describe('native chooser trigger placement', () => {
     const f = fixture(); Object.assign(visual, { offsetLeft: 80, offsetTop: 200, width: 360, height: 300, scale: 2 });
     f.setAnchor(new DOMRect(400, 440, 66, 44)); f.open();
     expect(f.panel.getBoundingClientRect()).toMatchObject({ x: 90, y: 212, width: 340, height: 220 });
+  });
+
+  it('intersects safe-area bounds with the keyboard viewport without double insetting', () => {
+    setViewport(390, 844);
+    for (const [side, value] of Object.entries({ top: 47, right: 20, bottom: 34, left: 20 })) {
+      document.documentElement.style.setProperty(`--music-ui-safe-${side}`, `${value}px`);
+    }
+    const f = fixture(); f.setSize(380, () => 900); f.setAnchor(new DOMRect(10, 400, 60, 44)); f.open();
+    expect(f.panel.getBoundingClientRect()).toMatchObject({ x: 30, bottom: 800, width: 330 });
+    Object.assign(visual, { offsetTop: 100, height: 300 });
+    f.setAnchor(new DOMRect(10, 350, 60, 44));
+    visual.dispatchEvent(new Event('resize')); flushFrame();
+    expect(f.panel.getBoundingClientRect()).toMatchObject({ x: 30, y: 110, width: 330 });
+    expect(f.panel.getBoundingClientRect().bottom).toBeLessThanOrEqual(390);
   });
 
   it('measures wrapped height only after constraining width, then re-expands after viewport growth', () => {

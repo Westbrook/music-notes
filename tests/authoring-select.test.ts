@@ -197,7 +197,8 @@ describe('customizable native authoring selects', () => {
     expect(close.getAttribute('type')).toBe('button');
     expect(close.getAttribute('popovertarget')).toBe(panel.id);
     expect(close.getAttribute('popovertargetaction')).toBe('hide');
-    expect(panel.querySelector('summary')).toBeNull();
+    expect(panel.querySelector(':scope > summary')).toBeNull();
+    expect(panel.querySelector('.install-help > summary')?.textContent).toBe('Install Music Notes');
     expect(panel.querySelectorAll('[role="menu"], [role="menuitem"]')).toHaveLength(0);
     expect(panel.querySelector('#new-template')).not.toBeNull();
     expect(panel.querySelector('#project-subtitle')).not.toBeNull();
@@ -213,7 +214,7 @@ describe('customizable native authoring selects', () => {
     expect(authorCss).toMatch(/\.document-menu-trigger,\s*\.document-menu-close\s*\{\s*display: none;/);
     expect(authorCss).toMatch(/\.document-menu-trigger\[data-surface-target\],\s*\.document-menu-close\[data-surface-target\]\s*\{\s*display: inline-flex;/);
     expect(authorCss).not.toContain('.document-menu > summary');
-    expect(authorCss).toContain('max-height: calc(100dvh - 24px)');
+    expect(authorCss).toContain('max-height: calc(100dvh - 24px - var(--music-ui-safe-top) - var(--music-ui-safe-bottom))');
     expect(authorCss).toContain('overscroll-behavior: contain');
   });
 
@@ -228,8 +229,8 @@ describe('customizable native authoring selects', () => {
     expect(body?.contains(shell.getElementById('close-document-menu'))).toBe(false);
     const open = authorCss.match(/\.surface-popover:popover-open\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(open).toContain('margin: 0;');
-    expect(open).toContain('max-height: calc(100vh - 24px);');
-    expect(open).toContain('max-height: calc(100dvh - 24px);');
+    expect(open).toContain('max-height: calc(100vh - 24px - var(--music-ui-safe-top) - var(--music-ui-safe-bottom));');
+    expect(open).toContain('max-height: calc(100dvh - 24px - var(--music-ui-safe-top) - var(--music-ui-safe-bottom));');
     expect(open).toContain('min-height: 0;');
     const content = authorCss.match(/\.surface-popover \.document-menu-content\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(content).toContain('min-height: 0;');

@@ -1826,7 +1826,7 @@ describe('score-first authoring CSS contract', () => {
     expect(base).not.toMatch(/\bdisplay\s*:/);
     const open = declarationsFor('.surface-popover:popover-open');
     expect(open).toMatch(/position:\s*fixed;/);
-    expect(open).toMatch(/max-height:\s*calc\(100dvh\s*-\s*\d+(?:\.\d+)?px\);/);
+    expect(open).toContain('max-height: calc(100dvh - 24px - var(--music-ui-safe-top) - var(--music-ui-safe-bottom));');
     expect(open).toMatch(/min-height:\s*0;/);
     expect(open).toMatch(/overflow:\s*hidden;/);
     expect(declarationsFor('.popover-body')).toMatch(/min-height:\s*0;/);
@@ -1905,7 +1905,7 @@ describe('score-first authoring CSS contract', () => {
     expect(open).toMatch(/display:\s*flex;/);
     expect(open).toMatch(/position:\s*fixed;/);
     expect(open).toMatch(/min-height:\s*0;/);
-    expect(open).toMatch(/max-height:\s*calc\(100dvh\s*-\s*\d+(?:\.\d+)?px\);/);
+    expect(open).toContain('max-height: calc(100dvh - 24px - var(--music-ui-safe-top) - var(--music-ui-safe-bottom));');
     expect(open).toMatch(/overflow:\s*hidden;/);
     expect(declarationsFor('.confirmation-body')).toMatch(/min-height:\s*0;/);
     expect(declarationsFor('.confirmation-body')).toMatch(/overflow:\s*auto;/);

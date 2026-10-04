@@ -13,7 +13,10 @@ const manifest = JSON.parse(await readFile(resolve(directory, '.vite/manifest.js
 // continuation add about 3.5 kB gzip; Author measured about 636.8 kB. Matching Select quick controls and mixed
 // attack states add about 1.3 kB. Select Note/Rest conversion with per-measure
 // middle-line defaults adds about 0.9 kB; Author now measures about 639.1 kB.
-const budgets = { 'index.html': 50_500, 'author.html': 639_500 };
+// Home Screen metadata, installation help and offline setup add about 1.3 kB gzip.
+// Icons and the service worker are static install assets, not initial JS imports.
+// Workbook's explicit shared-token CSS and safe-area layout add about 0.5 kB.
+const budgets = { 'index.html': 51_000, 'author.html': 641_000 };
 
 function graph(entry, includeDynamic = false, visited = new Set()) {
   if (visited.has(entry)) return visited;

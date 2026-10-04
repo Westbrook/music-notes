@@ -33,6 +33,62 @@ The selected-event editor also offers **Attached marks**. Add or remove articula
 
 Author attempts local recovery saves after a short pause in editing. Saves use Web Locks to coordinate cooperating tabs; browsers without that coordination do not silently fall back to unsafe autosaving. Storage failures and conflicts remain visible. **Download project** keeps a portable copy, including layout settings and unapplied source drafts. Browser storage is not a backup.
 
+## Install on iPad, iPhone, or desktop
+
+In Safari on iPad or iPhone, open Author, choose **Share → Add to Home Screen**,
+leave **Open as Web App** enabled if shown, then tap **Add**. Launch the new
+**Music Notes** icon to use Author without browser tabs or an address bar.
+iPadOS retains control over the status bar, Home indicator, and multitasking;
+standalone mode does not force exclusive use of the screen. See
+[Apple’s installation instructions](https://support.apple.com/guide/ipad/open-as-web-app-ipad8f1f7a29/ipados).
+Desktop browsers that support installation offer their own **Install app** command.
+These instructions are also available in Author’s **Document → Install Music Notes**.
+
+Both entry pages share [manifest.json](public/manifest.json), a stable installation
+identity, and an Author launch URL. The workbook stays within the app’s scope.
+All manifest URLs are relative to its location, so root and `/music-notes/` builds
+work without escaping their deployment prefix. Orientation is unrestricted for
+portrait, landscape, and windowed use. The edge-to-edge viewport uses all four `env(safe-area-inset-*, 0px)`
+values to protect controls, dialogs, and popovers from notches and the Home
+indicator. Zoom remains enabled.
+
+Open the installed app online once and check **Document → Install Music Notes**
+for “Ready for offline use.” Production Author installs a service worker that
+atomically saves and integrity-checks that release’s HTML, scripts (including Listen), styles, fonts,
+manifest and icons. You can then reopen, compose, listen and export offline.
+The workbook becomes available offline after Author completes setup; opening the
+workbook alone does not download Author. HTTPS (or localhost for testing) is required.
+Development mode does not register a worker.
+
+Updates download in the background and activate after all Music Notes windows
+close. There is no forced reload or replacement of an open editor. The worker
+serves a consistent cached release, cleans only its own deployment’s old caches,
+and never caches compositions or unrelated requests. Online startup verifies the
+offline files and repairs missing assets only when their bytes match that release. Browser and installed-app
+storage can be separate, so **Download project** before switching and **Open
+project** inside the installed app to bring your composition with you. System
+storage eviction can remove offline files and recovery data; keep project backups.
+
+The original vector artwork is [app.svg](public/icons/app.svg). Committed PNGs
+cover Apple’s 152px/167px/180px Home Screen icons, 192px/512px app icons, and a maskable icon with
+its essential artwork in the central safe zone; SVG, PNG and ICO favicons cover
+tabs and older browsers. Regenerate them with the pinned Playwright Chromium:
+
+```sh
+npx playwright install chromium
+node scripts/generate-app-icons.mjs
+```
+
+With Vite on port 5175, run `node scripts/check-install-browser.mjs` for reproducible
+Chromium/WebKit phone and tablet checks. `INSTALL_TEST_URL` selects another
+server; `INSTALL_TEST_OUTPUT` saves screenshots. These checks inject safe-area
+values to verify every view’s dock and native popover bounds. They do not emulate
+actual OS insets or an onscreen keyboard.
+
+A physical iPhone/iPad check is still needed for Home Screen installation, launch,
+rotation, multitasking, keyboard use, and project import; desktop WebKit cannot
+reproduce iPadOS’s installation UI.
+
 ## GitHub Pages
 
 The source lives on `main`; the generated site is published from the root of
@@ -51,7 +107,10 @@ npm run test:pages:browser
 The `pages` build mode sets Vite's base to `/music-notes/`, including asset URLs
 and Author's workbook links. Ordinary `npm run dev` and `npm run build` keep the
 root base. The production browser check serves `dist` at the project prefix,
-uses isolated browser storage, and checks navigation, engraving and WAV export.
+uses isolated browser storage, and checks navigation, engraving, WAV export,
+installation metadata, decoded icons, and offline startup. Use `TEST_BROWSER=webkit`
+for the same checks in WebKit. For a root build, run `npm run build` then
+`TEST_BASE_PATH=/ npm run test:pages:browser`.
 
 After running the relevant repository checks and committing the source to `main`:
 

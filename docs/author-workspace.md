@@ -221,3 +221,17 @@ With the development server running, `/tests/browser.html` exercises the notatio
 `/tests/notation-browser.html` checks the quarter-tone glyphs and single-line rhythm engraving, including parts, exact tuplets, ties, and responsive/fixed print projections. These checks do not certify native print output or every possible score.
 
 Playback, instrument transposition, MIDI/MusicXML interchange, cross-staff beams, independent polymeter, arbitrary tuning beyond the supported 24-EDO spellings, cross-bar tuplets, general slurs, arbitrary graphical notation, and automatic page-turn optimization remain outside the implemented scope. See the [notation grammar and API](authoring.md) for musical semantics and the [notation expansion review](notation-expansion.md) for the added scope and performer checks.
+
+## iPhone, iPad, and installed use
+
+Use Document → Install Music Notes for Home Screen instructions and offline setup
+status. The installed app launches Author without browser chrome and supports
+portrait, landscape, and windowed use. On narrow iPhone windows, history gets
+its own header row so every view remains reachable. Native zoom, selection and
+scrolling stay available; safe-area padding protects controls and overlays around notches and the Home indicator.
+
+The first online production visit prepares offline files, including Listen and
+music fonts. Updates wait until all app windows close. Browser recovery and
+installed-app recovery may be separate; Download project and Open project carry
+work between them. Offline caching is separate from project saving, and system
+storage eviction can remove either. See [installation and verification](../README.md#install-on-ipad-iphone-or-desktop).
