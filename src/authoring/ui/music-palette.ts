@@ -70,7 +70,6 @@ export function musicPalette(): TemplateResult {
                 </div>
                 <div id="selection-collection" class="palette-slot selection-collection" role="group" aria-label="Build a selection">
                   <button id="selection-select-more" type="button" aria-describedby="selection-context">${buttonContent(phSelection, 'Select more')}</button>
-                  <button id="selection-range" type="button" class="selection-action" hidden>${buttonContent(phSelection, 'Range…')}</button>
                   <button id="selection-done" type="button" class="selection-done" hidden>${buttonContent(phCheck, "Done")}</button>
                 </div>
               </div>

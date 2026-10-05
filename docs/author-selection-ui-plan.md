@@ -28,7 +28,7 @@ The phone row has a maximum of five controls, not five mandatory placeholders. I
 | Chord | Location, Value, Pitches, More, Resume. |
 | Attached mark | Location, Edit mark, Remove mark, More, Resume. Removal uses the exact child and current compatibility guards. |
 | Multiple events | Location/count, Shared properties, Relationships, More, Resume. |
-| Select more | Location/count, Range, Selection actions, Done, Resume. Done keeps membership and returns to ordinary Select; Resume ends this mode and resumes writing. |
+| Select more | Location/count, Selection actions, Relate, Select more toggle, Resume. Turning Select more off keeps membership and returns to ordinary Select; Resume ends this mode and resumes writing. |
 | No event / structural selection | Location, Tools, Resume/Enter. An instruction or tuplet adds its explicit Edit action; unavailable note controls disappear. |
 | Deliberate pitch drag armed | Location, fixed feedback space, Drag pitch handle, Done. More → Prepare pitch drag parks the pane and establishes this row before any press on the handle. Done restores ordinary Select. The handle stays beside visible notation and never moves or disappears during capture. |
 

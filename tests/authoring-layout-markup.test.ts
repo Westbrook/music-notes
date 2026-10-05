@@ -312,7 +312,7 @@ describe('stable writing palette structural contract', () => {
       expect(core.contains(slot)).toBe(true);
       for (const id of actionIds) expect(slot.contains(button(id)), `${id} has a stable musical slot`).toBe(true);
     }
-    expect(element('selection-collection').contains(button('selection-range'))).toBe(true);
+    expect(findAuthorControl(shell, 'selection-range')).toBeNull();
     expect(button('selection-value').hidden).toBe(false);
     for (const id of ['edit-selected-event', 'tools-toggle', 'location-trigger', 'toggle-entry', 'select-mode']) {
       expect(core.contains(element(id))).toBe(false);

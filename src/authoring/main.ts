@@ -367,7 +367,6 @@ export class AuthorWorkspace {
       execute: command => this.editNote(() => this.execute(command)),
       openProperties: target => this.showSelectionProperties(target),
       openRelationships: () => this.tools.open('rhythm', '#range-status'),
-      openRange: () => this.tools.open('rhythm', '#range-start'),
       selectMore: enabled => this.setSelectMore(enabled),
       preparePitchDrag: () => this.preparePitchDrag(),
       cancelPitchDrag: () => this.finishPitchDrag(),
@@ -1219,7 +1218,7 @@ export class AuthorWorkspace {
     }
     this.syncPanels(false); this.drawSelection(); this.invalidateOffers();
     this.el('score-editor').focus({ preventScroll: true });
-    this.status(enabled ? 'Select more: tap events to toggle them. Arrows move focus; Space toggles. Done keeps the selection.' : 'Selection kept.');
+    this.status(enabled ? 'Select more: tap events to toggle them. Arrows move focus; Space toggles. Turn Select more off to keep the selection.' : 'Selection kept.');
   }
 
   private preparePitchDrag(): void {

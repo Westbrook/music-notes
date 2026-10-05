@@ -51,7 +51,6 @@ export interface SelectionControlsOptions {
   execute: (command: AuthorCommand) => void;
   openProperties: (target?: SelectionPropertiesTarget) => void;
   openRelationships: () => void;
-  openRange?: () => void;
   selectMore: (enabled: boolean) => void;
   preparePitchDrag: () => void;
   cancelPitchDrag?: () => void;
@@ -309,7 +308,7 @@ export class SelectionControls {
   private bind(): void {
     const signal = this.abort.signal;
     const controls = [this.toolbar, ...surfaceNames.map(name => this.panel(name)),
-      this.el('edit-selected-event'), this.el('selection-range'),
+      this.el('edit-selected-event'),
       this.el('selection-done'), this.el('selection-select-more'), this.el('selection-prepare-drag'), this.el('properties-pitch')];
     for (const region of controls) {
       const surface = surfaceNames.some(name => this.panel(name) === region);
@@ -434,7 +433,6 @@ export class SelectionControls {
       this.perform({ type: 'remove-event-marking', eventId: state.event.id, markingId: mark.id });
     });
     this.listen('selection-relationships', 'click', () => this.routeAction(this.button('selection-relationships'), () => this.options.openRelationships()));
-    this.listen('selection-range', 'click', () => this.routeAction(this.button('selection-range'), () => (this.options.openRange ?? this.options.openRelationships)()));
     this.listen('selection-select-more', 'click', () => {
       const state = this.guard(undefined, this.button('selection-select-more'));
       if (!state) return;
@@ -455,7 +453,6 @@ export class SelectionControls {
       this.close();
       this.routeActionSafely(() => {
         if (state.pitchDragArmed) this.options.cancelPitchDrag?.();
-        else if (state.selectMoreActive) this.options.selectMore(false);
         this.refresh();
       });
     });
@@ -901,8 +898,7 @@ export class SelectionControls {
       ? `Edit attached ${mark ? markingName(mark) : 'mark'}`
       : state.structural ? `Edit ${state.structural.kind}: ${state.structural.label}` : 'Edit the selected target');
     this.setButton('selection-mark-remove', !!state.activeMarkingId && !state.pitchDragArmed, baseReason);
-    this.setButton('selection-range', more, writingReason(state));
-    this.setButton('selection-done', show && (!!state.pitchDragArmed || more), state.mode !== 'write' ? 'Return to Write.' : undefined);
+    this.setButton('selection-done', show && !!state.pitchDragArmed, state.mode !== 'write' ? 'Return to Write.' : undefined);
     this.setButton('edit-selected-event', show, state.mode !== 'write' || state.entryMode ? 'Choose Select in Write.' : undefined);
     this.button('edit-selected-event').setAttribute('aria-controls', 'workspace-tools');
     this.button('edit-selected-event').setAttribute('aria-expanded', String(state.moreExpanded === true));
@@ -980,7 +976,7 @@ export class SelectionControls {
     const scope = state.eventIds.length > 1
       ? `${state.staffLabel || 'Staff'} · voice ${state.voiceNumber} · ${bars.length === 1 ? 'bar' : 'bars'} ${bars.join(', ')}` : place;
     if (state.pitchDragArmed) return `${event ? identity(event) : 'Selected note'} · ${place} · Drag pitch, then Done.`;
-    if (state.selectMoreActive) return `${state.eventIds.length} selected · ${scope} · Tap events to toggle; Done keeps the selection.`;
+    if (state.selectMoreActive) return `${state.eventIds.length} selected · ${scope} · Tap events to toggle; turn Select more off to keep the selection.`;
     if (state.activeMarkingId) return `${mark ? markingName(mark) : 'Missing attached mark'} · ${place}`;
     if (state.eventIds.length > 1) return `${state.eventIds.length} selected events · ${scope}`;
     if (event) return `${identity(event)} · ${place}`;

@@ -129,7 +129,6 @@ function fixture(html = scoreHtml(), settings: {
   const execute = vi.fn((command: AuthorCommand) => { session.execute(command); });
   const openProperties = vi.fn(() => {});
   const openRelationships = vi.fn(() => {});
-  const openRange = vi.fn(() => {});
   const selectMore = vi.fn((enabled: boolean) => { view.selectMoreActive = enabled; });
   const preparePitchDrag = vi.fn(() => {});
   const cancelPitchDrag = vi.fn(() => {});
@@ -139,7 +138,7 @@ function fixture(html = scoreHtml(), settings: {
   const success = vi.fn(() => {});
   const afterSurfaceClose = vi.fn(() => {});
   const controls = new SelectionControls({
-    state, execute, openProperties, openRelationships, openRange, selectMore, preparePitchDrag,
+    state, execute, openProperties, openRelationships, selectMore, preparePitchDrag,
     cancelPitchDrag, resume, report, error: showError, afterSurfaceClose, ...(settings.observeSuccess ? { success } : {}),
   }, root);
   const refresh = () => { if (view.autoRefresh) controls.refresh(); };
@@ -164,7 +163,7 @@ function fixture(html = scoreHtml(), settings: {
   const isOpen = (name: SurfaceName): boolean => nativeSurfaces.get(name)?.isOpen() ?? !localControl(`selection-${name}-chooser`).hidden;
   return {
     controls, session, view, state, select, event, open, isOpen, nativeSurfaces,
-    execute, openProperties, openRelationships, openRange, selectMore, preparePitchDrag, cancelPitchDrag, resume, report, showError, success, afterSurfaceClose,
+    execute, openProperties, openRelationships, selectMore, preparePitchDrag, cancelPitchDrag, resume, report, showError, success, afterSurfaceClose,
     toolbar: localControl('selection-controls'), panel: (name: SurfaceName) => localControl(`selection-${name}-chooser`),
     button: (id: string) => localControl<HTMLButtonElement>(id), field: (id: string) => localControl<HTMLSelectElement>(id),
     error: (name: SurfaceName) => localControl(`selection-${name}-error`),
@@ -872,7 +871,7 @@ describe('SelectionControls fixed musical slots', () => {
     expect(visible(h.button('edit-selected-event'))).toBe(true); expect(control('edit-selected-label').textContent).toBe('More');
   });
 
-  it.each(['collecting', 'pitch-drag'] as const)('shows Done with collection controls while %s, then restores exact-selection Value', mode => {
+  it.each(['collecting', 'pitch-drag'] as const)('exits %s without clearing the selection; Done is only for pitch drag', mode => {
     const h = fixture(scoreHtml(), { ids: mode === 'collecting' ? ['n1', 'n3'] : ['n1'] });
     const value = h.button('selection-value'); const done = h.button('selection-done');
     const owner = control('selection-slot-2'); const ids = [...h.view.ids]; const before = h.session.project;
@@ -884,14 +883,15 @@ describe('SelectionControls fixed musical slots', () => {
     }
     h.controls.refresh();
     expect(visible(value)).toBe(false); expect(value.disabled).toBe(true);
-    expect(visible(done)).toBe(true); expect(done.disabled).toBe(false);
+    expect(visible(done)).toBe(mode === 'pitch-drag'); expect(done.disabled).toBe(mode !== 'pitch-drag');
     expect(h.toolbar.hidden).toBe(false); expect(visible(h.button('edit-selected-event'))).toBe(true);
     const third = h.button(mode === 'collecting' ? 'selection-relationships' : 'selection-attached-marks');
     expect(visible(third)).toBe(mode === 'collecting');
     if (mode === 'pitch-drag') {
       for (const id of ['selection-attached-marks', 'selection-relationships', 'selection-mark-remove']) expect(visible(h.button(id))).toBe(false);
     }
-    done.focus(); done.click();
+    const finish = mode === 'collecting' ? h.button('selection-select-more') : done;
+    finish.focus(); finish.click();
     expect(visible(done)).toBe(false); expect(visible(value)).toBe(true); expect(value.disabled).toBe(false);
     expect(value.closest('.palette-slot')).toBe(owner); expect(h.view.ids).toEqual(ids);
     expect(visible(third)).toBe(true);
@@ -1468,8 +1468,8 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     expect(h.openProperties).toHaveBeenCalledExactlyOnceWith({ eventId: 'n1', section: 'properties', toggle: true, invokerId: 'edit-selected-event' });
     h.select(['n1', 'n2']); h.button('selection-relationships').click(); expect(h.openRelationships).toHaveBeenCalledOnce();
     h.open('shared'); h.button('selection-select-more').click(); expect(h.selectMore).toHaveBeenCalledWith(true);
-    h.controls.refresh(); h.button('selection-range').click(); expect(h.openRange).toHaveBeenCalledOnce();
-    h.button('selection-done').click(); expect(h.selectMore).toHaveBeenLastCalledWith(false);
+    h.controls.refresh(); expect(h.button('selection-select-more').getAttribute('aria-pressed')).toBe('true');
+    h.button('selection-select-more').click(); expect(h.selectMore).toHaveBeenLastCalledWith(false);
     expect(h.execute).not.toHaveBeenCalled(); expect(h.resume).not.toHaveBeenCalled(); expect(h.session.revision).toBe(0);
   });
 

@@ -26,28 +26,32 @@ try {
     for (const width of [320, 390, 844, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const buttons = collecting
-        ? ['selection-shared', 'selection-relationships', 'selection-select-more', 'selection-range', 'selection-done']
+        ? ['selection-shared', 'selection-relationships', 'selection-select-more']
         : ['selection-pitch', 'selection-value', 'selection-attached-marks', 'selection-select-more'];
       const boxes = await Promise.all(buttons.map(id => page.locator(`#${id}`).boundingBox()));
-      const singleRow = !collecting || width >= 390;
-      if (singleRow) assert.ok(boxes.every(box => box && Math.abs(box.y - boxes[0].y) < 1), `${width}px: selection actions share a row`);
+      assert.ok(boxes.every(box => box && Math.abs(box.y - boxes[0].y) < 1), `${width}px: selection actions share a row`);
       for (let i = 1; i < boxes.length; i++) {
         assert.ok(boxes[i].y >= boxes[i - 1].y + boxes[i - 1].height - 1 || boxes[i].x >= boxes[i - 1].x + boxes[i - 1].width - 1, `${width}px: actions do not overlap`);
       }
       assert.ok(boxes.every(box => box.x >= 0 && box.x + box.width <= width), `${width}px: actions fit the viewport`);
-      if (singleRow) {
-        const height = (await page.locator('#workspace-dock').boundingBox()).height;
-        await page.locator('#selection-collection').evaluate(el => { el.style.display = 'none'; });
-        assert.equal((await page.locator('#workspace-dock').boundingBox()).height, height, `${width}px: collection actions add no toolbar height`);
-        await page.locator('#selection-collection').evaluate(el => { el.style.removeProperty('display'); });
-      }
+      // Compare synchronously so adaptive quick-control packing cannot settle
+      // between measurements and look like height added by Select more.
+      const heights = await page.locator('#selection-collection').evaluate(el => {
+        const dock = document.querySelector('#workspace-dock');
+        const before = dock.getBoundingClientRect().height;
+        el.style.display = 'none';
+        const after = dock.getBoundingClientRect().height;
+        el.style.removeProperty('display');
+        return { before, after };
+      });
+      assert.equal(heights.after, heights.before, `${width}px: collection actions add no toolbar height`);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px: no horizontal page overflow`);
       await page.screenshot({ path: `${output}/action-row-${width}-${collecting ? 'collecting' : 'single'}.png` });
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = '24px'; });
     await page.setViewportSize({ width: 320, height: 900 });
     await page.screenshot({ path: `${output}/action-row-large-text-${collecting ? 'collecting' : 'single'}.png` });
-    for (const id of ['selection-select-more', ...(collecting ? ['selection-range', 'selection-done'] : ['selection-pitch', 'selection-value', 'selection-attached-marks'])]) {
+    for (const id of ['selection-select-more', ...(collecting ? ['selection-shared', 'selection-relationships'] : ['selection-pitch', 'selection-value', 'selection-attached-marks'])]) {
       const box = await page.locator(`#${id}`).boundingBox();
       assert.ok(box.x >= 0 && box.x + box.width <= 320 && box.height >= 44, `large text: ${id} remains inside the viewport with a full touch target`);
     }
@@ -57,6 +61,8 @@ try {
   await checkActionRow(false);
   await page.locator('#selection-select-more').tap();
   assert.equal(await page.locator('#selection-select-more').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#selection-done').isVisible(), false);
+  assert.equal(await page.locator('#selection-range').count(), 0);
   await checkActionRow(true);
   await note('c').tap(); assert.deepEqual(await ids(), ['a', 'c']);
   await note('c').tap(); assert.deepEqual(await ids(), ['a']);
@@ -64,7 +70,9 @@ try {
   assert.equal(await html(), before);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.screenshot({ path: `${output}/touch-selection.png` });
-  await page.locator('#selection-done').tap(); assert.deepEqual(await ids(), ['a', 'b', 'c']);
+  await page.locator('#selection-select-more').tap(); assert.deepEqual(await ids(), ['a', 'b', 'c']);
+  assert.equal(await page.locator('#selection-select-more').getAttribute('aria-pressed'), 'false');
+  assert.equal(await html(), before);
   await page.locator('#selection-relationships').tap();
   await page.locator('#wrap-tuplet').tap(); await ready();
   assert.equal(await source.locator('music-tuplet music-note').count(), 3);
@@ -72,7 +80,7 @@ try {
   // Range is accessible without a modifier key; the existing native endpoint selectors own it.
   await page.locator('#tools-hide').tap();
   await page.locator('#selection-select-more').tap();
-  await page.locator('#selection-range').tap();
+  await page.locator('#selection-relationships').tap();
   await page.locator('#range-start').selectOption('a'); await page.locator('#range-end').selectOption('d');
   assert.deepEqual(await ids(), ['a', 'b', 'c', 'd']);
   await page.locator('#tool-tab-measure').tap();
@@ -91,7 +99,21 @@ try {
   await page.locator('#tools-hide').tap();
   await page.screenshot({ path: `${output}/meter-overflow.png` });
   await page.locator('#undo').tap(); await ready(); assert.equal(await html(), before);
+  // Done still belongs to the separate prepared pitch-drag mode.
+  if (await page.locator('#selection-select-more').getAttribute('aria-pressed') === 'true') await page.locator('#selection-select-more').tap();
+  await note('a').tap();
+  await page.locator('#edit-selected-event').tap();
+  await page.locator('#selection-prepare-drag').tap();
+  assert.equal(await page.locator('#drag-pitch').isVisible(), true);
+  assert.equal(await page.locator('#selection-done').isVisible(), true);
+  assert.equal(await page.locator('#selection-select-more').isVisible(), false);
+  await page.locator('#selection-done').tap();
+  assert.equal(await page.locator('#drag-pitch').isVisible(), false);
+  assert.equal(await page.locator('#selection-done').isVisible(), false);
+  assert.equal(await page.locator('#selection-select-more').isVisible(), true);
+  assert.deepEqual(await ids(), ['a']);
+  assert.equal(await html(), before);
   assert.deepEqual(errors, []);
-  const result = { passed: true, engine, version: browser.version(), checks: ['320/390/844/1440px action-row alignment and toolbar height', '320px enlarged-text controls', '390px browser touch taps', 'direct multi-selection with toggling', 'selection adds no music history', 'triplet from touch selection and Undo', 'native range selectors', '4/4 to 3/4 overflow through real form', 'overflow Undo', 'no browser errors'], limitations: ['Emulated browser touch input; physical iPhone/iPad gestures not tested.', 'Expanded collection actions may wrap at 320px or with enlarged text.'] };
+  const result = { passed: true, engine, version: browser.version(), checks: ['320/390/844/1440px action-row alignment and toolbar height', '320px enlarged-text controls', '390px browser touch taps', 'direct multi-selection with toggling', 'toggle off preserves selected membership', 'Range removed; endpoints available through Relate', 'Done only exits prepared pitch dragging', 'selection adds no music history', 'triplet from touch selection and Undo', 'native range selectors', '4/4 to 3/4 overflow through real form', 'overflow Undo', 'no browser errors'], limitations: ['Emulated browser touch input; physical iPhone/iPad gestures not tested.', 'Controls may wrap with enlarged text.'] };
   await writeFile(`${output}/result.json`, JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } finally { await browser.close(); }
