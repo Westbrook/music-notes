@@ -1580,7 +1580,7 @@ describe('score-first authoring CSS contract', () => {
       expect(rule).toMatch(/display:\s*grid;/);
       expect(rule).toMatch(/gap:\s*8px;/);
     }
-    expect(declarationsFor('#selection-controls')).toMatch(/grid-template-columns:\s*var\(--palette-musical-columns\);/);
+    expect(declarationsFor('#selection-controls')).toContain('grid-template-columns: minmax(0, 1fr);');
     expect(declarationsFor('#entry-toolbar .entry-tools')).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*max-content\)\) minmax\(0,\s*1fr\);/);
     expect(element('write-tools').querySelector('[data-toggle-group-row]')?.children).toHaveLength(5);
     expect(declarationsFor('.entry-quick-tools')).toMatch(/display:\s*flex;/);
@@ -1617,7 +1617,7 @@ describe('score-first authoring CSS contract', () => {
 
   it('gives Select and Write the same responsive quick-control allocation beside their own actions', () => {
     const desktop = blockFor(/@container\s+author-workbench\s*\(width\s*>=\s*1100px\)\s*and\s*\(width\s*>=\s*68\.75rem\)/);
-    expect(declarationsFor('#selection-controls', desktop)).toBe(declarationsFor('#entry-toolbar .entry-tools', desktop));
+    expect(declarationsFor('#selection-controls', desktop)).toContain('1fr) max-content;');
     expect(declarationsFor('.selection-quick-tools', desktop)).toMatch(/grid-column:\s*auto;/);
     expect(element('selection-slot-1').contains(button('selection-pitch'))).toBe(true);
     expect(button('selection-pitch').getAttribute('popovertarget')).toBe('selection-pitch-chooser');

@@ -22,8 +22,42 @@ try {
   const note = id => page.locator(`#score-host .screen g.vf-music-event[data-source-id="${id}"]`);
   const ids = async () => JSON.parse(await page.locator('#selection-controls').getAttribute('data-event-ids'));
   await note('a').tap();
+  const checkActionRow = async collecting => {
+    for (const width of [320, 390, 844, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const buttons = collecting
+        ? ['selection-shared', 'selection-relationships', 'selection-select-more', 'selection-range', 'selection-done']
+        : ['selection-pitch', 'selection-value', 'selection-attached-marks', 'selection-select-more'];
+      const boxes = await Promise.all(buttons.map(id => page.locator(`#${id}`).boundingBox()));
+      const singleRow = !collecting || width >= 390;
+      if (singleRow) assert.ok(boxes.every(box => box && Math.abs(box.y - boxes[0].y) < 1), `${width}px: selection actions share a row`);
+      for (let i = 1; i < boxes.length; i++) {
+        assert.ok(boxes[i].y >= boxes[i - 1].y + boxes[i - 1].height - 1 || boxes[i].x >= boxes[i - 1].x + boxes[i - 1].width - 1, `${width}px: actions do not overlap`);
+      }
+      assert.ok(boxes.every(box => box.x >= 0 && box.x + box.width <= width), `${width}px: actions fit the viewport`);
+      if (singleRow) {
+        const height = (await page.locator('#workspace-dock').boundingBox()).height;
+        await page.locator('#selection-collection').evaluate(el => { el.style.display = 'none'; });
+        assert.equal((await page.locator('#workspace-dock').boundingBox()).height, height, `${width}px: collection actions add no toolbar height`);
+        await page.locator('#selection-collection').evaluate(el => { el.style.removeProperty('display'); });
+      }
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px: no horizontal page overflow`);
+      await page.screenshot({ path: `${output}/action-row-${width}-${collecting ? 'collecting' : 'single'}.png` });
+    }
+    await page.evaluate(() => { document.documentElement.style.fontSize = '24px'; });
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.screenshot({ path: `${output}/action-row-large-text-${collecting ? 'collecting' : 'single'}.png` });
+    for (const id of ['selection-select-more', ...(collecting ? ['selection-range', 'selection-done'] : ['selection-pitch', 'selection-value', 'selection-attached-marks'])]) {
+      const box = await page.locator(`#${id}`).boundingBox();
+      assert.ok(box.x >= 0 && box.x + box.width <= 320 && box.height >= 44, `large text: ${id} remains inside the viewport with a full touch target`);
+    }
+    await page.evaluate(() => { document.documentElement.style.removeProperty('font-size'); });
+    await page.setViewportSize({ width: 390, height: 844 });
+  };
+  await checkActionRow(false);
   await page.locator('#selection-select-more').tap();
   assert.equal(await page.locator('#selection-select-more').getAttribute('aria-pressed'), 'true');
+  await checkActionRow(true);
   await note('c').tap(); assert.deepEqual(await ids(), ['a', 'c']);
   await note('c').tap(); assert.deepEqual(await ids(), ['a']);
   await note('b').tap(); await note('c').tap(); assert.deepEqual(await ids(), ['a', 'b', 'c']);
@@ -58,6 +92,6 @@ try {
   await page.screenshot({ path: `${output}/meter-overflow.png` });
   await page.locator('#undo').tap(); await ready(); assert.equal(await html(), before);
   assert.deepEqual(errors, []);
-  const result = { passed: true, engine, version: browser.version(), checks: ['390px browser touch taps', 'direct multi-selection with toggling', 'selection adds no music history', 'triplet from touch selection and Undo', 'native range selectors', '4/4 to 3/4 overflow through real form', 'overflow Undo', 'no browser errors'], limitations: ['Emulated browser touch input; physical iPhone/iPad gestures not tested.'] };
+  const result = { passed: true, engine, version: browser.version(), checks: ['320/390/844/1440px action-row alignment and toolbar height', '320px enlarged-text controls', '390px browser touch taps', 'direct multi-selection with toggling', 'selection adds no music history', 'triplet from touch selection and Undo', 'native range selectors', '4/4 to 3/4 overflow through real form', 'overflow Undo', 'no browser errors'], limitations: ['Emulated browser touch input; physical iPhone/iPad gestures not tested.', 'Expanded collection actions may wrap at 320px or with enlarged text.'] };
   await writeFile(`${output}/result.json`, JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } finally { await browser.close(); }

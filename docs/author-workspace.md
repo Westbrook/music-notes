@@ -76,7 +76,7 @@ Selections contain exact whole events in one staff and voice, including across b
 | Unmodified Left/Right outside Select more | In Select, move to the previous/next event relative to the primary and collapse a set to that event. In Write notes, these keys move only the writing point. |
 | Escape at the score | Close/cancel an active chooser or gesture first. Otherwise clear Select membership and range fields; Write notes remains active. Never discard a form draft. |
 
-On a touch screen, choose **Select**, tap the first note, then **Select more** in the palette. Tap each additional note to add it (tap again to remove it), or use **Range…** and its From/Through selectors for a continuous passage. **Done** keeps the notes selected for transposition, tuplets, and other eligible group edits. Ordinary score scrolling stays available.
+On a touch screen, choose **Select**, tap the first note, then **Select more** beside Pitch, duration, and Marks in the palette. Tap each additional note to add it (tap again to remove it), or use **Range…** and its From/Through selectors for a continuous passage. **Done** keeps the notes selected for transposition, tuplets, and other eligible group edits. Ordinary score scrolling stays available.
 
 A modified attempt in another staff or voice leaves the previous set intact and explains the limit. A modified click on an attached mark selects its owning event; an ordinary mark click retains the exact child target. Cross-staff sets, lasso selection, chord-tone selection and group pitch dragging are not implemented.
 

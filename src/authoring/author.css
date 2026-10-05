@@ -633,7 +633,7 @@ body[data-entry-kind="road"] #entry-settings-trigger,
 body:not([data-entry-kind="road"]) #entry-direction-trigger { display: none; }
 #author-workbench .pointer-tools { grid-area: 1 / 1; display: block; position: static; z-index: auto; width: 100%; min-width: 0; height: auto; min-height: 0; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
 #selection-controls-dock { position: relative; width: 100%; min-width: 0; height: auto; min-height: var(--palette-group-size); }
-#selection-controls { display: grid; grid-template-columns: var(--palette-musical-columns); align-items: center; gap: 8px; width: 100%; min-width: 0; height: auto; min-height: var(--palette-group-size); margin: 0; padding: 0; border: 0; }
+#selection-controls { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 8px; width: 100%; min-width: 0; height: auto; min-height: var(--palette-group-size); margin: 0; padding: 0; border: 0; }
 #selection-controls[data-selection-placement="floating"] { z-index: 30; border: 1px solid var(--author-border); border-radius: 5px; background: var(--author-surface); box-shadow: 0 5px 16px rgba(20, 28, 36, 0.15); }
 .palette-slot { display: grid; position: relative; grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--palette-group-size); align-items: center; min-width: 0; height: var(--palette-group-size); }
 .palette-slot > button { grid-area: 1 / 1; justify-self: start; width: auto; min-width: 44px; min-height: var(--palette-control-size); height: var(--palette-control-size); max-height: none; margin: 0; border-color: transparent; border-radius: 6px; background: transparent; color: var(--author-control-ink); font-weight: 550; white-space: normal; overflow-wrap: normal; }
@@ -676,7 +676,8 @@ body[data-entry-mode="true"] #palette-more-slot #edit-selected-event { display: 
 /* Add direct spelling only when both the available width and text size fit. */
 @container author-workbench (width >= 1100px) and (width >= 68.75rem) {
   #workspace-dock { --palette-musical-columns: minmax(max(264px, 16.5rem), max-content) minmax(max(88px, 5.5rem), max-content) minmax(max(100px, 6.25rem), max-content); grid-template-columns: max-content minmax(max(480px, 30rem), 1fr) max-content max(180px, 11.25rem); }
-  #entry-toolbar .entry-tools, #selection-controls { grid-template-columns: minmax(calc(4 * var(--palette-group-size) + 3 * var(--music-ui-group-spacing)), 1fr) max-content max-content max-content; }
+  #entry-toolbar .entry-tools { grid-template-columns: minmax(calc(4 * var(--palette-group-size) + 3 * var(--music-ui-group-spacing)), 1fr) max-content max-content max-content; }
+  #selection-controls { grid-template-columns: minmax(calc(4 * var(--palette-group-size) + 3 * var(--music-ui-group-spacing)), 1fr) max-content; }
   .entry-quick-tools, .selection-quick-tools { grid-column: auto; }
   #selection-slot-1 { grid-template-columns: minmax(0, max-content); }
   #selection-slot-1 > button { grid-area: 1 / 1; }
@@ -1123,7 +1124,8 @@ body[data-view="listen"] #score-scroll { grid-row: 1; }
   input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: max(16px, 1rem); }
 }
 
-/* Keep touch collection controls visible without overlapping the musical slots. */
-.selection-collection { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--music-ui-group-spacing); }
-.selection-collection > button { min-width: var(--music-ui-control-size); min-height: var(--music-ui-control-size); }
+/* Collection actions share the musical action row and its control geometry. */
+.selection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.selection-collection { display: flex; align-items: center; gap: var(--music-ui-group-spacing); }
+.selection-collection > button { padding-inline: var(--music-ui-control-padding-inline); font-size: var(--music-ui-label-size); }
 .selection-collection > button[aria-pressed="true"] { background: var(--music-ui-color-active); border-color: var(--music-ui-color-border); }
