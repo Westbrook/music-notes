@@ -1,4 +1,4 @@
-import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Ue,f as be,S as He}from"./button-content-DK5Fi-Iu.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as O,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as ve,a9 as I,aa as F,ab as ct,ac as dt,ad as me,ae as ut,af as pt,ag as bt,ah as ht,ai as vt,aj as De,ak as J,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./offline-status-BYpr33d9.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
+import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Ue,f as be,S as He}from"./button-content-DK5Fi-Iu.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as O,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as I,a9 as F,aa as ct,ab as ve,ac as dt,ad as me,ae as ut,af as pt,ag as bt,ah as ht,ai as vt,aj as De,ak as J,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./offline-status-CJpAAGGn.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
     :host {
       box-sizing: border-box;
       display: grid;
@@ -934,11 +934,6 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         <div id="pointer-tools" class="pointer-tools" data-selection-state="none" aria-label="Selected music">
           <div id="selection-controls-dock" class="selection-controls-dock">
             <div id="selection-controls" class="selection-controls" role="toolbar" aria-label="Selected music" aria-describedby="selection-controls-context" data-selection-placement="dock" data-selection-state="none" data-has-error="false">
-              <div id="selection-collection" class="selection-collection" role="group" aria-label="Build a selection">
-                <button id="selection-select-more" type="button" aria-describedby="selection-context">${e(ve,"Select more")}</button>
-                <button id="selection-range" type="button" class="selection-action" hidden>${e(ve,"Range…")}</button>
-                <button id="selection-done" type="button" class="selection-done" hidden>${e(r,"Done")}</button>
-              </div>
               <div id="selection-quick-tools" class="selection-quick-tools" data-toggle-group-row aria-label="Quick choices for selected notes">
                 <music-toggle-button-group id="selection-kind" label="Note or rest" overflow-at="2"></music-toggle-button-group>
                 <music-toggle-button-group id="selection-accidentals" label="Accidentals" .buttonIds=${{"-1":"selection-flat",0:"selection-natural",1:"selection-sharp"}} overflow-at="3"></music-toggle-button-group>
@@ -947,26 +942,33 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
                 <music-toggle-button-group id="selection-quick-attack" label="Attack" overflow-at="2" aria-describedby="selection-attack-help"></music-toggle-button-group>
               </div>
               <p id="selection-attack-help" class="visually-hidden">Toggle each articulation or ornament independently. A mixed choice applies it to all selected events; None clears attacks and ornaments.</p>
-              <div id="selection-slot-1" class="palette-slot selection-pitch-slot">
-                <button id="selection-pitch" type="button" class="selection-action selection-pitch-action" popovertarget="selection-pitch-chooser" hidden>${e(se,o`<span data-control-label>Pitch</span>`)}</button>
-                <button id="selection-shared" type="button" class="selection-action" popovertarget="selection-shared-chooser" hidden>${e(M,o`<span data-control-label>Shared properties</span>`)}</button>
-                <button id="selection-mark-edit" type="button" class="selection-action" hidden>${e(N,o`<span data-control-label>Edit mark</span>`)}</button>
-                <div class="selection-direct-choices">
-                  <div id="selection-road-directions" class="selection-shortcuts" role="radiogroup" aria-label="Relative pitch direction" hidden>
-                    <button id="selection-higher" type="button" role="radio" aria-checked="false" tabindex="-1">${e(I,"Higher")}</button>
-                    <button id="selection-same" type="button" role="radio" aria-checked="false" tabindex="-1">${e(d,"Same")}</button>
-                    <button id="selection-lower" type="button" role="radio" aria-checked="false" tabindex="-1">${e(F,"Lower")}</button>
+              <div id="selection-actions" class="selection-actions">
+                <div id="selection-slot-1" class="palette-slot selection-pitch-slot">
+                  <button id="selection-pitch" type="button" class="selection-action selection-pitch-action" popovertarget="selection-pitch-chooser" hidden>${e(se,o`<span data-control-label>Pitch</span>`)}</button>
+                  <button id="selection-shared" type="button" class="selection-action" popovertarget="selection-shared-chooser" hidden>${e(M,o`<span data-control-label>Shared properties</span>`)}</button>
+                  <button id="selection-mark-edit" type="button" class="selection-action" hidden>${e(N,o`<span data-control-label>Edit mark</span>`)}</button>
+                  <div class="selection-direct-choices">
+                    <div id="selection-road-directions" class="selection-shortcuts" role="radiogroup" aria-label="Relative pitch direction" hidden>
+                      <button id="selection-higher" type="button" role="radio" aria-checked="false" tabindex="-1">${e(I,"Higher")}</button>
+                      <button id="selection-same" type="button" role="radio" aria-checked="false" tabindex="-1">${e(d,"Same")}</button>
+                      <button id="selection-lower" type="button" role="radio" aria-checked="false" tabindex="-1">${e(F,"Lower")}</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div id="selection-slot-2" class="palette-slot">
-                <button id="selection-value" type="button" class="selection-action" popovertarget="selection-value-chooser" disabled>${e(c,o`<span data-control-label>Value</span>`)}</button>
-              </div>
-              <div id="selection-slot-3" class="palette-slot">
-                <button id="selection-attached-marks" type="button" class="selection-action" aria-label="Attached marks for selected event" disabled>${e(z,"Marks")}</button>
-                <button id="selection-relationships" type="button" class="selection-action" aria-label="Relationships for the selected events" hidden>${e(ie,o`<span data-control-label>Relate</span>`)}</button>
-                <button id="selection-mark-remove" type="button" class="selection-action danger-button" hidden>${e(T,"Remove mark")}</button>
-                <button id="drag-pitch" type="button" class="gesture-handle footer-drag-handle" aria-label="Drag selected pitch" aria-describedby="drag-pitch-help pointer-help" title="Drag vertically to change the selected pitch" disabled hidden>${e(ct,"Drag pitch")}</button>
+                <div id="selection-slot-2" class="palette-slot">
+                  <button id="selection-value" type="button" class="selection-action" popovertarget="selection-value-chooser" disabled>${e(c,o`<span data-control-label>Value</span>`)}</button>
+                </div>
+                <div id="selection-slot-3" class="palette-slot">
+                  <button id="selection-attached-marks" type="button" class="selection-action" aria-label="Attached marks for selected event" disabled>${e(z,"Marks")}</button>
+                  <button id="selection-relationships" type="button" class="selection-action" aria-label="Relationships for the selected events" hidden>${e(ie,o`<span data-control-label>Relate</span>`)}</button>
+                  <button id="selection-mark-remove" type="button" class="selection-action danger-button" hidden>${e(T,"Remove mark")}</button>
+                  <button id="drag-pitch" type="button" class="gesture-handle footer-drag-handle" aria-label="Drag selected pitch" aria-describedby="drag-pitch-help pointer-help" title="Drag vertically to change the selected pitch" disabled hidden>${e(ct,"Drag pitch")}</button>
+                </div>
+                <div id="selection-collection" class="palette-slot selection-collection" role="group" aria-label="Build a selection">
+                  <button id="selection-select-more" type="button" aria-describedby="selection-context">${e(ve,"Select more")}</button>
+                  <button id="selection-range" type="button" class="selection-action" hidden>${e(ve,"Range…")}</button>
+                  <button id="selection-done" type="button" class="selection-done" hidden>${e(r,"Done")}</button>
+                </div>
               </div>
             </div>
           </div>

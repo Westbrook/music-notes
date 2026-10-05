@@ -1,11 +1,11 @@
 {
-  "_author-ui-BauXz06D.js": {
-    "file": "assets/author-ui-BauXz06D.js",
+  "_author-ui-BaZLcSef.js": {
+    "file": "assets/author-ui-BaZLcSef.js",
     "name": "author-ui",
     "imports": [
       "_ui-runtime-DZIFwxVs.js",
       "_button-content-DK5Fi-Iu.js",
-      "_offline-status-BYpr33d9.js"
+      "_offline-status-CJpAAGGn.js"
     ]
   },
   "_button-content-CB62cQHJ.css": {
@@ -26,8 +26,8 @@
     "file": "assets/notation-fonts-BN8TYhU_.js",
     "name": "notation-fonts"
   },
-  "_offline-status-BYpr33d9.js": {
-    "file": "assets/offline-status-BYpr33d9.js",
+  "_offline-status-CJpAAGGn.js": {
+    "file": "assets/offline-status-CJpAAGGn.js",
     "name": "offline-status",
     "imports": [
       "_button-content-DK5Fi-Iu.js",
@@ -58,15 +58,15 @@
     "name": "ui-runtime"
   },
   "author.html": {
-    "file": "assets/author-C7lwmWda.js",
+    "file": "assets/author-CQJ9BkC5.js",
     "name": "author",
     "src": "author.html",
     "isEntry": true,
     "imports": [
       "_readonly-signal-C8xoJeWf.js",
       "_button-content-DK5Fi-Iu.js",
-      "_offline-status-BYpr33d9.js",
-      "_author-ui-BauXz06D.js",
+      "_offline-status-CJpAAGGn.js",
+      "_author-ui-BaZLcSef.js",
       "_ui-runtime-DZIFwxVs.js",
       "_semantics-BRTp3gBZ.js",
       "_notation-fonts-BN8TYhU_.js"
@@ -76,7 +76,7 @@
       "src/authoring/listen-controller.ts"
     ],
     "css": [
-      "assets/author-C_D6eJVQ.css"
+      "assets/author-pTqZEUyZ.css"
     ]
   },
   "index.html": {
@@ -94,7 +94,7 @@
     ]
   },
   "src/authoring/listen-controller.ts": {
-    "file": "assets/listen-controller-BPyadSW2.js",
+    "file": "assets/listen-controller-CWajIS4j.js",
     "name": "listen-controller",
     "src": "src/authoring/listen-controller.ts",
     "isDynamicEntry": true,
@@ -103,8 +103,8 @@
       "_button-content-DK5Fi-Iu.js",
       "_readonly-signal-C8xoJeWf.js",
       "_ui-runtime-DZIFwxVs.js",
-      "_offline-status-BYpr33d9.js",
-      "_author-ui-BauXz06D.js",
+      "_offline-status-CJpAAGGn.js",
+      "_author-ui-BaZLcSef.js",
       "_semantics-BRTp3gBZ.js",
       "_notation-fonts-BN8TYhU_.js"
     ]
