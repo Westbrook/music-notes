@@ -1,4 +1,4 @@
-import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Oe,f as be,S as Ue}from"./button-content-DK5Fi-Iu.js";import{p as He,a as ke,b as xe,c as Le,d as We,e as p,f as Be,g as ze,h as je,i as ne,j as d,k as Se,l as b,m as v,n as r,o as Ce,q as qe,r as he,s as Qe,t as Ge,u as Ke,v as Ae,w as c,x as N,y as Ve,z as Ye,A as g,B as Ze,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Je,P as Re,Q as ie,R as Xe,S as _e,T as et,U as tt,V as Te,W as h,X as se,Y as Pe,Z as O,_ as ot,$ as le,a0 as M,a1 as l,a2 as at,a3 as nt,a4 as it,a5 as st,a6 as lt,a7 as Ne,a8 as F,a9 as I,aa as rt,ab as ct,ac as dt,ad as ve,ae as ut,af as pt,ag as bt,ah as ht,ai as vt,aj as Ee,ak as J,al as De,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./offline-status-CJpAAGGn.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
+import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Oe,f as be,S as Ue}from"./button-content-DK5Fi-Iu.js";import{p as He,a as ke,b as xe,c as Le,d as We,e as p,f as Be,g as ze,h as je,i as ne,j as d,k as Se,l as b,m as v,n as r,o as Ce,q as qe,r as he,s as Qe,t as Ge,u as Ke,v as Ae,w as c,x as N,y as Ve,z as Ye,A as g,B as Ze,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as T,L as y,M as R,N as z,O as Je,P as Te,Q as ie,R as Xe,S as _e,T as et,U as tt,V as Re,W as h,X as se,Y as Pe,Z as O,_ as ot,$ as le,a0 as M,a1 as l,a2 as at,a3 as nt,a4 as it,a5 as st,a6 as lt,a7 as Ne,a8 as F,a9 as I,aa as rt,ab as ct,ac as dt,ad as ve,ae as ut,af as pt,ag as bt,ah as ht,ai as vt,aj as Ee,ak as J,al as De,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./offline-status-CJpAAGGn.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
     :host {
       box-sizing: border-box;
       display: grid;
@@ -468,7 +468,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
         <button id="properties-pitch" type="button" popovertarget="selection-pitch-chooser" aria-label="Pitch spelling and quarter-tone alterations" disabled>${e(g,"Spelling…")}</button>
         <button id="selection-prepare-drag" type="button" disabled>${e(Ze,"Prepare pitch drag")}</button>
       </div>
-      ${Rt()}
+      ${Tt()}
       <details id="event-details" class="sub-disclosure event-details"><summary>Event details</summary>
         <div class="sub-disclosure-content">
           <p class="field-help">Changes here are staged. Apply event details when ready; common selection controls apply immediately.</p>
@@ -503,7 +503,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
                   ${t({value:"sixteenth",label:"Sixteenth",icon:C})}
                   ${t({value:"thirty-second",label:"32nd",icon:q})}
                   ${t({value:"sixty-fourth",label:"64th",icon:A})}
-                  ${t({value:"128th",label:"128th",icon:R})}
+                  ${t({value:"128th",label:"128th",icon:T})}
                   ${y("quarter")}
                 </select>
               </label>
@@ -558,10 +558,10 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
           <input id="selected-rhythmic" name="selected-rhythmic" type="checkbox" />Write slash rhythm</label>
       </div>
       <div class="button-row panel-actions">
-        <button id="remove-event" type="button" class="danger-button">${e(T,"Remove event")}</button>
+        <button id="remove-event" type="button" class="danger-button">${e(R,"Remove event")}</button>
       </div>
     </section>
-  `}function Rt(){return o`
+  `}function Tt(){return o`
     <section id="event-markings-editor" class="subsection" aria-labelledby="event-markings-heading">
       <div class="panel-heading">
         <h3 id="event-markings-heading">Attached marks</h3>
@@ -586,7 +586,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
       <div class="button-row">
         <button id="add-event-articulation" type="button">${e(z,"Add articulation")}</button>
         <button id="add-event-ornament" type="button">${e(Je,"Add ornament")}</button>
-        <button id="add-event-interval" type="button">${e(Re,"Add harmony interval")}</button>
+        <button id="add-event-interval" type="button">${e(Te,"Add harmony interval")}</button>
       </div>
       <p id="event-markings-availability" class="field-help"></p>
       <p id="event-markings-placement-help" class="field-help">Articulations and ornaments are placed automatically opposite the drawn stem, or above when there is no stem. Harmony direction stays above or below the main pitch.</p>
@@ -596,7 +596,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
         <button id="apply-event-markings" type="button" class="primary-button" disabled>${e(r,"Apply attached marks")}</button>
       </div>
     </section>
-  `}function Tt(){return o`
+  `}function Rt(){return o`
     <section id="passage-inspector" class="tool-panel" role="tabpanel" aria-labelledby="tool-tab-rhythm" tabindex="0" hidden>
       <div class="panel-heading">
         <h2>Relationships &amp; passages</h2>
@@ -681,7 +681,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
         <div class="button-row">
           <button id="wrap-tuplet" type="button" class="primary-button">${e(et,"Make tuplet")}</button>
           <button id="update-tuplet" type="button">${e(r,"Apply group settings")}</button>
-          <button id="unwrap-tuplet" type="button" class="danger-button">${e(T,"Remove tuplet grouping")}</button>
+          <button id="unwrap-tuplet" type="button" class="danger-button">${e(R,"Remove tuplet grouping")}</button>
         </div>
       </section>
       <details id="beam-membership" class="sub-disclosure"><summary>Per-event beam membership</summary>
@@ -742,7 +742,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
       <div class="field-grid annotation-position-fields">
         <div class="onset-actions">
           <button id="annotation-at-start" type="button" class="quiet-button">${e(tt,"At bar start")}</button>
-          <button id="annotation-at-selection" type="button" class="quiet-button">${e(Te,"Use selected position")}</button>
+          <button id="annotation-at-selection" type="button" class="quiet-button">${e(Re,"Use selected position")}</button>
         </div>
         <label class="field" for="annotation-at">Position in whole notes<input id="annotation-at" name="annotation-at" type="text" value="0" placeholder="0, 1/4, 1/2…" aria-describedby="annotation-position-help">
         </label>
@@ -760,7 +760,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
             ${t({value:"sixteenth",label:"Sixteenth",icon:C})}
             ${t({value:"thirty-second",label:"32nd",icon:q})}
             ${t({value:"sixty-fourth",label:"64th",icon:A})}
-            ${t({value:"128th",label:"128th",icon:R})}
+            ${t({value:"128th",label:"128th",icon:T})}
             ${y("quarter")}
           </select>
         </label>
@@ -792,7 +792,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
         <button id="update-annotation" type="button" hidden="">${e(r,"Apply changes")}</button>
         <button id="update-annotation-next" type="button" hidden="">${e(d,"Apply & next bar")}</button>
         <button id="new-annotation" type="button" class="quiet-button" hidden="">${e(h,o`<span id="new-annotation-label" data-control-label>New instruction</span>`)}</button>
-        <button id="remove-annotation" type="button" class="danger-button" hidden="">${e(T,"Remove instruction")}</button>
+        <button id="remove-annotation" type="button" class="danger-button" hidden="">${e(R,"Remove instruction")}</button>
       </div>
     </section>
   `}function Nt(){return o`
@@ -857,7 +857,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
       <div class="subsection button-row">
         <button id="move-measure-earlier" type="button">${e(ne,"Move measure earlier")}</button>
         <button id="move-measure-later" type="button">${e(d,"Move measure later")}</button>
-        <button id="remove-measure" type="button" class="danger-button">${e(T,"Remove measure")}</button>
+        <button id="remove-measure" type="button" class="danger-button">${e(R,"Remove measure")}</button>
       </div>
       <section class="subsection" aria-labelledby="duplicate-bars-heading">
         <h3 id="duplicate-bars-heading">Duplicate a section</h3>
@@ -897,7 +897,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
         <button id="tool-tab-measure" type="button" role="tab" aria-controls="measure-inspector" aria-selected="false" tabindex="-1">${e(at,"Measure")}</button>
       </div>
       ${At()}
-      ${Tt()}
+      ${Rt()}
       ${Pt()}
       ${Nt()}
       <div class="tools-footer">
@@ -961,12 +961,14 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
                 <div id="selection-slot-3" class="palette-slot">
                   <button id="selection-attached-marks" type="button" class="selection-action" aria-label="Attached marks for selected event" disabled>${e(z,"Marks")}</button>
                   <button id="selection-relationships" type="button" class="selection-action" aria-label="Relationships for the selected events" hidden>${e(ie,o`<span data-control-label>Relate</span>`)}</button>
-                  <button id="selection-mark-remove" type="button" class="selection-action danger-button" hidden>${e(T,"Remove mark")}</button>
                   <button id="drag-pitch" type="button" class="gesture-handle footer-drag-handle" aria-label="Drag selected pitch" aria-describedby="drag-pitch-help pointer-help" title="Drag vertically to change the selected pitch" disabled hidden>${e(rt,"Drag pitch")}</button>
                 </div>
                 <div id="selection-collection" class="palette-slot selection-collection" role="group" aria-label="Build a selection">
                   <button id="selection-select-more" type="button" aria-describedby="selection-context">${e(ct,"Select more")}</button>
                   <button id="selection-done" type="button" class="selection-done" hidden>${e(r,"Done")}</button>
+                </div>
+                <div class="palette-slot">
+                  <button id="selection-delete" type="button" class="selection-action danger-button" aria-label="Delete selected music" hidden>${e(R,"Delete")}</button>
                 </div>
               </div>
             </div>
@@ -975,7 +977,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
       </div>
       <div id="workspace-mode-slot" class="workspace-mode-slot" role="group" aria-label="Editing mode">
         <button id="toggle-entry" type="button" aria-pressed="false" aria-describedby="entry-destination">${e(dt,o`<span id="entry-mode-label">Write notes</span>`)}</button>
-        <button id="select-mode" type="button" aria-pressed="true">${e(Te,"Select")}</button>
+        <button id="select-mode" type="button" aria-pressed="true">${e(Re,"Select")}</button>
       </div>
       <div id="palette-more-slot" class="palette-more-slot">
         <button id="edit-selected-event" class="selection-action selection-more" type="button" aria-controls="workspace-tools" aria-expanded="false" aria-describedby="edit-selected-help">${e(ve,o`<span id="edit-selected-label">More</span><span id="edit-selected-value" hidden></span>`)}</button>
@@ -1210,7 +1212,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
             <div class="button-row">
               <button id="add-part" type="button" class="primary-button">${e(h,"Create part")}</button>
               <button id="update-part" type="button">${e(r,"Update selected part")}</button>
-              <button id="remove-part" type="button" class="danger-button">${e(T,"Remove part")}</button>
+              <button id="remove-part" type="button" class="danger-button">${e(R,"Remove part")}</button>
             </div>
           </div>
         </section>
@@ -1242,7 +1244,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
         <div class="local-action-grid">
           <button id="next-measure" type="button" >${e(d,"Next measure")}</button>
           <button id="add-measure" type="button" class="quiet-button">${e(h,o`<span id="add-measure-label" data-control-label>Add measure</span>`)}</button>
-          <button id="add-chord-symbol" type="button" class="primary-button">${e(Re,"Add chord symbol")}</button>
+          <button id="add-chord-symbol" type="button" class="primary-button">${e(Te,"Add chord symbol")}</button>
           <button id="start-entry-here" type="button" >${e(N,"Start writing here")}</button>
           <button id="resume-entry" type="button" class="quiet-button" hidden>${e(N,o`<span id="resume-entry-label" data-control-label>Resume writing</span>`)}</button>
           <button id="selection-review" type="button" class="quiet-button" popovertarget="workspace-review" hidden>${e(J,"Review")}</button>
@@ -1404,7 +1406,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
               ${t({value:"sixteenth",label:"Sixteenth",icon:C})}
               ${t({value:"thirty-second",label:"32nd",icon:q})}
               ${t({value:"sixty-fourth",label:"64th",icon:A})}
-              ${t({value:"128th",label:"128th",icon:R})}
+              ${t({value:"128th",label:"128th",icon:T})}
               ${y("quarter")}
             </select>
           </label>
@@ -1456,7 +1458,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
               ${t({value:"sixteenth",label:"Sixteenth",icon:C})}
               ${t({value:"thirty-second",label:"32nd",icon:q})}
               ${t({value:"sixty-fourth",label:"64th",icon:A})}
-              ${t({value:"128th",label:"128th",icon:R})}
+              ${t({value:"128th",label:"128th",icon:T})}
             </select>
           </label>
           <label class="field" for="selection-dots">Dots<select id="selection-dots" name="selection-dots" class="author-select" aria-describedby="selection-rhythm-help">
@@ -1562,7 +1564,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
               ${t({value:"sixteenth",label:"Sixteenth",icon:C})}
               ${t({value:"thirty-second",label:"32nd",icon:q})}
               ${t({value:"sixty-fourth",label:"64th",icon:A})}
-              ${t({value:"128th",label:"128th",icon:R})}
+              ${t({value:"128th",label:"128th",icon:T})}
             </select>
           </label>
           <label class="field" for="selection-shared-dots">Dots<select id="selection-shared-dots" name="selection-shared-dots" class="author-select" aria-describedby="selection-shared-help">
@@ -1655,7 +1657,7 @@ import{i as m,a as w,b as o,A as we,c as P,D as $e}from"./ui-runtime-DZIFwxVs.js
               ${t({value:"sixteenth",label:"Sixteenth",icon:C})}
               ${t({value:"thirty-second",label:"32nd",icon:q})}
               ${t({value:"sixty-fourth",label:"64th",icon:A})}
-              ${t({value:"128th",label:"128th",icon:R})}
+              ${t({value:"128th",label:"128th",icon:T})}
             </select>
           </label>
           <label class="field" for="note-dots">Dots<select id="note-dots" name="note-dots" class="author-select" aria-describedby="note-rhythm-help">
