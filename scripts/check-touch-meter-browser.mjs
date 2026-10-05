@@ -21,13 +21,14 @@ try {
   const before = await html();
   const note = id => page.locator(`#score-host .screen g.vf-music-event[data-source-id="${id}"]`);
   const ids = async () => JSON.parse(await page.locator('#selection-controls').getAttribute('data-event-ids'));
+  assert.equal(await page.locator('#selection-delete').isVisible(), false);
   await note('a').tap();
   const checkActionRow = async collecting => {
     for (const width of [320, 390, 844, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const buttons = collecting
-        ? ['selection-shared', 'selection-relationships', 'selection-select-more']
-        : ['selection-pitch', 'selection-value', 'selection-attached-marks', 'selection-select-more'];
+        ? ['selection-shared', 'selection-relationships', 'selection-select-more', 'selection-delete']
+        : ['selection-pitch', 'selection-value', 'selection-attached-marks', 'selection-select-more', 'selection-delete'];
       const boxes = await Promise.all(buttons.map(id => page.locator(`#${id}`).boundingBox()));
       assert.ok(boxes.every(box => box && Math.abs(box.y - boxes[0].y) < 1), `${width}px: selection actions share a row`);
       for (let i = 1; i < boxes.length; i++) {
@@ -51,7 +52,7 @@ try {
     await page.evaluate(() => { document.documentElement.style.fontSize = '24px'; });
     await page.setViewportSize({ width: 320, height: 900 });
     await page.screenshot({ path: `${output}/action-row-large-text-${collecting ? 'collecting' : 'single'}.png` });
-    for (const id of ['selection-select-more', ...(collecting ? ['selection-shared', 'selection-relationships'] : ['selection-pitch', 'selection-value', 'selection-attached-marks'])]) {
+    for (const id of ['selection-select-more', 'selection-delete', ...(collecting ? ['selection-shared', 'selection-relationships'] : ['selection-pitch', 'selection-value', 'selection-attached-marks'])]) {
       const box = await page.locator(`#${id}`).boundingBox();
       assert.ok(box.x >= 0 && box.x + box.width <= 320 && box.height >= 44, `large text: ${id} remains inside the viewport with a full touch target`);
     }
@@ -113,7 +114,19 @@ try {
   assert.equal(await page.locator('#selection-select-more').isVisible(), true);
   assert.deepEqual(await ids(), ['a']);
   assert.equal(await html(), before);
+  // Delete the exact disjoint touch selection, then restore it in one Undo.
+  await page.locator('#selection-select-more').tap(); await note('c').tap();
+  assert.deepEqual(await ids(), ['a', 'c']); await page.locator('#selection-delete').tap(); await ready();
+  assert.deepEqual(await source.locator('music-note').evaluateAll(nodes => nodes.map(n => n.id)), ['b', 'd']);
+  await page.locator('#undo').tap(); await ready(); assert.equal(await html(), before);
+  if (await page.locator('#selection-select-more').getAttribute('aria-pressed') === 'true') await page.locator('#selection-select-more').tap();
+  await note('a').tap(); await page.locator('#selection-select-more').tap();
+  for (const id of ['b', 'c', 'd']) await note(id).tap();
+  await page.locator('#selection-delete').tap(); await ready();
+  assert.equal(await source.locator('music-note').count(), 0);
+  assert.equal(await page.locator('#selection-delete').isVisible(), false);
+  await page.locator('#undo').tap(); await ready(); assert.equal(await html(), before);
   assert.deepEqual(errors, []);
-  const result = { passed: true, engine, version: browser.version(), checks: ['320/390/844/1440px action-row alignment and toolbar height', '320px enlarged-text controls', '390px browser touch taps', 'direct multi-selection with toggling', 'toggle off preserves selected membership', 'Range removed; endpoints available through Relate', 'Done only exits prepared pitch dragging', 'selection adds no music history', 'triplet from touch selection and Undo', 'native range selectors', '4/4 to 3/4 overflow through real form', 'overflow Undo', 'no browser errors'], limitations: ['Emulated browser touch input; physical iPhone/iPad gestures not tested.', 'Controls may wrap with enlarged text.'] };
+  const result = { passed: true, engine, version: browser.version(), checks: ['320/390/844/1440px action-row alignment and toolbar height', '320px enlarged-text controls', '390px browser touch taps', 'direct multi-selection with toggling', 'toggle off preserves selected membership', 'Range removed; endpoints available through Relate', 'Done only exits prepared pitch dragging', 'selection adds no music history', 'triplet from touch selection and Undo', 'native range selectors', '4/4 to 3/4 overflow through real form', 'overflow Undo', 'touch Delete preserves disjoint holes and Undo restores exact source', 'Delete hides after emptying selection', 'no browser errors'], limitations: ['Emulated browser touch input; physical iPhone/iPad gestures not tested.', 'Controls may wrap with enlarged text.'] };
   await writeFile(`${output}/result.json`, JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } finally { await browser.close(); }

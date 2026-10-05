@@ -1129,3 +1129,6 @@ body[data-view="listen"] #score-scroll { grid-row: 1; }
 .selection-collection { display: flex; align-items: center; gap: var(--music-ui-group-spacing); }
 .selection-collection > button { padding-inline: var(--music-ui-control-padding-inline); font-size: var(--music-ui-label-size); }
 .selection-collection > button[aria-pressed="true"] { background: var(--music-ui-color-active); border-color: var(--music-ui-color-border); }
+@media (max-width: 400px) {
+  .selection-actions { column-gap: var(--music-ui-group-gap); }
+}

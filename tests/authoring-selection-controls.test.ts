@@ -801,7 +801,7 @@ describe('SelectionControls fixed musical slots', () => {
     for (const [slot, ids] of [
       ['selection-slot-1', ['selection-pitch', 'selection-shared', 'selection-mark-edit']],
       ['selection-slot-2', ['selection-value']],
-      ['selection-slot-3', ['selection-attached-marks', 'selection-relationships', 'selection-mark-remove']],
+      ['selection-slot-3', ['selection-attached-marks', 'selection-relationships']],
     ] as const) {
       const owner = control(slot);
       expect(owner.classList.contains('palette-slot')).toBe(true);
@@ -888,7 +888,7 @@ describe('SelectionControls fixed musical slots', () => {
     const third = h.button(mode === 'collecting' ? 'selection-relationships' : 'selection-attached-marks');
     expect(visible(third)).toBe(mode === 'collecting');
     if (mode === 'pitch-drag') {
-      for (const id of ['selection-attached-marks', 'selection-relationships', 'selection-mark-remove']) expect(visible(h.button(id))).toBe(false);
+      for (const id of ['selection-attached-marks', 'selection-relationships', 'selection-delete']) expect(visible(h.button(id))).toBe(false);
     }
     const finish = mode === 'collecting' ? h.button('selection-select-more') : done;
     finish.focus(); finish.click();
@@ -1000,7 +1000,7 @@ describe('SelectionControls kind and child-target gates', () => {
     h.select(['n1'], 'trill');
     h.button('selection-mark-edit').click();
     expect(h.openProperties).toHaveBeenCalledExactlyOnceWith({ eventId: 'n1', markingId: 'trill', section: 'markings' });
-    h.button('selection-mark-remove').click();
+    h.button('selection-delete').click();
     expect(h.execute).toHaveBeenCalledExactlyOnceWith({ type: 'remove-event-marking', eventId: 'n1', markingId: 'trill' });
     expect(h.session.source.querySelector('#trill')).toBeNull(); expect(h.session.source.querySelector('#accent')).not.toBeNull();
     expect(h.event().duration).toBe('quarter'); expect(h.session.revision).toBe(1);
@@ -1009,7 +1009,7 @@ describe('SelectionControls kind and child-target gates', () => {
 
   it('does not redirect a pressed child-removal action to a different marking of the same event', () => {
     const h = fixture(scoreHtml(note('n1', 'pitch="C4" duration="quarter"', '<music-articulation id="accent" type="accent"></music-articulation><music-ornament id="trill" type="trill"></music-ornament>')));
-    h.select(['n1'], 'trill'); const remove = h.button('selection-mark-remove');
+    h.select(['n1'], 'trill'); const remove = h.button('selection-delete');
     pointer(remove, 'pointerdown');
     // The exact child is part of the binding independently of the event/version.
     h.view.activeMarkingId = 'accent'; h.controls.refresh();
@@ -1559,5 +1559,20 @@ describe('SelectionControls binding, focus, and surface lifecycle', () => {
     change(h.field('selection-duration'), 'half'); h.button('selection-sharp').click(); h.button('edit-selected-event').click();
     h.controls.refresh(); h.controls.close(); h.controls.cancel('Already disposed');
     expect(h.execute).not.toHaveBeenCalled(); expect(h.openProperties).not.toHaveBeenCalled(); expect(h.session.revision).toBe(0);
+  });
+});
+
+
+describe('SelectionControls direct deletion binding', () => {
+  it('rejects a Delete press when its selected events change before release', () => {
+    const h = fixture(); const remove = h.button('selection-delete'); pointer(remove, 'pointerdown');
+    h.select(['n2']); pointer(remove, 'pointerup'); remove.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    expect(h.execute).not.toHaveBeenCalled(); expect(h.session.canUndo).toBe(false);
+    expect(h.session.source.querySelector('#n1')).not.toBeNull(); expect(h.session.source.querySelector('#n2')).not.toBeNull();
+  });
+  it('hides Delete for structural targets without selected events', () => {
+    const h = fixture(scoreHtml(), { ids: [] });
+    h.view.structural = { id: 'bar', kind: 'measure', label: 'Bar 12' }; h.controls.refresh();
+    expect(h.button('selection-delete').hidden).toBe(true); expect(h.button('selection-delete').disabled).toBe(true);
   });
 });

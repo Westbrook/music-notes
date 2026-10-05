@@ -306,7 +306,7 @@ describe('stable writing palette structural contract', () => {
     for (const [slotId, actionIds] of [
       ['selection-slot-1', ['selection-pitch', 'selection-shared', 'selection-mark-edit']],
       ['selection-slot-2', ['selection-value']],
-      ['selection-slot-3', ['selection-attached-marks', 'selection-relationships', 'selection-mark-remove', 'drag-pitch']],
+      ['selection-slot-3', ['selection-attached-marks', 'selection-relationships', 'drag-pitch']],
     ] as const) {
       const slot = element(slotId);
       expect(core.contains(slot)).toBe(true);

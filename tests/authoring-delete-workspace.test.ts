@@ -372,3 +372,41 @@ describe('fresh text gestures relinquish score shortcuts without clearing browse
     for (const key of keys) { const native = await press(key); expect(native.defaultPrevented).toBe(false); unchanged(before); } expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
   });
 });
+
+
+describe('selection Delete button', () => {
+  it('appears only for musical selection and deletes a disjoint touch collection in one Undo', async () => {
+    mount(); expect(el('selection-delete').hidden).toBe(true);
+    await futureRecipe(); await select('a'); await click('selection-select-more'); await select('c');
+    expect(app!.session.selection.ids).toEqual(['a', 'c']);
+    const before = accepted(), lower = structuredClone(voice(0, 1));
+    await click('selection-delete');
+    expect(voice().events.map(item => item.id)).toEqual(['b', 'd']); expect(voice(0, 1)).toEqual(lower);
+    expect(app!.session.revision).toBe(before.revision + 1); expect(recipe()).toEqual(before.recipe);
+    expect(app!.session.cursor).toEqual(before.cursor); await undoDeletion(before);
+  });
+  it('hides after deleting the last event and restores a full-measure rest with Undo', async () => {
+    mount(); await select('writer'); const before = accepted(); await click('selection-delete');
+    expect(voice(2).events).toEqual([]); expect(el('selection-delete').hidden).toBe(true);
+    await undoDeletion(before); expect(event('writer')?.measureRest).toBe(true);
+  });
+  it('deletes the current selection without using or discarding a held Properties draft', async () => {
+    mount(); await select('a'); await click('edit-selected-event'); await field('selected-pitch', 'Gqf4'); await select('b');
+    const before = accepted(); await click('selection-delete'); expect(event('b')).toBeUndefined();
+    expect(event('a')?.pitches.map(pitchText)).toEqual(['F4']);
+    expect(el('selection-inspector').dataset.draftTarget).toBe('a'); expect(el<HTMLInputElement>('selected-pitch').value).toBe('Gqf4');
+    await undoDeletion(before);
+  });
+  it('rejects tied event deletion atomically and retains Undo history', async () => {
+    mount('<music-staff><music-measure><music-note id="a" pitch="C4" duration="half" tie="start"></music-note><music-note id="b" pitch="C4" duration="half" tie="end"></music-note></music-measure></music-staff>');
+    await select('a'); const before = accepted(); await click('selection-delete'); unchanged(before);
+    expect(el('author-errors').textContent).toMatch(/Clear connected ties/i);
+  });
+  it('disables deletion with an unapplied Source draft and hides it during entry', async () => {
+    mount(); await select('b'); await click('source-trigger');
+    await field('source-input', app!.session.project.sourceHtml + '\n<!-- pending -->'); await click('close-source');
+    expect(el<HTMLButtonElement>('selection-delete').disabled).toBe(true);
+    const before = accepted(); el('selection-delete').click(); await flush(); unchanged(before);
+    await click('toggle-entry'); expect(available(el('selection-delete'))).toBe(false);
+  });
+});

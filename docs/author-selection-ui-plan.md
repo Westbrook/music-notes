@@ -26,7 +26,7 @@ The phone row has a maximum of five controls, not five mandatory placeholders. I
 | --- | --- |
 | Single pitched/road/rhythm event | Location, Value, applicable Pitch/Direction, More, Resume. Omit irrelevant choices. |
 | Chord | Location, Value, Pitches, More, Resume. |
-| Attached mark | Location, Edit mark, Remove mark, More, Resume. Removal uses the exact child and current compatibility guards. |
+| Attached mark | Location, Edit mark, Delete, More, Resume. Removal uses the exact child and current compatibility guards. |
 | Multiple events | Location/count, Shared properties, Relationships, More, Resume. |
 | Select more | Location/count, Selection actions, Relate, Select more toggle, Resume. Turning Select more off keeps membership and returns to ordinary Select; Resume ends this mode and resumes writing. |
 | No event / structural selection | Location, Tools, Resume/Enter. An instruction or tuplet adds its explicit Edit action; unavailable note controls disappear. |
@@ -84,7 +84,7 @@ Do not merge different owners for the sake of fewer words. A scalar draft for ba
 | Shift-click / Shift-Left or Right | Replace membership with the inclusive range from the fixed anchor; extend or shrink it as the endpoint moves. Shift after a disjoint set does not add a second range. Crossing staff/voice boundaries leaves the prior selection intact with an explanation. |
 | Command-click on macOS / Control-click elsewhere | Toggle the exact event, preserving holes. macOS Control-click retains secondary-click behavior. A modified mark click addresses its owner event and names that choice. |
 | Selection modifier while entering | Park entry before gesture handling; select only. Never insert or repitch first and repair afterward. |
-| Select more / Done | Visible modifier-free mode: taps toggle membership. Keyboard arrows move focus without changing membership; Space toggles. Done retains the set. Range… retains From/Through controls for long passages. |
+| Select more | Visible modifier-free mode: taps toggle membership. Keyboard arrows move focus without changing membership; Space toggles. Switching Select more off retains the set. Relate opens From/Through controls for long passages. |
 | Unmodified Left/Right at the score | Outside Select more, collapse a set to the previous/next single event relative to its primary. Park entry when necessary without replacing its recipe or writing bookmark. |
 | Enter at the score | In Select, open Properties for one event, the exact row for a marking, or Selection actions for a group; in Enter, insert the exact recipe under current validation. Native controls retain their own Enter behavior. Tab from score focus enters the compact toolbar without requiring Properties. |
 | Escape | Cancel the active gesture or close the transient chooser first. When handled at the score with no transient action, clear selection through the same reducer and reconcile highlights, counts and range fields; in Enter, park entry first. Never discard a draft implicitly. |
@@ -193,3 +193,5 @@ More and its Tools counterpart toggle the applicable visible pane. Closing is a 
 Small native choosers use the actual invoker for each opening, including Properties' alternate Spelling trigger. Positioning begins only after native opening, prefers available space above the dock, flips or clamps within the visible viewport, and preserves menu scrolling. Closing removes its observers and temporary styles. An unavailable invoker dismisses only its own chooser; focus recovery must not override a newly chosen external field. Ordinary in-flow fallbacks receive no positioning behavior. This menu placement is enabled independently of the disabled note-relative toolbar.
 
 The stricter review also requires field reveal through the actual short-screen pane scrollport, visible focus when restoring a scrolled general tool without resetting its saved position, and rejection of pointer drops on the relocated dock. Tests must exercise those boundaries rather than count source declarations as native layout evidence.
+
+The implemented musical action row includes **Delete** only when events or an attached mark are selected. It removes the exact selection in one Undo transaction, preserving gaps in disjoint selections; attached-mark deletion preserves its parent event. Pending Source disables the action, and prepared pitch dragging hides it. Delete shares the existing row at standard phone sizes; enlarged text can wrap without shrinking touch targets.

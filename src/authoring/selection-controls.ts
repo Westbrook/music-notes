@@ -425,12 +425,15 @@ export class SelectionControls {
     this.listen('edit-selected-event', 'click', () => this.route('properties', this.button('edit-selected-event')));
     this.listen('selection-mark-edit', 'click', () => this.route('markings', this.button('selection-mark-edit')));
     this.listen('selection-attached-marks', 'click', () => this.route('markings', this.button('selection-attached-marks')));
-    this.listen('selection-mark-remove', 'click', () => {
-      const state = this.guard(undefined, this.button('selection-mark-remove'));
+    this.listen('selection-delete', 'click', () => {
+      const state = this.guard(undefined, this.button('selection-delete'));
       if (!state) return;
       const mark = selectedMark(state);
-      if (writingReason(state) || !mark || !state.event) return this.fail(writingReason(state) ?? 'Select the exact attached mark to remove.');
-      this.perform({ type: 'remove-event-marking', eventId: state.event.id, markingId: mark.id });
+      const reason = writingReason(state) ?? selectionReason(state);
+      if (reason) return this.fail(reason);
+      this.perform(mark
+        ? { type: 'remove-event-marking', eventId: state.event!.id, markingId: mark.id }
+        : { type: 'remove-events', eventIds: [...state.eventIds] });
     });
     this.listen('selection-relationships', 'click', () => this.routeAction(this.button('selection-relationships'), () => this.options.openRelationships()));
     this.listen('selection-select-more', 'click', () => {
@@ -897,7 +900,9 @@ export class SelectionControls {
     this.button('selection-mark-edit').setAttribute('aria-label', state.activeMarkingId
       ? `Edit attached ${mark ? markingName(mark) : 'mark'}`
       : state.structural ? `Edit ${state.structural.kind}: ${state.structural.label}` : 'Edit the selected target');
-    this.setButton('selection-mark-remove', !!state.activeMarkingId && !state.pitchDragArmed, baseReason);
+    this.setButton('selection-delete', show && valid && !state.pitchDragArmed, baseReason);
+    this.button('selection-delete').setAttribute('aria-label', mark
+      ? `Delete attached ${markingName(mark)}` : `Delete ${state.eventIds.length} selected event${state.eventIds.length === 1 ? '' : 's'}`);
     this.setButton('selection-done', show && !!state.pitchDragArmed, state.mode !== 'write' ? 'Return to Write.' : undefined);
     this.setButton('edit-selected-event', show, state.mode !== 'write' || state.entryMode ? 'Choose Select in Write.' : undefined);
     this.button('edit-selected-event').setAttribute('aria-controls', 'workspace-tools');

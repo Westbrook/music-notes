@@ -65,12 +65,14 @@ export function musicPalette(): TemplateResult {
                 <div id="selection-slot-3" class="palette-slot">
                   <button id="selection-attached-marks" type="button" class="selection-action" aria-label="Attached marks for selected event" disabled>${buttonContent(bravuraArticAccentAbove, "Marks")}</button>
                   <button id="selection-relationships" type="button" class="selection-action" aria-label="Relationships for the selected events" hidden>${buttonContent(phLink, html`<span data-control-label>Relate</span>`)}</button>
-                  <button id="selection-mark-remove" type="button" class="selection-action danger-button" hidden>${buttonContent(phTrash, "Remove mark")}</button>
                   <button id="drag-pitch" type="button" class="gesture-handle footer-drag-handle" aria-label="Drag selected pitch" aria-describedby="drag-pitch-help pointer-help" title="Drag vertically to change the selected pitch" disabled hidden>${buttonContent(phArrowsVertical, "Drag pitch")}</button>
                 </div>
                 <div id="selection-collection" class="palette-slot selection-collection" role="group" aria-label="Build a selection">
                   <button id="selection-select-more" type="button" aria-describedby="selection-context">${buttonContent(phSelection, 'Select more')}</button>
                   <button id="selection-done" type="button" class="selection-done" hidden>${buttonContent(phCheck, "Done")}</button>
+                </div>
+                <div class="palette-slot">
+                  <button id="selection-delete" type="button" class="selection-action danger-button" aria-label="Delete selected music" hidden>${buttonContent(phTrash, "Delete")}</button>
                 </div>
               </div>
             </div>
