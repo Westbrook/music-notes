@@ -43,7 +43,15 @@
 * { box-sizing: border-box; }
 body { min-width: 320px; margin: 0; }
 @media screen {
-  body { padding: var(--music-ui-safe-top) var(--music-ui-safe-right) var(--music-ui-safe-bottom) var(--music-ui-safe-left); }
+  /* Paint through the safe areas with the same surface as the header/docks.
+     Keep controls inset; the Home indicator strip should not look like a gap. */
+  :root { background: var(--author-surface); }
+  body {
+    background: var(--author-surface);
+    /* The status-bar fade can extend beyond the reported safe area. Give the
+       header a little breathing room, with no extra space at a zero top inset. */
+    padding: calc(var(--music-ui-safe-top) + min(var(--music-ui-safe-top), 1rem)) var(--music-ui-safe-right) var(--music-ui-safe-bottom) var(--music-ui-safe-left);
+  }
 }
 music-author-shell { display: contents; }
 [hidden] { display: none !important; }
@@ -163,7 +171,7 @@ select > button { display: none; }
   white-space: nowrap;
   border: 0;
 }
-.skip-link { position: fixed; z-index: 100; top: calc(8px + var(--music-ui-safe-top)); left: calc(12px + var(--music-ui-safe-left)); padding: 10px 15px; transform: translateY(-150%); background: var(--paper); }
+.skip-link { position: fixed; z-index: 100; top: calc(8px + var(--music-ui-safe-top)); left: calc(12px + var(--music-ui-safe-left)); padding: 10px 15px; transform: translateY(calc(-100% - var(--music-ui-safe-top) - 12px)); background: var(--paper); }
 .skip-link:focus { transform: none; }
 .app-header {
   display: grid;

@@ -14,7 +14,7 @@ for (const [name, engine] of [['chromium', chromium], ['webkit', webkit]]) {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     for (const [width, height, top, right, bottom, left] of [
-      [320, 568, 20, 0, 0, 0], [390, 844, 47, 0, 34, 0],
+      [1280, 800, 0, 0, 0, 0], [320, 568, 20, 0, 0, 0], [390, 844, 47, 0, 34, 0],
       [844, 390, 0, 47, 21, 47], [1024, 1366, 24, 0, 20, 0], [1366, 1024, 24, 0, 20, 0],
     ]) {
       await page.setViewportSize({ width, height });
@@ -26,16 +26,34 @@ for (const [name, engine] of [['chromium', chromium], ['webkit', webkit]]) {
           document.documentElement.style.setProperty(`--music-ui-safe-${side}`, `${value}px`);
         }
       }, { top, right, bottom, left });
+      const skip = page.locator('.skip-link');
+      const hiddenSkip = await skip.boundingBox();
+      assert.ok(hiddenSkip.y + hiddenSkip.height <= 0, `${name} ${width}: unfocused skip link stays above the safe area`);
+      // macOS WebKit uses Option-Tab to include links in keyboard navigation.
+      await page.keyboard.press(name === 'webkit' ? 'Alt+Tab' : 'Tab');
+      assert.ok(await skip.evaluate(link => link === document.activeElement), `${name} ${width}: keyboard reaches skip link first`);
+      const focusedSkip = await skip.boundingBox();
+      assert.ok(focusedSkip.y >= top && focusedSkip.x >= left, `${name} ${width}: focused skip link clears safe areas`);
+      await page.keyboard.press('Tab');
       const pages = await page.locator('#view-pages').boundingBox();
       const undo = await page.locator('#undo').boundingBox();
       assert.ok(pages.x + pages.width <= undo.x || pages.y + pages.height <= undo.y, `${name} ${width}: Pages and Undo must not overlap`);
       const header = await page.locator('.app-header').boundingBox();
-      assert.ok(header.y >= top && header.x >= left && header.x + header.width <= width - right + 1);
+      const rootFontSize = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
+      assert.ok(Math.abs(header.y - top - Math.min(top, rootFontSize)) < 1, `${name} ${width}: header adds fade clearance only with a top inset`);
+      assert.ok(header.x >= left && header.x + header.width <= width - right + 1);
       for (const [view, dock] of [['write', '#workspace-dock'], ['read', '#read-tools'], ['listen', '#listen-tools'], ['pages', '#pages-tools']]) {
         await page.locator(`#view-${view}`).click();
         const box = await page.locator(dock).boundingBox();
         assert.ok(box && box.y + box.height <= height - bottom + 1, `${name} ${width}: ${view} clears Home indicator`);
+        const surfaces = await page.locator(dock).evaluate(element => {
+          const background = node => getComputedStyle(node).backgroundColor;
+          return [element, document.body, document.documentElement, document.querySelector('.app-header')].map(background);
+        });
+        assert.ok(surfaces.every(color => color === surfaces[0] && color !== 'rgba(0, 0, 0, 0)'), `${name} ${width}: ${view} surface continues through safe areas`);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight), false, `${name} ${width}: ${view} fits viewport including insets`);
         if (view === 'listen') assert.ok(await page.locator('#listen-tempo').evaluate(input => parseFloat(getComputedStyle(input).fontSize) >= 16));
+        if (output) await page.screenshot({ path: `${output}/${name}-${width}-${view}.png` });
       }
       await page.locator('#document-menu-trigger').click();
       await page.getByText('Install Music Notes', { exact: true }).click();

@@ -82,6 +82,12 @@ The `--music-ui-safe-top/right/bottom/left` tokens read the corresponding
 their main content; viewport-positioned popovers and dialogs apply their own
 bounds because they escape that content box. Author's border-box `100dvh`
 frame includes the padding, leaving every bottom dock above the Home indicator.
+Author paints the page and its safe-area padding with the same surface as the
+header and docks, so the controls stay inset without a contrasting bottom strip.
+Its top padding adds up to `1rem` of breathing room beyond the reported top inset
+(capped by that inset, and zero when it is zero) for the status-bar fade. This is
+visual spacing, not a measurement of the operating system's blur; confirm the
+result on a physical device.
 Print styles remove screen insets. Override the tokens in browser fixtures to
 exercise nonzero safe areas without claiming physical-device qualification.
 
