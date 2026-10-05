@@ -1,6 +1,6 @@
 {
-  "_author-ui-BaZLcSef.js": {
-    "file": "assets/author-ui-BaZLcSef.js",
+  "_author-ui-mj_bwcbM.js": {
+    "file": "assets/author-ui-mj_bwcbM.js",
     "name": "author-ui",
     "imports": [
       "_ui-runtime-DZIFwxVs.js",
@@ -58,7 +58,7 @@
     "name": "ui-runtime"
   },
   "author.html": {
-    "file": "assets/author-CQJ9BkC5.js",
+    "file": "assets/author-BGpqAP-V.js",
     "name": "author",
     "src": "author.html",
     "isEntry": true,
@@ -66,7 +66,7 @@
       "_readonly-signal-C8xoJeWf.js",
       "_button-content-DK5Fi-Iu.js",
       "_offline-status-CJpAAGGn.js",
-      "_author-ui-BaZLcSef.js",
+      "_author-ui-mj_bwcbM.js",
       "_ui-runtime-DZIFwxVs.js",
       "_semantics-BRTp3gBZ.js",
       "_notation-fonts-BN8TYhU_.js"
@@ -94,7 +94,7 @@
     ]
   },
   "src/authoring/listen-controller.ts": {
-    "file": "assets/listen-controller-CWajIS4j.js",
+    "file": "assets/listen-controller-CzJyTLJW.js",
     "name": "listen-controller",
     "src": "src/authoring/listen-controller.ts",
     "isDynamicEntry": true,
@@ -104,7 +104,7 @@
       "_readonly-signal-C8xoJeWf.js",
       "_ui-runtime-DZIFwxVs.js",
       "_offline-status-CJpAAGGn.js",
-      "_author-ui-BaZLcSef.js",
+      "_author-ui-mj_bwcbM.js",
       "_semantics-BRTp3gBZ.js",
       "_notation-fonts-BN8TYhU_.js"
     ]
