@@ -1,4 +1,4 @@
-import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Ue,f as be,S as He}from"./button-content-DK5Fi-Iu.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as O,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as I,a9 as F,aa as ct,ab as dt,ac as ve,ad as ut,ae as pt,af as bt,ag as ht,ah as vt,ai as De,aj as J,ak as me,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./offline-status-jkT5tb3B.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
+import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js";import{b as e,p as ae,a as Ue,f as be,S as He}from"./button-content-DK5Fi-Iu.js";import{p as Le,a as xe,b as Se,c as We,d as Be,e as p,f as ze,g as je,h as Qe,i as ne,j as d,k as Ce,l as b,m as v,n as r,o as qe,q as Ae,r as he,s as Ge,t as Ke,u as Ve,v as Re,w as c,x as N,y as Ye,z as Ze,A as g,B as Je,C as t,D as $,E as k,F as x,G as S,H as C,I as q,J as A,K as R,L as y,M as T,N as z,O as Xe,P as Te,Q as ie,R as _e,S as et,T as tt,U as ot,V as Pe,W as h,X as se,Y as Ne,Z as O,_ as at,$ as le,a0 as M,a1 as l,a2 as nt,a3 as it,a4 as st,a5 as lt,a6 as rt,a7 as Ee,a8 as ve,a9 as I,aa as F,ab as ct,ac as dt,ad as me,ae as ut,af as pt,ag as bt,ah as ht,ai as vt,aj as De,ak as J,al as Me,am as Z,an as j,ao as Q,ap as E,aq as G,ar as D,as as K,at as V,au as Y,av as mt,aw as ft,ax as gt,ay as yt,az as wt,aA as $t}from"./offline-status-BYpr33d9.js";const L=class L extends m{constructor(){super(...arguments),this.mode="write",this.toolsPresentation="closed"}render(){return o`<slot name="score"></slot><slot name="tools"></slot><slot name="palette"></slot><slot name="listen"></slot><slot name="read"></slot>`}mount(){this.performUpdate()}};L.properties={mode:{reflect:!0},toolsPresentation:{attribute:"tools-presentation",reflect:!0}},L.styles=w`
     :host {
       box-sizing: border-box;
       display: grid;
@@ -446,7 +446,7 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
           <music-event-navigator id="event-navigator" class="event-navigator" aria-label="Staff, measure, voice, and event navigation"></music-event-navigator>
         </details>
         <details id="keyboard-shortcuts" class="keyboard-shortcuts nonprinting"><summary id="keyboard-shortcuts-summary">${e(Ze,"Keyboard shortcuts",{layout:"inline"})}</summary>
-          <p id="keyboard-help" class="keyboard-help">With the score focused: in Write notes, N/R chooses a note or rest without inserting, Left/Right moves the writing point through existing music and bars, and Enter inserts the current recipe. A–G writes natural pitches in the configured octave on pitched staves. In Select, Left/Right selects music, Shift extends a range, Enter opens Properties, and Delete or Backspace removes the selection. Use Location → Select more without a modifier key. Escape cancels an active gesture or collection; when idle, it keeps the current mode. Command or Control + C copies selected notes; switch to Write notes and use Command or Control + V to paste at the writing cursor. Insertions continue through later bars as needed. Command or Control + Z undoes. Native fields and readable text keep their usual keys.</p>
+          <p id="keyboard-help" class="keyboard-help">With the score focused: in Write notes, N/R chooses a note or rest without inserting, Left/Right moves the writing point through existing music and bars, and Enter inserts the current recipe. A–G writes natural pitches in the configured octave on pitched staves. In Select, Left/Right selects music, Shift extends a range, Enter opens Properties, and Delete or Backspace removes the selection. Tap Select more in the palette, then tap notes to add or remove them. Range… selects a passage by its endpoints; Done keeps the selection. Escape cancels an active gesture or collection; when idle, it keeps the current mode. Command or Control + C copies selected notes; switch to Write notes and use Command or Control + V to paste at the writing cursor. Insertions continue through later bars as needed. Command or Control + Z undoes. Native fields and readable text keep their usual keys.</p>
         </details>
         <footer class="workspace-footer nonprinting"><a href=${"/music-notes/index.html"}>${e(xe,"Notation workbook",{layout:"inline"})}</a>
           <span>Written in musical HTML</span>
@@ -934,6 +934,11 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         <div id="pointer-tools" class="pointer-tools" data-selection-state="none" aria-label="Selected music">
           <div id="selection-controls-dock" class="selection-controls-dock">
             <div id="selection-controls" class="selection-controls" role="toolbar" aria-label="Selected music" aria-describedby="selection-controls-context" data-selection-placement="dock" data-selection-state="none" data-has-error="false">
+              <div id="selection-collection" class="selection-collection" role="group" aria-label="Build a selection">
+                <button id="selection-select-more" type="button" aria-describedby="selection-context">${e(ve,"Select more")}</button>
+                <button id="selection-range" type="button" class="selection-action" hidden>${e(ve,"Range…")}</button>
+                <button id="selection-done" type="button" class="selection-done" hidden>${e(r,"Done")}</button>
+              </div>
               <div id="selection-quick-tools" class="selection-quick-tools" data-toggle-group-row aria-label="Quick choices for selected notes">
                 <music-toggle-button-group id="selection-kind" label="Note or rest" overflow-at="2"></music-toggle-button-group>
                 <music-toggle-button-group id="selection-accidentals" label="Accidentals" .buttonIds=${{"-1":"selection-flat",0:"selection-natural",1:"selection-sharp"}} overflow-at="3"></music-toggle-button-group>
@@ -956,7 +961,6 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
               </div>
               <div id="selection-slot-2" class="palette-slot">
                 <button id="selection-value" type="button" class="selection-action" popovertarget="selection-value-chooser" disabled>${e(c,o`<span data-control-label>Value</span>`)}</button>
-                <button id="selection-done" type="button" class="selection-done" hidden>${e(r,"Done")}</button>
               </div>
               <div id="selection-slot-3" class="palette-slot">
                 <button id="selection-attached-marks" type="button" class="selection-action" aria-label="Attached marks for selected event" disabled>${e(z,"Marks")}</button>
@@ -973,8 +977,8 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
         <button id="select-mode" type="button" aria-pressed="true">${e(Pe,"Select")}</button>
       </div>
       <div id="palette-more-slot" class="palette-more-slot">
-        <button id="edit-selected-event" class="selection-action selection-more" type="button" aria-controls="workspace-tools" aria-expanded="false" aria-describedby="edit-selected-help">${e(ve,o`<span id="edit-selected-label">More</span><span id="edit-selected-value" hidden></span>`)}</button>
-        <button id="tools-toggle" type="button" class="tools-toggle" aria-controls="workspace-tools" aria-expanded="false">${e(ve,o`<span data-tools-toggle-label>More</span>`)}</button>
+        <button id="edit-selected-event" class="selection-action selection-more" type="button" aria-controls="workspace-tools" aria-expanded="false" aria-describedby="edit-selected-help">${e(me,o`<span id="edit-selected-label">More</span><span id="edit-selected-value" hidden></span>`)}</button>
+        <button id="tools-toggle" type="button" class="tools-toggle" aria-controls="workspace-tools" aria-expanded="false">${e(me,o`<span data-tools-toggle-label>More</span>`)}</button>
       </div>
       <button id="location-trigger" type="button" class="location-trigger" popovertarget="location-panel" aria-label="Location and musical actions" aria-describedby="selection-controls-context entry-destination">${e(ut,o`<span id="palette-owner-label" class="control-caption">Selected</span><span id="selection-context" class="visually-hidden">Choose a musical location</span><span id="selection-controls-context" class="visually-hidden">Choose music on the staff.</span><span class="location-compact" aria-hidden="true"><span id="selection-compact-staff" class="visually-hidden">Staff</span><span id="selection-compact-context">Bar 1 · V1</span></span>`,{layout:"inline"})}</button>
       <span id="drag-pitch-help" class="visually-hidden">Prepare an untied single note for dragging in Properties.</span>
@@ -1240,10 +1244,8 @@ import{i as m,a as w,b as o,A as $e,c as P,D as ke}from"./ui-runtime-DZIFwxVs.js
           <button id="add-chord-symbol" type="button" class="primary-button">${e(Te,"Add chord symbol")}</button>
           <button id="start-entry-here" type="button" >${e(N,"Start writing here")}</button>
           <button id="resume-entry" type="button" class="quiet-button" hidden>${e(N,o`<span id="resume-entry-label" data-control-label>Resume writing</span>`)}</button>
-          <button id="selection-range" type="button" class="selection-action" hidden>${e(me,"Range…")}</button>
           <button id="selection-review" type="button" class="quiet-button" popovertarget="workspace-review" hidden>${e(J,"Review")}</button>
           <button id="continue-piece" type="button" hidden>${e(d,"Continue this piece…")}</button>
-          <button id="selection-select-more" type="button" aria-describedby="selection-context">${e(me,"Select more")}</button>
           <button id="return-to-selection" type="button" class="quiet-button" aria-label="Return to selection" hidden>${e(p,"Return to selection")}</button>
           <button id="selection-review-history" type="button" class="quiet-button" popovertarget="workspace-review" hidden>${e(Me,"Review last editing problem")}</button>
         </div>
