@@ -440,7 +440,7 @@ export class SelectionControls {
       if (!state) return;
       const reason = this.selectMoreReason(state);
       if (reason) return this.fail(reason);
-      this.close(); this.routeActionSafely(() => { this.options.selectMore(true); this.refresh(); });
+      this.close(); this.routeActionSafely(() => { this.options.selectMore(!state.selectMoreActive); this.refresh(); });
     });
     this.listen('selection-prepare-drag', 'click', () => {
       const state = this.guard(undefined, this.button('selection-prepare-drag'), true);
@@ -908,7 +908,8 @@ export class SelectionControls {
     this.button('edit-selected-event').setAttribute('aria-expanded', String(state.moreExpanded === true));
     this.el('edit-selected-label').textContent = 'More';
     this.el('edit-selected-value').textContent = '';
-    this.setButton('selection-select-more', true, this.selectMoreReason(state));
+    this.setButton('selection-select-more', show && !state.pitchDragArmed, this.selectMoreReason(state));
+    this.button('selection-select-more').setAttribute('aria-pressed', String(more));
     const propertiesReason = state.inspectionMatchesSelection === true ? this.pitchReason(state) : heldMessage;
     this.setButton('properties-pitch', event?.kind === 'note' && !state.activeMarkingId, propertiesReason);
     this.setButton('selection-prepare-drag', true, propertiesReason);

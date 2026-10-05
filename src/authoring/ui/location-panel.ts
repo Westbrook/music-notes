@@ -1,4 +1,4 @@
-import { phArrowRight, phArrowUUpLeft, phEye, phListChecks, phPencilSimple, phPlus, phSelection, phX } from '../../ui/icons/phosphor.js';
+import { phArrowRight, phArrowUUpLeft, phEye, phListChecks, phPencilSimple, phPlus, phX } from '../../ui/icons/phosphor.js';
 import { bravuraNoteheadBlack } from '../../ui/icons/bravura.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
@@ -23,10 +23,8 @@ export function locationPanel(): TemplateResult {
           <button id="add-chord-symbol" type="button" class="primary-button">${buttonContent(bravuraNoteheadBlack, 'Add chord symbol')}</button>
           <button id="start-entry-here" type="button" >${buttonContent(phPencilSimple, 'Start writing here')}</button>
           <button id="resume-entry" type="button" class="quiet-button" hidden>${buttonContent(phPencilSimple, html`<span id="resume-entry-label" data-control-label>Resume writing</span>`)}</button>
-          <button id="selection-range" type="button" class="selection-action" hidden>${buttonContent(phSelection, 'Range…')}</button>
           <button id="selection-review" type="button" class="quiet-button" popovertarget="workspace-review" hidden>${buttonContent(phEye, 'Review')}</button>
           <button id="continue-piece" type="button" hidden>${buttonContent(phArrowRight, 'Continue this piece…')}</button>
-          <button id="selection-select-more" type="button" aria-describedby="selection-context">${buttonContent(phSelection, 'Select more')}</button>
           <button id="return-to-selection" type="button" class="quiet-button" aria-label="Return to selection" hidden>${buttonContent(phArrowUUpLeft, 'Return to selection')}</button>
           <button id="selection-review-history" type="button" class="quiet-button" popovertarget="workspace-review" hidden>${buttonContent(phListChecks, 'Review last editing problem')}</button>
         </div>

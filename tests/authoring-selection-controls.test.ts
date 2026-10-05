@@ -872,11 +872,11 @@ describe('SelectionControls fixed musical slots', () => {
     expect(visible(h.button('edit-selected-event'))).toBe(true); expect(control('edit-selected-label').textContent).toBe('More');
   });
 
-  it.each(['collecting', 'pitch-drag'] as const)('substitutes Done in slot2 only while %s, then restores exact-selection Value', mode => {
+  it.each(['collecting', 'pitch-drag'] as const)('shows Done with collection controls while %s, then restores exact-selection Value', mode => {
     const h = fixture(scoreHtml(), { ids: mode === 'collecting' ? ['n1', 'n3'] : ['n1'] });
     const value = h.button('selection-value'); const done = h.button('selection-done');
     const owner = control('selection-slot-2'); const ids = [...h.view.ids]; const before = h.session.project;
-    expect(value.closest('.palette-slot')).toBe(owner); expect(done.closest('.palette-slot')).toBe(owner);
+    expect(value.closest('.palette-slot')).toBe(owner); expect(done.closest('.selection-collection')).not.toBeNull();
     if (mode === 'collecting') h.view.selectMoreActive = true;
     else {
       h.view.pitchDragArmed = true;

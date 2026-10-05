@@ -1114,3 +1114,8 @@ body[data-view="listen"] #score-scroll { grid-row: 1; }
   /* iOS may zoom focused fields below 16px; preserve user-controlled zoom. */
   input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: max(16px, 1rem); }
 }
+
+/* Keep touch collection controls visible without overlapping the musical slots. */
+.selection-collection { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--music-ui-group-spacing); }
+.selection-collection > button { min-width: var(--music-ui-control-size); min-height: var(--music-ui-control-size); }
+.selection-collection > button[aria-pressed="true"] { background: var(--music-ui-color-active); border-color: var(--music-ui-color-border); }

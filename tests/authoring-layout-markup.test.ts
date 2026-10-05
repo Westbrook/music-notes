@@ -305,16 +305,16 @@ describe('stable writing palette structural contract', () => {
     const core = element('selection-controls');
     for (const [slotId, actionIds] of [
       ['selection-slot-1', ['selection-pitch', 'selection-shared', 'selection-mark-edit']],
-      ['selection-slot-2', ['selection-value', 'selection-done']],
+      ['selection-slot-2', ['selection-value']],
       ['selection-slot-3', ['selection-attached-marks', 'selection-relationships', 'selection-mark-remove', 'drag-pitch']],
     ] as const) {
       const slot = element(slotId);
       expect(core.contains(slot)).toBe(true);
       for (const id of actionIds) expect(slot.contains(button(id)), `${id} has a stable musical slot`).toBe(true);
     }
-    expect(element('location-panel').contains(button('selection-range'))).toBe(true);
+    expect(element('selection-collection').contains(button('selection-range'))).toBe(true);
     expect(button('selection-value').hidden).toBe(false);
-    for (const id of ['edit-selected-event', 'tools-toggle', 'location-trigger', 'toggle-entry', 'select-mode', 'selection-range']) {
+    for (const id of ['edit-selected-event', 'tools-toggle', 'location-trigger', 'toggle-entry', 'select-mode']) {
       expect(core.contains(element(id))).toBe(false);
     }
   });
@@ -775,10 +775,11 @@ describe('score-first authoring shell markup', () => {
     // contract. Static markup must not expose it as ordinary note correction.
   });
 
-  it('keeps Select more in Location and compound pitch editing with the held Properties target', () => {
+  it('keeps Select more directly in the palette and compound pitch editing with the held Properties target', () => {
     const selecting = button('selection-select-more');
     const properties = element('selection-inspector');
-    expect(element('location-panel').contains(selecting)).toBe(true);
+    expect(element('selection-collection').contains(selecting)).toBe(true);
+    expect(element('selection-controls').contains(selecting)).toBe(true);
     expect(selecting.getAttribute('aria-describedby')?.split(/\s+/)).toContain('selection-context');
     expect(properties.contains(selecting)).toBe(false);
     expect(element('selection-shared-chooser').contains(selecting)).toBe(false);
@@ -1740,7 +1741,7 @@ describe('score-first authoring CSS contract', () => {
     }
     expect(button('selection-review').getAttribute('popovertarget')).toBe('workspace-review');
     expect(element('location-panel').contains(button('selection-review'))).toBe(true);
-    expect(element('selection-slot-2').contains(button('selection-done'))).toBe(true);
+    expect(element('selection-collection').contains(button('selection-done'))).toBe(true);
     expect(element('selection-slot-3').contains(button('drag-pitch'))).toBe(true);
     // Capture geometry belongs to browser tests. Authored gesture-state rules
     // must not directly hide, resize, or relocate the captured handle.

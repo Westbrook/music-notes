@@ -70,11 +70,13 @@ Selections contain exact whole events in one staff and voice, including across b
 | Click/tap an event | Replace the set with that event. |
 | Shift-click or Shift + Left/Right | Extend or shrink a consecutive range from its fixed anchor. Starting a range after a disjoint set replaces that set with the new range. |
 | Command-click on macOS; Control-click elsewhere | Toggle that exact event, preserving gaps. macOS Control-click remains secondary-click. |
-| Location & actions → Select more | Enter a mode where taps toggle events without a modifier key. Arrows move focus; Space toggles the focused event. |
-| Done | Keep the selected set and leave Select more. Write notes also leaves this mode and resumes writing. |
+| Palette → Select more | Enter a mode where taps toggle events without a modifier key. Arrows move focus; Space toggles the focused event. |
+| Done (or tap Select more again) | Keep the selected set and leave Select more. Write notes also leaves this mode and resumes writing. |
 | Range… | Open the From/Through controls in Relationships for a consecutive passage. |
 | Unmodified Left/Right outside Select more | In Select, move to the previous/next event relative to the primary and collapse a set to that event. In Write notes, these keys move only the writing point. |
 | Escape at the score | Close/cancel an active chooser or gesture first. Otherwise clear Select membership and range fields; Write notes remains active. Never discard a form draft. |
+
+On a touch screen, choose **Select**, tap the first note, then **Select more** in the palette. Tap each additional note to add it (tap again to remove it), or use **Range…** and its From/Through selectors for a continuous passage. **Done** keeps the notes selected for transposition, tuplets, and other eligible group edits. Ordinary score scrolling stays available.
 
 A modified attempt in another staff or voice leaves the previous set intact and explains the limit. A modified click on an attached mark selects its owning event; an ordinary mark click retains the exact child target. Cross-staff sets, lasso selection, chord-tone selection and group pitch dragging are not implemented.
 
@@ -116,7 +118,7 @@ A pristine Properties view follows deliberate inspection selections in Select; i
 
 - **Relationships:** consecutive passage selection, ties, reviewed event conversion, and tuplets. Mixed durations and nested tuplets are supported, but a tuplet cannot cross a barline or split a nested boundary. A ratio describes written units, not the number of child notes. Ties require compatible consecutive events in one voice, potentially across bars: complete matching spelled pitch sets, rhythm notes, or valid road continuations. A tie is not a slur.
 - **Instructions:** chord symbols, directions, rehearsal marks, dynamics and tempo, with musical positions and explicit recipients. These are distinct from event-owned articulations, ornaments and road intervals.
-- **Measure:** clef, key, meter and beat groups, pickups, drafts, barlines, voices, explicit remainder rests, and measure movement/removal. Duplicate a bar range across the score here. Structural operations keep staff columns aligned; a meter edit affects that column and preserves later musical context.
+- **Measure:** clef, key, meter and beat groups, pickups, drafts, barlines, voices, explicit remainder rests, and measure movement/removal. Duplicate a bar range across the score here. Structural operations keep staff columns aligned; a meter edit affects that column and preserves later musical context. Shortening a meter moves excess music into new aligned measures of the target meter immediately after the edited column, before any existing following music. Ordinary notes crossing a new barline split into tied values; rests split without ties. Event identities, attached marks, exact instruction offsets, and the closing barline are preserved. Short or empty overflow voices remain explicit incomplete drafts, without invented rests. Full-measure rests follow the new meter. Complete tuplets stay intact; cross-bar tuplets and unsplittable slashes reject the whole edit with an explanation. One Undo restores the entire change.
 
 Use Left/Right or Home/End to move focus among the three tabs, then Enter/Space to activate. Tab moves into the fields. **Back to properties** returns to the held Properties view and scroll; it is not a fourth tab. Merely selecting music does not switch the general-tool tab.
 

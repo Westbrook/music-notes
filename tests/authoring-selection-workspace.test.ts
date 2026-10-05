@@ -507,8 +507,10 @@ describe('entry and held Properties keep separate destinations', () => {
 
 describe('selection modes, native ownership, and drag admission policy', () => {
   it('Select more toggles exact touch targets; arrows move only focus, Space toggles, and Done keeps membership', async () => {
-    mount(); await chooseSource('a'); const before = accepted(); await click('location-trigger'); await click('selection-select-more');
-    expect(document.body.dataset.selectMore).toBe('true'); await click('close-location'); await chooseSource('c', { pointerType: 'touch' }); expectMembers(['a', 'c'], 'c', 'a');
+    mount(); await chooseSource('a'); const before = accepted();
+    expect(available(control('selection-select-more'))).toBe(true); await click('selection-select-more');
+    expect(control('selection-select-more').getAttribute('aria-pressed')).toBe('true');
+    expect(document.body.dataset.selectMore).toBe('true'); await chooseSource('c', { pointerType: 'touch' }); expectMembers(['a', 'c'], 'c', 'a');
     await key('ArrowLeft'); expectMembers(['a', 'c'], 'c', 'a'); expect(exactSelection().focusId).toBe('b');
     await key(' '); expectMembers(['a', 'b', 'c'], 'b', 'a'); await click('selection-done'); expect(document.body.dataset.selectMore).toBe('false');
     expectMembers(['a', 'b', 'c'], 'b', 'a'); await key('ArrowRight'); expectMembers(['c'], 'c', 'c'); noEdit(before);

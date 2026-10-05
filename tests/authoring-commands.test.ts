@@ -475,13 +475,15 @@ describe('staff, voice, and musical context edits', () => {
     assertValid(root);
   });
 
-  it('does not mark an underfilled measure complete or silently repair meter overflow', () => {
+  it('keeps underfilled measures explicit and rebars overflow when shortening the meter', () => {
     const draft = score(bar(note('a'), 'incomplete'));
     expect(() => run(draft, { type: 'set-measure', measureId: 'bar', values: { incomplete: false } })).toThrow('still short');
     const root = score(bar(note('a', 'whole')));
     run(root, { type: 'set-measure', measureId: 'bar', values: { meter: '3/4' } });
-    expect(errors(root)).toContain('measure-overfull');
-    expect(measure(root).voices[0].events[0].duration).toBe('whole');
+    assertValid(root);
+    expect(music(root).staves[0].measures).toHaveLength(2);
+    expect(measure(root).voices[0].events[0]).toMatchObject({ id: 'a', duration: 'half', dots: 1, tie: 'start' });
+    expect(measure(root, 1).voices[0].events[0]).toMatchObject({ duration: 'quarter', tie: 'end' });
   });
 });
 

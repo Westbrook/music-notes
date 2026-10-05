@@ -1,4 +1,4 @@
-import { phArrowDown, phArrowRight, phArrowUp, phArrowsVertical, phCheck, phCursor, phDotsThree, phHand, phLink, phMapPin, phMusicNotesPlus, phPencilSimple, phPlus, phSlidersHorizontal, phTrash } from '../../ui/icons/phosphor.js';
+import { phArrowDown, phArrowRight, phArrowUp, phArrowsVertical, phCheck, phCursor, phDotsThree, phHand, phLink, phMapPin, phMusicNotesPlus, phPencilSimple, phPlus, phSelection, phSlidersHorizontal, phTrash } from '../../ui/icons/phosphor.js';
 import { bravuraArticAccentAbove, bravuraGClef, bravuraNoteQuarterUp, bravuraRestQuarter } from '../../ui/icons/bravura.js';
 import { html } from 'lit';
 import type { TemplateResult } from 'lit';
@@ -38,6 +38,11 @@ export function musicPalette(): TemplateResult {
         <div id="pointer-tools" class="pointer-tools" data-selection-state="none" aria-label="Selected music">
           <div id="selection-controls-dock" class="selection-controls-dock">
             <div id="selection-controls" class="selection-controls" role="toolbar" aria-label="Selected music" aria-describedby="selection-controls-context" data-selection-placement="dock" data-selection-state="none" data-has-error="false">
+              <div id="selection-collection" class="selection-collection" role="group" aria-label="Build a selection">
+                <button id="selection-select-more" type="button" aria-describedby="selection-context">${buttonContent(phSelection, 'Select more')}</button>
+                <button id="selection-range" type="button" class="selection-action" hidden>${buttonContent(phSelection, 'Range…')}</button>
+                <button id="selection-done" type="button" class="selection-done" hidden>${buttonContent(phCheck, "Done")}</button>
+              </div>
               <div id="selection-quick-tools" class="selection-quick-tools" data-toggle-group-row aria-label="Quick choices for selected notes">
                 <music-toggle-button-group id="selection-kind" label="Note or rest" overflow-at="2"></music-toggle-button-group>
                 <music-toggle-button-group id="selection-accidentals" label="Accidentals" .buttonIds=${{ '-1': 'selection-flat', '0': 'selection-natural', '1': 'selection-sharp' }} overflow-at="3"></music-toggle-button-group>
@@ -60,7 +65,6 @@ export function musicPalette(): TemplateResult {
               </div>
               <div id="selection-slot-2" class="palette-slot">
                 <button id="selection-value" type="button" class="selection-action" popovertarget="selection-value-chooser" disabled>${buttonContent(bravuraNoteQuarterUp, html`<span data-control-label>Value</span>`)}</button>
-                <button id="selection-done" type="button" class="selection-done" hidden>${buttonContent(phCheck, "Done")}</button>
               </div>
               <div id="selection-slot-3" class="palette-slot">
                 <button id="selection-attached-marks" type="button" class="selection-action" aria-label="Attached marks for selected event" disabled>${buttonContent(bravuraArticAccentAbove, "Marks")}</button>

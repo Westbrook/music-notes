@@ -585,6 +585,45 @@ function insertEvent(context: EditContext, command: Extract<AuthorCommand, { typ
 
 interface PasteUnit { node: Element; time: Rational; events: readonly MusicEvent[]; copied: boolean }
 
+function flowUnits(context: EditContext, voice: Voice, sources: ReadonlyMap<string, Element>, copied: boolean): PasteUnit[] {
+  const result: PasteUnit[] = [];
+  for (let index = 0; index < voice.events.length;) {
+    const event = voice.events[index];
+    const tuplet = event.tupletIds[0];
+    const events = tuplet ? voice.events.slice(index).filter(member => member.tupletIds.includes(tuplet)) : [event];
+    const original = sources.get(tuplet ?? event.id)!;
+    requireCondition(original && (!tuplet || original.localName === 'music-tuplet'),
+      'This passage uses legacy tuplet boundaries. Convert it to a music-tuplet group in Source before moving this music.');
+    const node = copied ? context.copied(original) : original;
+    // Beam groups follow their new measure; no forced beam may cross a barline.
+    for (const member of [node, ...node.querySelectorAll('[beam]')]) if (member.getAttribute('beam') !== 'none') member.removeAttribute('beam');
+    result.push({ node, events, copied, time: events.reduce((sum, member) => add(sum, member.time), ZERO) });
+    index += events.length;
+  }
+  return result;
+}
+
+function splitFlowUnit(context: EditContext, unit: PasteUnit, remaining: Rational): PasteUnit[] {
+  const event = unit.events[0];
+  const firstTime = compare(unit.time, remaining) > 0 ? remaining : unit.time;
+  const lengths = [...restValues(firstTime), ...restValues(subtract(unit.time, firstTime))];
+  requireCondition(lengths.length < 2 || event.kind !== 'slash', 'This slash cannot be split across a barline. Choose a boundary that keeps it whole.');
+  return lengths.map((value, index): PasteUnit => {
+    const node = index === 0 ? unit.node : context.copied(unit.node);
+    node.removeAttribute('measure'); node.removeAttribute('dotted');
+    node.setAttribute('duration', value.duration); node.setAttribute('dots', String(value.dots));
+    if (index > 0) node.querySelectorAll('music-articulation, music-ornament').forEach(mark => mark.remove());
+    if (event.kind !== 'rest' && event.kind !== 'slash') {
+      const incoming = index > 0 || event.tie === 'end' || event.tie === 'continue';
+      const outgoing = index < lengths.length - 1 || event.tie === 'start' || event.tie === 'continue';
+      node.setAttribute('tie', incoming ? outgoing ? 'continue' : 'end' : outgoing ? 'start' : 'none');
+      if (event.kind === 'road' && incoming) node.setAttribute('direction', 'same');
+    }
+    return { ...unit, node, time: value.time, events: [{ ...event, duration: value.duration, dots: value.dots, time: value.time, measureRest: false,
+      tie: (node.getAttribute('tie') ?? 'none') as MusicEvent['tie'] }] };
+  });
+}
+
 /** Reflow one voice only, staging the whole operation in EditorSession's detached source. */
 function pasteMusic(initial: EditContext, command: Extract<AuthorCommand, { type: 'paste-music' | 'insert-event' }>): EditResult {
   const target = initial.voice(command.cursor.measureId, command.cursor.voiceIndex);
@@ -615,24 +654,7 @@ function pasteMusic(initial: EditContext, command: Extract<AuthorCommand, { type
   requireCondition(!previous?.tupletIds.some(id => next?.tupletIds.includes(id)),
     'Paste at a boundary outside the tuplet so the copied rhythm keeps its original timing.');
 
-  const units = (voice: Voice, sources: ReadonlyMap<string, Element>, copied: boolean): PasteUnit[] => {
-    const result: PasteUnit[] = [];
-    for (let index = 0; index < voice.events.length;) {
-      const event = voice.events[index];
-      const tuplet = event.tupletIds[0];
-      const events = tuplet ? voice.events.slice(index).filter(member => member.tupletIds.includes(tuplet)) : [event];
-      const original = sources.get(tuplet ?? event.id)!;
-      requireCondition(original && (!tuplet || original.localName === 'music-tuplet'),
-        'This passage uses legacy tuplet boundaries. Convert it to a music-tuplet group in Source before pasting here.');
-      const node = copied ? initial.copied(original) : original;
-      // Beam groups follow their new measure; no forced beam may cross a barline.
-      for (const member of [node, ...node.querySelectorAll('[beam]')]) if (member.getAttribute('beam') !== 'none') member.removeAttribute('beam');
-      result.push({ node, events, copied, time: events.reduce((sum, member) => add(sum, member.time), ZERO) });
-      index += events.length;
-    }
-    return result;
-  };
-  const queue = clip.score.staves[0].measures.flatMap(measure => units(measure.voices[0], clip.sources, true));
+  const queue = clip.score.staves[0].measures.flatMap(measure => flowUnits(initial, measure.voices[0], clip.sources, true));
   let context = initial;
   let barId = command.cursor.measureId;
   let lastPasted: Cursor | undefined;
@@ -644,7 +666,7 @@ function pasteMusic(initial: EditContext, command: Extract<AuthorCommand, { type
     const at = firstBar ? position : 0;
     // Instructions retain their original musical positions when surrounding events move.
     for (const annotation of location.measure.annotations) context.node(annotation.id).setAttribute('at', formatRational(annotation.onset));
-    const existing = units(voice, context.initial.sources, false);
+    const existing = flowUnits(context, voice, context.initial.sources, false);
     let eventCount = 0;
     const tail = existing.filter(unit => { const index = eventCount; eventCount += unit.events.length; return index >= at; });
     if (firstBar && placeholder) {
@@ -667,24 +689,7 @@ function pasteMusic(initial: EditContext, command: Extract<AuthorCommand, { type
       if (compare(unit.time, remaining) > 0 || unit.events[0].measureRest) {
         requireCondition(unit.events.length === 1 && !unit.events[0].tupletIds.length,
           'A tuplet would cross a barline. Paste at a location with enough room for the complete tuplet.');
-        const event = unit.events[0];
-        const firstTime = compare(unit.time, remaining) > 0 ? remaining : unit.time;
-        const lengths = [...restValues(firstTime), ...restValues(subtract(unit.time, firstTime))];
-        requireCondition(lengths.length < 2 || event.kind !== 'slash', 'This slash cannot be split across a barline. Choose a different paste location.');
-        const fragments = lengths.map((value, index): PasteUnit => {
-          const node = index === 0 ? unit.node : initial.copied(unit.node);
-          node.removeAttribute('measure'); node.removeAttribute('dotted');
-          node.setAttribute('duration', value.duration); node.setAttribute('dots', String(value.dots));
-          if (index > 0) node.querySelectorAll('music-articulation, music-ornament').forEach(mark => mark.remove());
-          if (event.kind !== 'rest' && event.kind !== 'slash') {
-            const incoming = index > 0 || event.tie === 'end' || event.tie === 'continue';
-            const outgoing = index < lengths.length - 1 || event.tie === 'start' || event.tie === 'continue';
-            node.setAttribute('tie', incoming ? outgoing ? 'continue' : 'end' : outgoing ? 'start' : 'none');
-            if (event.kind === 'road' && incoming) node.setAttribute('direction', 'same');
-          }
-          return { ...unit, node, time: value.time, events: [{ ...event, duration: value.duration, dots: value.dots, time: value.time, measureRest: false,
-            tie: (node.getAttribute('tie') ?? 'none') as MusicEvent['tie'] }] };
-        });
+        const fragments = splitFlowUnit(initial, unit, remaining);
         queue.splice(0, 1, ...fragments);
         continue;
       }
@@ -958,6 +963,76 @@ function addVoice(context: EditContext, measureId: string): EditResult {
   return { selectionId: newVoice.id, message: 'Added a silent voice without changing the existing voice order.' };
 }
 
+/** Insert new columns immediately after the edited column; later bars keep their music and context. */
+function rebarShortenedMeasure(context: EditContext, column: readonly MeasureLocation[], meter: Meter): number {
+  const capacity = meterTime(meter);
+  if (!column.some(({ measure }) => compare(capacity, meterTime(measure.meter)) < 0
+    && measure.voices.some(voice => !voice.events.some(event => event.measureRest) && compare(totalTime(voice), capacity) > 0))) return 0;
+
+  const plans = column.map(location => ({ location, voices: location.measure.voices.map(voice => {
+    const queue = flowUnits(context, voice, context.initial.sources, false);
+    const bars: Element[][] = [[]];
+    let used = ZERO;
+    while (queue.length) {
+      if (compare(used, capacity) === 0) { bars.push([]); used = ZERO; }
+      requireCondition(bars.length <= 256, 'This meter change would add too many measures. Choose a longer meter.');
+      const unit = queue[0];
+      // A full-measure rest follows the new meter, as it does for ordinary meter edits.
+      if (unit.events[0].measureRest) unit.time = capacity;
+      const remaining = subtract(capacity, used);
+      if (compare(unit.time, remaining) > 0) {
+        requireCondition(unit.events.length === 1 && !unit.events[0].tupletIds.length,
+          'A tuplet would cross a new barline. Choose a meter that fits the complete tuplet or unwrap it first.');
+        queue.splice(0, 1, ...splitFlowUnit(context, unit, remaining));
+        continue;
+      }
+      queue.shift(); bars.at(-1)!.push(unit.node); used = add(used, unit.time);
+    }
+    return bars;
+  }) }));
+  const count = Math.max(...plans.flatMap(plan => plan.voices.map(bars => bars.length)));
+  for (const { location, voices } of plans) {
+    const original = context.node(location.measure.id);
+    const bars = [original];
+    const closing = original.getAttribute('end-bar');
+    original.setAttribute('end-bar', 'single');
+    original.removeAttribute('pickup');
+    for (let index = 1; index < count; index++) {
+      const bar = context.create('music-measure');
+      writeMeter(bar, meter);
+      bars.at(-1)!.after(bar); bars.push(bar);
+    }
+    if (closing !== null) bars.at(-1)!.setAttribute('end-bar', closing);
+    // Original voice containers and event/tuplet IDs survive; only continuations get new IDs.
+    voices.forEach((chunks, voiceIndex) => {
+      const voice = location.measure.voices[voiceIndex];
+      const originalVoice = context.node(voice.id);
+      for (const chunksOfBar of chunks) for (const node of chunksOfBar) node.remove();
+      bars.forEach((bar, index) => {
+        let container = originalVoice;
+        if (index > 0) {
+          container = originalVoice === original ? bar : context.create('music-voice');
+          if (container !== bar) {
+            for (const attr of originalVoice.attributes) if (attr.name !== 'id') container.setAttribute(attr.name, attr.value);
+            bar.append(container);
+          }
+        }
+        container.append(...(chunks[index] ?? []));
+      });
+    });
+    // Make implicit instruction positions explicit before moving them into their new bar.
+    for (const annotation of location.measure.annotations) {
+      let onset = annotation.onset, index = 0;
+      while (compare(onset, capacity) >= 0 && index < count - 1) { onset = subtract(onset, capacity); index++; }
+      const node = context.node(annotation.id);
+      node.setAttribute('at', formatRational(onset));
+      bars[index].append(node);
+    }
+    for (const bar of bars) context.changed.add(bar);
+  }
+  return count - 1;
+}
+
 function setMeasure(context: EditContext, command: Extract<AuthorCommand, { type: 'set-measure' }>): EditResult {
   const selected = context.bar(command.measureId);
   const values = command.values;
@@ -995,6 +1070,9 @@ function setMeasure(context: EditContext, command: Extract<AuthorCommand, { type
   if (values.endBar !== undefined) bar.setAttribute('end-bar', values.endBar);
   if (values.repeatStart !== undefined) setBoolean(bar, 'repeat-start', values.repeatStart);
   context.changed.add(bar);
+  const added = meter ? rebarShortenedMeasure(context, column, meter) : 0;
+  requireCondition(!added || values.pickup !== true, 'The new first measure is full and cannot be a pickup. Turn off Pickup before shortening this meter.');
+  if (added) return { selectionId: command.measureId, message: `Updated the meter; added ${added} aligned measure${added === 1 ? '' : 's'} for the overflow. Following music is unchanged. One Undo restores the previous music.` };
   return { selectionId: command.measureId, message: meter || values.pickup !== undefined ? 'Updated this measure column; following musical context is unchanged.' : 'Updated this measure; following musical context is unchanged.' };
 }
 

@@ -16,7 +16,9 @@ const manifest = JSON.parse(await readFile(resolve(directory, '.vite/manifest.js
 // Home Screen metadata, installation help and offline setup add about 1.3 kB gzip.
 // Icons and the service worker are static install assets, not initial JS imports.
 // Workbook's explicit shared-token CSS and safe-area layout add about 0.5 kB.
-const budgets = { 'index.html': 51_000, 'author.html': 641_000 };
+// Touch collection controls and exact shorter-meter reflow reuse existing modules;
+// no new dependency or workbook import. Author measures about 641.6 kB gzip.
+const budgets = { 'index.html': 51_000, 'author.html': 642_000 };
 
 function graph(entry, includeDynamic = false, visited = new Set()) {
   if (visited.has(entry)) return visited;
